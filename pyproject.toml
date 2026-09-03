@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "po400"
+version = "0.1.0"
+description = "CLI tool to read live data and extract recordings from Pulsox PO-400 USB HID pulse oximeter"
+readme = "README.md"
+authors = [
+    { name = "Developer" }
+]
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+po400 = "po400.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["po400*"]

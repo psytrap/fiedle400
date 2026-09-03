@@ -1,0 +1,16 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# Downloaded Session Outputs & Temp Files
+po400_all_sessions_*.csv
+session.csv
+test_parse_stored_dump.py
+*.tmp
+exe/
+*.zip
+*.exe
