@@ -191,19 +191,28 @@ Packed consecutively in 64-byte HID input reports:
 
 ### 3.5 Storage Transfer Commands (`0x9D`) & Subframes (`0xED`)
 
-#### Storage Command Header Layout (64 Bytes Outbound)
+#### Storage Command Request (`0x9D`, 64 Bytes Outbound)
 
-| Byte | `[0]` | `[1]` | `[2]` | `[3]` | `[4]` | `[5]` | `[6]` | `[7]` | `[8]` | `[9..63]` |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Field** | Opcode | Mode | Type | User_ID | Seg_ID | Off_Lo | Off_Hi | Reserved | Checksum | Padding |
-| **Val** | `0x9D` | Mode | Type | User_ID | Seg_ID | Off_Lo | Off_Hi | `0x00` | Chk | `0x00...` |
+| Offset | Field | Value / Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0x9D` | Storage transfer command opcode |
+| `0x01` | Mode | `0x02` / `0x04` | `0x02` = Init / ACK, `0x04` = Read block |
+| `0x02` | Data Type | `0x01` / `0x02` / `0x7F` | `0x01` = SpO2 series, `0x02` = Pulse Rate, `0x7F` = Init / ACK |
+| `0x03` | User ID | `0x01` / `0x7F` | User slot ID (`0x7F` for Init / ACK) |
+| `0x04` | Segment ID | `0x01` / `0x7F` | Session segment ID (`0x7F` for Init / ACK) |
+| `0x05` | Offset Low | `0x00..0x7F` | Block offset address (bits 0..6) |
+| `0x06` | Offset High | `0x00..0x7F` | Block offset address (bits 7..13) |
+| `0x07` | Reserved | `0x00` | Fixed zero |
+| `0x08` | Checksum | `0..127` | `sum(bytes[0..7]) % 128` |
+| `0x09..0x3F` | Padding | `0x00...` | Reserved zero padding |
 
-| Command | Mode | Type | User | Seg | Off_Lo | Off_Hi | Checksum | Description |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| `STORAGE_INIT` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00` | `0x00` | `0x1C` | Initializes Flash read buffers |
-| `READ_SPO2_BLOCK` | `0x04` | `0x01` | `0x01` | `0x01` | `0x00` | `0x00` | `0x24` | Reads SpO2 flash series |
-| `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | `0x00` | `0x00` | `0x25` | Reads Pulse Rate flash series |
-| `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00` | `0x00` | `0x1C` | Acknowledges session retrieval |
+#### Command Parameters
+| Command | Mode `[0x01]` | Type `[0x02]` | User `[0x03]` | Seg `[0x04]` | Offset `[0x05..0x06]` | Checksum `[0x08]` | Description |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| `STORAGE_INIT` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` | Initializes Flash read buffers |
+| `READ_SPO2_BLOCK` | `0x04` | `0x01` | `0x01` | `0x01` | `0x00 0x00` | `0x24` | Reads SpO2 flash series |
+| `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | `0x00 0x00` | `0x25` | Reads Pulse Rate flash series |
+| `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` | Acknowledges session retrieval |
 
 #### Device Response: Stored Data Sub-Frame (`0xED`, 30 Bytes each)
 
