@@ -6,7 +6,7 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 
 ## 1. Core Framing Rules
 
-1. **7-Bit Payload Restriction**: Data bytes carried in payloads must not set bit 7 (`0x00`..`0x7F` / 0..127) for UART backward compatibility. In `0xED` subframes, Bit 7 of the 21 payload bytes is stripped and stored across mask bytes 5, 6, and 7 (`m0`, `m1`, `m2`).
+1. **7-Bit Payload Restriction**: Data bytes carried in payloads must not set bit 7 (`0x00`..`0x7F` / 0..127) for UART backward compatibility and opcode avoidance. In `0xED` subframes, Bit 7 of the 21 payload bytes is stripped and stored across separated MSB bytes 5, 6, and 7 (`m0`, `m1`, `m2`).
 2. **Modulo-128 Checksum**: All request and subframe packets use a 7-bit additive checksum:
    `checksum = sum(bytes[0..N-1]) % 128` (or `sum(bytes[0..N-1]) & 0x7F`)
 3. **14-Bit Integer Packing (7-bit Little-Endian)**:
@@ -18,6 +18,12 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 ---
 
 ## 2. Command & Response Registry
+
+> [!IMPORTANT]
+> **Universal Protocol Principle: MSB Control vs. Data Distinction**
+> Across the entire protocol, the Most Significant Bit (Bit 7) serves as the universal delimiter between control and data:
+> - **`MSB = 1` (`0x80..0xFF`)**: **Opcode / Control Character** — All host request opcodes, device response markers, frame sync headers, and in-stream control escapes strictly have Bit 7 set.
+> - **`MSB = 0` (`0x00..0x7F`)**: **Data Payload** — All parameters, counters, checksums, and in-stream payload bytes are restricted to 7 bits (masked with `0x7F`) to prevent accidental collisions with opcodes or frame boundaries.
 
 ### 2.1 Outbound Host Request Commands
 | Opcode | Name | Host Request (Hex) | Expected Response | Description |
@@ -222,34 +228,50 @@ Packed consecutively in 64-byte HID input reports:
 | `0x01` | Mode | `0x04` | Flash block transfer mode |
 | `0x02` | Data Type | `0x01` / `0x02` | `0x01` = SpO2 series, `0x02` = Pulse Rate series |
 | `0x03..0x04` | Sequence Index | 14-bit LE | `(Byte[4] << 7) \| Byte[3]` (0-based subframe counter) |
-| `0x05` | MSB Mask 0 | Bitmask | Restores Bit 7 for payload bytes `0x08..0x0E` |
-| `0x06` | MSB Mask 1 | Bitmask | Restores Bit 7 for payload bytes `0x0F..0x15` |
-| `0x07` | MSB Mask 2 | Bitmask | Restores Bit 7 for payload bytes `0x16..0x1C` |
-| `0x08..0x1C` | Compressed Data | 42 nibbles | Delta-compressed 2 Hz samples (see below) |
+| `0x05` | Separated MSBs 0 | 7 bits | Bit 7 for payload bytes `0x08..0x0E` |
+| `0x06` | Separated MSBs 1 | 7 bits | Bit 7 for payload bytes `0x0F..0x15` |
+| `0x07` | Separated MSBs 2 | 7 bits | Bit 7 for payload bytes `0x16..0x1C` |
+| `0x08..0x1C` | 7-bit Payload (`& 0x7F`) | 21 bytes | Lower 7 bits of compressed data series |
 | `0x1D` | Checksum | `0..127` | `sum(bytes[0..28]) % 128` |
 
-#### MSB Unmasking Algorithm
-Payload bytes `0x08..0x1C` (indices 8..28) are 7-bit encoded. Bit 7 is restored using `m0` (byte 5), `m1` (byte 6), and `m2` (byte 7):
+#### MSB Reassembly (7-to-8 Bit Encoding)
+
+In accordance with the [Universal Protocol Principle](#2-command--response-registry), all payload bytes transmitted over the wire are restricted to 7 bits (`MSB = 0`, range `0x00..0x7F`) to prevent collision with frame opcodes and sync markers (`MSB = 1`). Each 8-bit data byte is split during encoding:
+* **Lower 7 Bits (`0x08..0x1C`)**: Masked with `0x7F` (`byte & 0x7F`) and transmitted as 21 payload bytes.
+* **Separated MSBs (`0x05..0x07`)**: The MSB (Bit 7) of each byte is extracted and packed across 3 header bytes (7 MSBs per byte, Bits 0..6).
+
+**Reassembly Process:**
+The receiver restores each full 8-bit byte by recombining its lower 7 bits with its separated MSB:
+$$\text{byte}[i] = (\text{MSB}_i \ll 7) \mid \text{payload}[i]$$
+
+Each reassembled byte carries two delta nibbles (either SpO2 or Pulse Rate).
+
 ```python
-unmasked = bytearray(payload[8:29])
+# Reassemble 8-bit bytes from 7-bit payload and separated MSBs
+reassembled = bytearray(payload[8:29])
 for i in range(7):
-    if (m0 >> i) & 1: unmasked[i] |= 0x80
-    if (m1 >> i) & 1: unmasked[i + 7] |= 0x80
-    if (m2 >> i) & 1: unmasked[i + 14] |= 0x80
+    if (m0 >> i) & 1: reassembled[i] |= 0x80
+    if (m1 >> i) & 1: reassembled[i + 7] |= 0x80
+    if (m2 >> i) & 1: reassembled[i + 14] |= 0x80
 ```
 
 #### Delta-Nibble Decompression
 1. **Dynamic Baseline Initialization (`0xF_ 0xF_` Escape)**:
-   - When a byte has high nibble `0xF_`, it pairs with the next `0xF_` byte to establish the dynamic baseline:
+   - The current `Base` acts as the **local upper envelope (maximum)** for subsequent samples.
+   - When a byte has high nibble `0xF_`, it pairs with the next `0xF_` byte to establish an 8-bit dynamic baseline:
      $$\text{Base} = ((B_1 \ \& \ 0\text{x}0\text{F}) \ll 4) \mid (B_2 \ \& \ 0\text{x}0\text{F})$$
      *(e.g., `0xF6 0xF2` $\implies \text{Base}_{\text{SpO2}} = 98\%$; `0xF3 0xFA` $\implies \text{Base}_{\text{HR}} = 58\text{ BPM}$)*
+   - **Encoder Trigger Conditions**: The encoder emits a new baseline escape whenever:
+     - The measured value exceeds the current baseline ($\text{Value} > \text{Base}$).
+     - The measured value drops by more than 14 points below the baseline ($\text{Base} - \text{Value} > 14$).
    - **Cross-Subframe Split Base**: If $B_1$ occurs at byte index 28 (end of subframe), $B_2$ is read from index 8 of the next subframe.
 2. **Stream Terminator**: `0xFF 0xFF` indicates the end of recorded flash data.
 3. **Delta-Nibble Extraction (2 Hz Half-Second Samples)**:
-   - Each byte carries two 4-bit nibbles:
+   - Each byte carries two unsigned 4-bit nibbles (`0x0..0xE`, 0..14) subtracted from `Base`:
      $$\text{Sample}_1 = \text{Base} - (B \gg 4)$$
      $$\text{Sample}_2 = \text{Base} - (B \ \& \ 0\text{x}0\text{F}) \quad (\text{skipped if nibble is } 0\text{x}0\text{F} \text{ padding})$$
-   - Note: $B = 0\text{x}00$ represents $\Delta = 0$ ($\text{Sample} = \text{Base}$). Zero bytes are valid data and must **not** be dropped.
+   - **Ceiling Bound**: Because nibbles are unsigned subtractions, $\text{Sample}_{\max} = \text{Base} - 0 = \text{Base}$. Samples can never exceed the baseline using deltas.
+   - **Zero Delta**: $B = 0\text{x}00$ represents $\Delta = 0$ ($\text{Sample} = \text{Base}$). Zero bytes are valid data and must **not** be dropped.
 4. **End-of-Data Sentinel**: A subframe with `mode = 0x00`, `seq = 0`, and masks containing `0x7F` indicates an uninitialized flash segment and signals immediate termination.
 
 ---
