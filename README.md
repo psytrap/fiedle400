@@ -6,10 +6,9 @@ For detailed hardware & protocol specifications, see [DESIGN.md](file:///home/mi
 
 ## Features
 - **Zero-Dependency Core**: Communicates natively with `/dev/hidraw*` device nodes without relying on buggy libusb C-wrappers.
-- **Device Scanner & Info Reader (`po400 scan` / `po400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries hardware model, raw sysfs parameters, firmware version, serial number (`50F`), user profile string (`user`), and storage geometry (`112B Sub-chunk Payload, 4KB Address Block`).
-- **Unlock Handshake & Negotiation (`po400 negotiate`)**: Transmits Packet #549 (`0x7D 0x81 0xA7` + `0x7D 0x81 0xA2`) unlock handshake and storage negotiation.
+- **Device Info Reader (`po400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries hardware model, raw sysfs parameters, firmware version, serial number (`50F`), user profile string (`user`), and storage geometry (`112B Sub-chunk Payload, 4KB Address Block`).
 - **Real-Time Clock Read & Write (`po400 read-time` / `po400 set-time`)**: Reads hardware RTC clock (`0x82`) and synchronizes device RTC clock (`0x83`) with PC system time.
-- **Session Index Lister (`po400 sessions`)**: Sends unlock handshake and queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
+- **Session Index Lister (`po400 sessions`)**: Queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
 - **Session Data Downloader (`po400 download`)**: Extracts stored recordings from device memory into CSV or JSON format in a 100% non-destructive manner.
 - **Device Memory Clear (`po400 clear`)**: Deletes stored recording sessions from device flash memory (`0xAA`).
 
@@ -34,30 +33,24 @@ sudo chmod 666 /dev/hidraw*
 
 Run commands directly without installing (`pip install` is not required):
 ```bash
-# 1. Scan for PO-400 device
-python3 -m po400.cli scan
-
-# 2. Read hardware information, serial (50F), and storage geometry
+# 1. Read hardware information, serial (50F), and storage geometry
 python3 -m po400.cli info
 
-# 3. Execute unlock handshake & storage negotiation (Packet #549)
-python3 -m po400.cli negotiate
-
-# 4. Read & set device Real-Time Clock (RTC)
+# 2. Read & set device Real-Time Clock (RTC)
 python3 -m po400.cli read-time
 python3 -m po400.cli set-time
 python3 -m po400.cli set-time "2026-09-03 09:45:30"
 
-# 5. List all stored recording sessions on device
+# 3. List all stored recording sessions on device
 python3 -m po400.cli sessions
 
-# 6. Download ALL stored recording sessions (Default)
+# 4. Download ALL stored recording sessions (Default)
 python3 -m po400.cli download -o all_sessions.csv
 
-# 7. Download a specific session (e.g. Session #1)
+# 5. Download a specific session (e.g. Session #1)
 python3 -m po400.cli download -s 1 -o session_1.csv
 
-# 8. Clear/delete ALL stored recording sessions from device flash memory
+# 6. Clear/delete ALL stored recording sessions from device flash memory
 python3 -m po400.cli clear -y
 ```
 
@@ -67,21 +60,21 @@ python3 -m po400.cli clear -y
 
 You can run commands using `po400 <command>` (if installed) or `python3 -m po400.cli <command>` (without installing):
 
-### 1. Scan for Connected Devices
+### 1. Read Device Information
 ```bash
-po400 scan
+po400 info
 # or
-python3 -m po400.cli scan
+python3 -m po400.cli info
 ```
 
-### 3. Extract Saved Recording Sessions to CSV
+### 2. Extract Saved Recording Sessions to CSV
 ```bash
 po400 download -o overnight_recording.csv
 # or
 python3 -m po400.cli download -o overnight_recording.csv
 ```
 
-### 4. Extract Recording Sessions to JSON
+### 3. Extract Recording Sessions to JSON
 ```bash
 po400 download -o overnight_recording.json -f json
 # or
@@ -93,7 +86,7 @@ python3 -m po400.cli download -o overnight_recording.json -f json
 ## Documentation & Protocol References
 
 - **[DESIGN.md](file:///home/mik/Documents/Bastel/2023-/po400/DESIGN.md)**: Full technical specification, USB HID framing, command codes, and memory architecture.
-- **[pcap/bum400_analysis.md](file:///home/mik/Documents/Bastel/2023-/po400/pcap/bum400_analysis.md)**: Ground-truth Wireshark packet capture dissection report (`bum400.pcapng`).
+- **[PROTOCOL.md](file:///home/mik/Documents/Bastel/2023-/po400/PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
 
 ---
 

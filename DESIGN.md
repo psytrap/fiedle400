@@ -21,7 +21,7 @@ Unlike legacy UART models, this hardware variant utilizes a native **GigaDevice 
                                                                         v
                                                               +-------------------+
                                                               | po400 CLI Tool    |
-                                                              |  - scan / info    |
+                                                              |  - info           |
                                                               |  - sessions       |
                                                               |  - download       |
                                                               |  - clear          |
@@ -89,7 +89,7 @@ po400/
    - `Parsers`: Decodes 64-byte `0xEC` metadata reports, 6-byte `0xED` sample frames, RTC datetimes, and device descriptors.
 
 3. **`po400.cli` (`main`, `command_*`)**:
-   - Parses CLI flags (`scan`, `info`, `sessions`, `download`, `clear`, `read-time`, `set-time`, `negotiate`).
+   - Parses CLI flags (`info`, `sessions`, `download`, `clear`, `read-time`, `set-time`, `detect`).
    - Executes session discovery, bounded record download, and CSV/JSON file export.
 
 ---
@@ -179,13 +179,13 @@ Exhaustive parameter sweeps (5,000+ total test cases executed on live `VID 0x28E
 
 | CLI Command | Action & Operation Description |
 | :--- | :--- |
-| `po400 scan` / `po400 info` | Scans sysfs and opens node to print USB descriptors, udev access, model provenance (`50F`), serial number, user profile (`user`), firmware version (`v2.0`), and RTC datetime. |
+| `po400 info` | Scans sysfs and opens node to print USB descriptors, udev access, model provenance (`50F`), serial number, user profile (`user`), firmware version (`v2.0`), and RTC datetime. |
 | `po400 sessions` | Discovers and formats all active recorded session index slots (`0xEC` reports) into a clean tabular view. |
 | `po400 download` | Downloads stored recording sessions from device memory (defaults to ALL sessions, `--session N` for specific session, `--format csv/json`). |
 | `po400 clear` | Erases all stored recording sessions from EEPROM/Flash memory via `0xAA` command (`--yes` to bypass prompt). |
 | `po400 read-time` | Reads device Real-Time Clock (RTC) timestamp (`0x82` command). |
 | `po400 set-time` | Sets device Real-Time Clock (RTC) to specified timestamp or local system time (`0x83` command). |
-| `po400 negotiate` | Executes Packet #549 unlock handshake (`0xA7` + `0xA2`) and prints active user ID. |
+| `po400 detect` | Runs live serial packet detector and decoder on incoming USB HID stream. |
 
 ---
 

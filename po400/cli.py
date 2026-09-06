@@ -1,7 +1,7 @@
 """Pulsox PO-400 Command-Line Interface (CLI).
 
 Commands:
-  scan     - Search for connected PO-400 USB HID devices and check permissions.
+  info     - Read hardware model, firmware version, and USB descriptors.
   sessions - List all stored recording sessions on device (v2.0.0).
   download - Extract recorded sessions from device and save to CSV or JSON.
 """
@@ -17,7 +17,7 @@ from typing import List, Optional, Tuple
 
 from po400 import protocol, serial_engine
 from po400.protocol import Commands, Parsers
-from po400.hid_driver import PulsoxHidDevice, find_pulsox_hid_devices, get_usb_sysfs_info
+from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 
 
 def command_detect(args) -> int:
@@ -52,32 +52,6 @@ def command_detect(args) -> int:
         dev.close()
 
     return 0
-
-
-
-
-def command_scan(args):
-    """Handler for 'scan' subcommand."""
-    print("Scanning for connected Pulsox PO-400 USB HID devices...\n")
-    devices = find_pulsox_hid_devices()
-    
-    if not devices:
-        print("❌ No PO-400 USB HID devices found.")
-        print("   Troubleshooting checklist:")
-        print("   1. Is the USB cable connected to the PC?")
-        print("   2. Is the PO-400 powered ON?")
-        return 1
-
-    print(f"Found {len(devices)} device(s):\n")
-    for idx, (path, info, is_readable) in enumerate(devices, 1):
-        perm_status = "✅ READ/WRITE OK" if is_readable else "❌ PERMISSION DENIED (Run 'sudo chmod 666 /dev/hidraw*')"
-        print(f" [{idx}] Node: {path}")
-        print(f"     Status: {perm_status}")
-        print(f"     Info:   {info}")
-        print("-" * 50)
-    return 0
-
-
 
 
 def _discover_sessions_to_download(dev, download_all: bool, target_session: int, debug: bool = False) -> List[protocol.SessionInfo]:
@@ -322,31 +296,6 @@ def command_set_time(args):
     return 0
 
 
-def command_negotiate(args):
-    """Handler for 'negotiate' subcommand to execute Packet #549 (0xA7 unlock + 0xA2 negotiation) using SerialDeviceEngine."""
-    print("Connecting to Pulsox PO-400 to execute unlock handshake & storage negotiation...")
-    try:
-        dev = PulsoxHidDevice(dev_path=args.device)
-        node_path = dev.connect()
-        print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
-        return 1
-
-    engine = serial_engine.SerialDeviceEngine(dev)
-    try:
-        user_id = engine.unlock_handshake(debug=getattr(args, "verbose", 0))
-        print(f"  ✅ Handshake ACK Success! Active Session User ID: User #{user_id}")
-
-    except KeyboardInterrupt:
-        print("\nNegotiation interrupted by user.")
-    finally:
-        dev.close()
-    return 0
-
-    return 0
-
-
 def command_info(args):
     """Handler for 'info' subcommand to read hardware and firmware information."""
     print("Connecting to Pulsox PO-400 to read device information...")
@@ -436,12 +385,6 @@ def main():
     
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
-    # Subcommand: scan (alias for info)
-    parser_scan = subparsers.add_parser("scan", help="Scan and display connected device information and permissions.")
-    parser_scan.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
-    parser_scan.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
-    parser_scan.set_defaults(func=command_info)
-
     # Subcommand: info
     parser_info = subparsers.add_parser("info", help="Read hardware model, firmware version, and USB descriptors.")
     parser_info.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
@@ -483,11 +426,6 @@ def main():
     parser_st.add_argument("timestamp", nargs="?", help="Optional timestamp string 'YYYY-MM-DD HH:MM:SS' (defaults to current system time).")
     parser_st.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
     parser_st.set_defaults(func=command_set_time)
-
-    # Subcommand: negotiate
-    parser_neg = subparsers.add_parser("negotiate", help="Execute Packet #549 unlock handshake (0xA7) & storage negotiation (0xA2).")
-    parser_neg.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
-    parser_neg.set_defaults(func=command_negotiate)
 
     # Subcommand: detect
     parser_det = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")

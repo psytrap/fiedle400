@@ -115,13 +115,12 @@ def parse_session_index_table(report_bytes: bytes) -> List[SessionInfo]:
         user_id = report_bytes[2] if len(report_bytes) > 2 else 1
         sess_id = report_bytes[3] if len(report_bytes) > 3 else 1
         
-        # Bytes 10..13: 28-Bit Packed Little-Endian Integer (7-Bit Chunks)
+        # Bytes 10..13: 28-Bit Packed Little-Endian Integer (7-Bit Chunks): Duration in seconds
         b0 = report_bytes[10] if len(report_bytes) > 10 else 0
         b1 = report_bytes[11] if len(report_bytes) > 11 else 0
         b2 = report_bytes[12] if len(report_bytes) > 12 else 0
         b3 = report_bytes[13] if len(report_bytes) > 13 else 0
-        samples = (b0 & 0x7F) | ((b1 & 0x7F) << 7) | ((b2 & 0x7F) << 14) | ((b3 & 0x7F) << 21)
-        duration_sec = (samples + 1) // 2 if samples > 0 else 0
+        duration_sec = (b0 & 0x7F) | ((b1 & 0x7F) << 7) | ((b2 & 0x7F) << 14) | ((b3 & 0x7F) << 21)
         rec_cnt = duration_sec
 
         if sess_id == 0 and duration_sec == 0 and rec_cnt == 0:

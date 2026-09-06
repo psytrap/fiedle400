@@ -72,15 +72,15 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(len(zero_sessions), 0)
 
     def test_parsers_ec_session_index(self):
-        # 0xEC report for Session #2: 102 samples (51s duration at 2 Hz)
+        # 0xEC report for Session #2: 102s duration (1m 42s)
         report_ec = bytes([0xEC, 0x00, 0x01, 0x02, 26, 9, 4, 21, 46, 47, 102, 0, 0, 0, 117, 115, 101, 114, 0, 0, 0] + [0]*43)
         sessions = Parsers.parse_session_index(report_ec)
         self.assertEqual(len(sessions), 1)
         self.assertEqual(sessions[0].session_id, 2)
         self.assertEqual(sessions[0].user_id, 1)
-        self.assertEqual(sessions[0].duration_sec, 51)
-        self.assertEqual(sessions[0].duration_str, "51s")
-        self.assertEqual(sessions[0].record_count, 51)
+        self.assertEqual(sessions[0].duration_sec, 102)
+        self.assertEqual(sessions[0].duration_str, "1m 42s")
+        self.assertEqual(sessions[0].record_count, 102)
 
     def test_parsers_hid_chunks(self):
         chunk0 = [0xF0, 0x00, 0x10, 85, 0, 0]

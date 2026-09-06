@@ -11,15 +11,16 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
    `checksum = sum(bytes[0..N-1]) % 128` (or `sum(bytes[0..N-1]) & 0x7F`)
 3. **14-Bit Integer Packing (7-bit Little-Endian)**:
    `value_14 = byte[0] | (byte[1] << 7)`
-4. **28-Bit Integer Packing (Sample Count in 0xEC Header)**:
-   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)`
+4. **28-Bit Integer Packing (Duration in 0xEC Header)**:
+   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` (Recorded session duration in seconds / 1 Hz records)
 5. **USB HID Report Size**: Outbound and inbound reports are 64 bytes fixed-length (`REPORT_SIZE = 64`), zero-padded.
 
 ---
 
-## 2. Opcode & Response Registry
+## 2. Command & Response Registry
 
-| Opcode | Name | Host Request | Device Response | Description |
+### 2.1 Outbound Host Request Commands
+| Opcode | Name | Host Request (Hex) | Expected Response | Description |
 | :---: | :--- | :--- | :---: | :--- |
 | **0xA7 + 0xA2** | `UNLOCK_HANDSHAKE` | `7D 81 A7 80...` & `7D 81 A2 80...` | `0xF0` | Unlocks MCU state machine (ACK `F0 70`) |
 | **0x9C [0x80]** | `SESSION_RESET` | `7D 81 9C 80 00 1C` | `0xF0` / `0xEC` | Resets session iterator to slot 0 |
@@ -41,6 +42,25 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 | **0xA6** | `SESSION_DOWNLOAD` | `7D 81 A6 [chk]` | `0xEB` | Starts stream download (serial-stream devices) |
 | **0xAA / 0x91** | `FLASH_CLEAR` | `7D 81 AA...` / `91 01 12` | `0xF0` | Flash erase / User erase (Destructive) |
 
+### 2.2 Inbound Device Responses
+| Response Header | Name | Payload Length | Triggering Command | Description |
+| :---: | :--- | :---: | :---: | :--- |
+| **`0xF0`** | `COMMAND_ACK` | 2 B (HID-aligned) | `0xA7`, `0xA2`, `0x9D 0x02`, `0x83` | Acknowledgment report. Byte 1 = `0x70` indicates success / MCU unlocked. |
+| **`0xEC`** | `SESSION_INDEX` | 21 B (HID-aligned) | `0x9C [0x01]` | Session metadata index: User ID, Session ID, Start Date/Time, 28-bit Sample Count, Profile Name. |
+| **`0xED`** | `STORAGE_SUBFRAME` | 30 B (stream)* | `0x9D 0x04 [0x01/0x02]` | Stored session data: 14-bit sequence, 3 MSB masks (`m0..m2`), 21 B delta-nibbles. |
+| **`0xEB`** | `LIVE_STREAM` | 6 B (HID-aligned, up to 3×) | `0x9B [0x00]` / `0xA6` | Real-time streaming sample sub-chunks: Status flags, PPG waveform bar height, Pulse Rate BPM, SpO2 %. |
+| **`0xF2`** | `RTC_REPORT` | 8 B (HID-aligned) | `0x82`, `0x83` | Real-Time Clock date and time: Year, Month, Day, Hour, Minute, Second, Checksum. |
+| **`0xF1`** | `DEVICE_INFO` | 10 B (HID-aligned) | `0xAD`, `0x81` | Hardware model descriptor ASCII string (e.g. `"50F     "`). |
+| **`0xCF` / `0x81`** | `FIRMWARE_INFO` | 10 B (HID-aligned) | `0x80`, `0x81` | Firmware version descriptor ASCII string (e.g. `"V3.1    "`). |
+| **`0xFE`** | `PROFILE_INFO` | 11 B (HID-aligned) | `0x8E` | User profile ASCII string (`"   user "`) or serial number string. |
+| **`0xEF`** | `FLASH_GEOMETRY` | 8 B (HID-aligned) | `0x8F`, `0x9F` | Flash memory geometry: sector count, block size (14-bit LE), capacity. |
+| **`0xD4`** | `FLASH_SECTOR` | 18 B (HID-aligned) | `0x94` | Flash sector layout: total blocks, block pages, sector allocation bitmask. |
+| **`0xE0`** | `USER_METADATA` | 7 B (HID-aligned) | `0x90 [0x06]` | User alarm thresholds: SpO2 Low/High (%), PR Low/High (BPM). |
+
+\*) **Framing & Alignment**:
+- **HID-aligned**: Message starts strictly at Byte 0 of the 64-byte USB report; remaining bytes are zero-padded (`0x00`).
+- **Continuous Stream (`0xED 0x04`)**: Stored session subframes are streamed continuously as unpadded 30-byte chunks across 64-byte USB HID report boundaries.
+
 ---
 
 ## 3. Byte Maps
@@ -48,134 +68,135 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 ### 3.1 UNLOCK_HANDSHAKE (`0xA7` + `0xA2`)
 
 #### Phase 1 Request (`0xA7`)
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Sync Prefix | `0x7D` | Protocol 0 sync marker |
-| `0x01` | 1 byte | Channel ID | `0x81` | Target channel ID |
-| `0x02` | 1 byte | Opcode | `0xA7` | Unlock Phase 1 |
-| `0x03..0x08` | 6 bytes | Key / Padding | `0x80` × 6 | Unlock key bytes |
-| `0x09` | 1 byte | Checksum | `0x20` | `sum(bytes[0..8]) % 128` |
-| `0x0A..0x3F` | 54 bytes | Padding | `0x00` × 54 | Report padding |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Sync Prefix | `0x7D` | Protocol 0 sync marker |
+| `0x01` | Channel ID | `0x81` | Target channel ID |
+| `0x02` | Opcode | `0xA7` | Unlock Phase 1 |
+| `0x03..0x08` | Key / Padding | `0x80` × 6 | Unlock key bytes |
+| `0x09` | Checksum | `0x20` | `sum(bytes[0..8]) % 128` |
+| `0x0A..0x3F` | Padding | `0x00` × 54 | Report padding |
 
 #### Phase 2 Request (`0xA2`)
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Sync Prefix | `0x7D` | Protocol 0 sync marker |
-| `0x01` | 1 byte | Channel ID | `0x81` | Target channel ID |
-| `0x02` | 1 byte | Opcode | `0xA2` | Unlock Phase 2 |
-| `0x03..0x08` | 6 bytes | Key / Padding | `0x80` × 6 | Unlock key bytes |
-| `0x09` | 1 byte | Checksum | `0x1B` | `sum(bytes[0..8]) % 128` |
-| `0x0A..0x3F` | 54 bytes | Padding | `0x00` × 54 | Report padding |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Sync Prefix | `0x7D` | Protocol 0 sync marker |
+| `0x01` | Channel ID | `0x81` | Target channel ID |
+| `0x02` | Opcode | `0xA2` | Unlock Phase 2 |
+| `0x03..0x08` | Key / Padding | `0x80` × 6 | Unlock key bytes |
+| `0x09` | Checksum | `0x1B` | `sum(bytes[0..8]) % 128` |
+| `0x0A..0x3F` | Padding | `0x00` × 54 | Report padding |
 
 #### Device Response: ACK (`0xF0`)
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xF0` | Acknowledge |
-| `0x01` | 1 byte | Status | `0x70` | `0x70` = Success / MCU unlocked |
-| `0x02..0x3F` | 62 bytes | Padding | `0x00...` | Zero padding |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xF0` | Acknowledge |
+| `0x01` | Status | `0x70` | `0x70` = Success / MCU unlocked |
+| `0x02..0x3F` | Padding | `0x00...` | Zero padding |
 
 ---
 
 ### 3.2 SESSION_RESET & QUERY_SESSIONS (`0x9C`)
 
 #### SESSION_RESET Request
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0x9C` | Session iterator control |
-| `0x01` | 1 byte | Sub-command | `0x80` | `0x80` = Reset iterator to start |
-| `0x02` | 1 byte | Checksum | `0x1C` | `(0x9C + 0x80) % 128 = 0x1C` |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0x9C` | Session iterator control |
+| `0x01` | Sub-command | `0x80` | `0x80` = Reset iterator to start |
+| `0x02` | Checksum | `0x1C` | `(0x9C + 0x80) % 128 = 0x1C` |
 
 #### QUERY_SESSIONS Request
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0x9C` | Session query command |
-| `0x01` | 1 byte | User / Slot ID | `0x01` | User 1 (Slot 1) |
-| `0x02` | 1 byte | Checksum | `0x1D` | `(0x9C + 0x01) % 128 = 0x1D` |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0x9C` | Session query command |
+| `0x01` | User / Slot ID | `0x01` | User 1 (Slot 1) |
+| `0x02` | Checksum | `0x1D` | `(0x9C + 0x01) % 128 = 0x1D` |
 
 #### Device Response: Session Header (`0xEC`, 64 Bytes)
-| Offset | Length | Field | Format | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Header Opcode | `0xEC` | Session metadata packet identifier |
-| `0x01` | 1 byte | Flags | Bitmask | Bit 6 (`0x40`): Data ready (1 = valid session). Bits 0..3: User slot ID |
-| `0x02` | 1 byte | Total Segments | `uint8` | Total stored segments count |
-| `0x03` | 1 byte | Segment Index | `uint8` | 1-based segment number |
-| `0x04` | 1 byte | Year | `uint8` | Years since 2000 (`26` = 2026) |
-| `0x05` | 1 byte | Month | `1..12` | Month |
-| `0x06` | 1 byte | Day | `1..31` | Day of month |
-| `0x07` | 1 byte | Hour | `0..23` | Start hour |
-| `0x08` | 1 byte | Minute | `0..59` | Start minute |
-| `0x09` | 1 byte | Second | `0..59` | Start second |
-| `0x0A..0x0D` | 4 bytes | Sample Count | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. 2 Hz samples. |
-| `0x0E..0x1D` | 16 bytes | Username | ASCII | Null-terminated username string (e.g. `"user"`) |
-| `0x1E..0x3F` | 34 bytes | Padding | `0x00...` | Reserved zero padding |
+| Offset | Field | Format | Description |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Header Opcode | `0xEC` | Session metadata packet identifier |
+| `0x01` | Flags | Bitmask | Bit 6 (`0x40`): Data ready (1 = valid session). Bits 0..3: User slot ID |
+| `0x02` | Total Segments | `uint8` | Total stored segments count |
+| `0x03` | Segment Index | `uint8` | 1-based segment number |
+| `0x04` | Year | `uint8` | Years since 2000 (`26` = 2026) |
+| `0x05` | Month | `1..12` | Month |
+| `0x06` | Day | `1..31` | Day of month |
+| `0x07` | Hour | `0..23` | Start hour |
+| `0x08` | Minute | `0..59` | Start minute |
+| `0x09` | Second | `0..59` | Start second |
+| `0x0A..0x0D` | Duration (s) | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. Total recorded duration in seconds (1 Hz records). |
+| `0x0E..0x1D` | Username | ASCII | Null-terminated username string (e.g. `"user"`) |
+| `0x1E..0x3F` | Padding | `0x00...` | Reserved zero padding |
 
 ---
 
 ### 3.3 READ_RTC (`0x82`) & SET_RTC (`0x83`)
 
 #### READ_RTC Request
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0x82` | Read clock |
-| `0x01` | 1 byte | Checksum | `0x02` | `0x82 % 128 = 0x02` |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0x82` | Read clock |
+| `0x01` | Checksum | `0x02` | `0x82 % 128 = 0x02` |
 
 #### SET_RTC Request
-| Offset | Length | Field | Range | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0x83` | Set clock |
-| `0x01` | 1 byte | Year | `0..127` | Year since 2000 |
-| `0x02` | 1 byte | Month | `1..12` | Month |
-| `0x03` | 1 byte | Day | `1..31` | Day |
-| `0x04` | 1 byte | Hour | `0..23` | Hour |
-| `0x05` | 1 byte | Minute | `0..59` | Minute |
-| `0x06` | 1 byte | Second | `0..59` | Second |
-| `0x07` | 1 byte | Flags | `0x33` | Subsecond timing parameter |
-| `0x08` | 1 byte | Reserved | `0x06` | Fixed parameter |
-| `0x09` | 1 byte | Checksum | `0..127` | `sum(bytes[0..8]) % 128` |
+| Offset | Field | Range | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0x83` | Set clock |
+| `0x01` | Year | `0..127` | Year since 2000 |
+| `0x02` | Month | `1..12` | Month |
+| `0x03` | Day | `1..31` | Day |
+| `0x04` | Hour | `0..23` | Hour |
+| `0x05` | Minute | `0..59` | Minute |
+| `0x06` | Second | `0..59` | Second |
+| `0x07` | Flags | `0x33` | Subsecond timing parameter |
+| `0x08` | Reserved | `0x06` | Fixed parameter |
+| `0x09` | Checksum | `0..127` | `sum(bytes[0..8]) % 128` |
 
 #### Device Response: RTC Report (`0xF2`, 8 Bytes)
-| Offset | Length | Field | Range | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xF2` | RTC response identifier |
-| `0x01` | 1 byte | Year | `0..127` | Year since 2000 (YY) |
-| `0x02` | 1 byte | Month | `1..12` | Month |
-| `0x03` | 1 byte | Day | `1..31` | Day |
-| `0x04` | 1 byte | Hour | `0..23` | Hour |
-| `0x05` | 1 byte | Minute | `0..59` | Minute |
-| `0x06` | 1 byte | Second | `0..59` | Second |
-| `0x07` | 1 byte | Checksum | `0..127` | `sum(bytes[0..6]) % 128` |
+| Offset | Field | Range | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xF2` | RTC response identifier |
+| `0x01` | Year | `0..127` | Year since 2000 (YY) |
+| `0x02` | Month | `1..12` | Month |
+| `0x03` | Day | `1..31` | Day |
+| `0x04` | Hour | `0..23` | Hour |
+| `0x05` | Minute | `0..59` | Minute |
+| `0x06` | Second | `0..59` | Second |
+| `0x07` | Checksum | `0..127` | `sum(bytes[0..6]) % 128` |
 
 ---
 
 ### 3.4 DATA_STREAM_QUERY (`0x9B`) & Live Streaming (`0xEB`)
 
 #### DATA_STREAM_QUERY Request
-| Offset | Length | Field | Value | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0x9B` | Stream control |
-| `0x01` | 1 byte | Control | `0x00` / `0x7F` | `0x00` = Start stream, `0x7F` = Stop stream |
-| `0x02` | 1 byte | Checksum | `0x1B` / `0x1A` | `(0x9B + Control) % 128` |
+| Offset | Field | Value | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0x9B` | Stream control |
+| `0x01` | Control | `0x00` / `0x7F` | `0x00` = Start stream, `0x7F` = Stop stream |
+| `0x02` | Checksum | `0x1B` / `0x1A` | `(0x9B + Control) % 128` |
 
 #### Device Response: Live Sub-Frames (`0xEB`, 6 Bytes each)
 Packed consecutively in 64-byte HID input reports:
-| Offset | Length | Field | Range | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Sync Opcode | `0xEB` | Live frame identifier |
-| `0x01` | 1 byte | Status & Quality | Bitfield | Bit 0: Finger-out (`1` = probe off, `0` = OK)<br>Bits 1..3: Signal bars (0..8)<br>Bit 4: Beat trigger (1 = pulse tick) |
-| `0x02` | 1 byte | Plethysmogram | `0..127` | Real-time PPG waveform curve amplitude |
-| `0x03` | 1 byte | Pulse Rate | `0..254` | Pulse rate in BPM (`0xFF` = invalid) |
-| `0x04` | 1 byte | SpO2 | `0..100` | Blood oxygen saturation % (`0x7F` = invalid) |
-| `0x05` | 1 byte | Checksum | `0..127` | `sum(bytes[0..4]) % 128` |
+| Offset | Field | Range | Description |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Sync Opcode | `0xEB` | Live frame identifier |
+| `0x01` | Status & Quality | Bitfield | Bit 0: Finger-out (`1` = probe off, `0` = OK)<br>Bits 1..3: Signal bars (0..8)<br>Bit 4: Beat trigger (1 = pulse tick) |
+| `0x02` | Plethysmogram | `0..127` | Real-time PPG waveform curve amplitude |
+| `0x03` | Pulse Rate | `0..254` | Pulse rate in BPM (`0xFF` = invalid) |
+| `0x04` | SpO2 | `0..100` | Blood oxygen saturation % (`0x7F` = invalid) |
+| `0x05` | Checksum | `0..127` | `sum(bytes[0..4]) % 128` |
 
 ---
 
 ### 3.5 Storage Transfer Commands (`0x9D`) & Subframes (`0xED`)
 
 #### Storage Command Header Layout (64 Bytes Outbound)
-```text
-Byte: [0]  [1]   [2]   [3]     [4]    [5]     [6]      [7]    [8]   [9..63]
-Val:  0x9D Mode  Type  User_ID Seg_ID Off_Lo  Off_Hi   0x00   Chk   0x00...
-```
+
+| Byte | `[0]` | `[1]` | `[2]` | `[3]` | `[4]` | `[5]` | `[6]` | `[7]` | `[8]` | `[9..63]` |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Field** | Opcode | Mode | Type | User_ID | Seg_ID | Off_Lo | Off_Hi | Reserved | Checksum | Padding |
+| **Val** | `0x9D` | Mode | Type | User_ID | Seg_ID | Off_Lo | Off_Hi | `0x00` | Chk | `0x00...` |
 
 | Command | Mode | Type | User | Seg | Off_Lo | Off_Hi | Checksum | Description |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -185,19 +206,18 @@ Val:  0x9D Mode  Type  User_ID Seg_ID Off_Lo  Off_Hi   0x00   Chk   0x00...
 | `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00` | `0x00` | `0x1C` | Acknowledges session retrieval |
 
 #### Device Response: Stored Data Sub-Frame (`0xED`, 30 Bytes each)
-Each 64-byte HID input report carries 2 consecutive 30-byte subframes (60 bytes total) plus 4 bytes trailing padding:
 
-| Offset | Length | Field | Format | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xED` | Storage subframe sync marker |
-| `0x01` | 1 byte | Mode | `0x04` | Flash block transfer mode |
-| `0x02` | 1 byte | Data Type | `0x01` / `0x02` | `0x01` = SpO2 series, `0x02` = Pulse Rate series |
-| `0x03..0x04` | 2 bytes | Sequence Index | 14-bit LE | `(Byte[4] << 7) \| Byte[3]` (0-based subframe counter) |
-| `0x05` | 1 byte | MSB Mask 0 | Bitmask | Restores Bit 7 for payload bytes `0x08..0x0E` |
-| `0x06` | 1 byte | MSB Mask 1 | Bitmask | Restores Bit 7 for payload bytes `0x0F..0x15` |
-| `0x07` | 1 byte | MSB Mask 2 | Bitmask | Restores Bit 7 for payload bytes `0x16..0x1C` |
-| `0x08..0x1C` | 21 bytes | Compressed Data | 42 nibbles | Delta-compressed 2 Hz samples (see below) |
-| `0x1D` | 1 byte | Checksum | `0..127` | `sum(bytes[0..28]) % 128` |
+| Offset | Field | Format | Description |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xED` | Storage subframe sync marker |
+| `0x01` | Mode | `0x04` | Flash block transfer mode |
+| `0x02` | Data Type | `0x01` / `0x02` | `0x01` = SpO2 series, `0x02` = Pulse Rate series |
+| `0x03..0x04` | Sequence Index | 14-bit LE | `(Byte[4] << 7) \| Byte[3]` (0-based subframe counter) |
+| `0x05` | MSB Mask 0 | Bitmask | Restores Bit 7 for payload bytes `0x08..0x0E` |
+| `0x06` | MSB Mask 1 | Bitmask | Restores Bit 7 for payload bytes `0x0F..0x15` |
+| `0x07` | MSB Mask 2 | Bitmask | Restores Bit 7 for payload bytes `0x16..0x1C` |
+| `0x08..0x1C` | Compressed Data | 42 nibbles | Delta-compressed 2 Hz samples (see below) |
+| `0x1D` | Checksum | `0..127` | `sum(bytes[0..28]) % 128` |
 
 #### MSB Unmasking Algorithm
 Payload bytes `0x08..0x1C` (indices 8..28) are 7-bit encoded. Bit 7 is restored using `m0` (byte 5), `m1` (byte 6), and `m2` (byte 7):
@@ -231,11 +251,11 @@ for i in range(7):
 `[0x81, 0x01]` (Checksum: `0x01`)
 
 #### Device Response (`0xF1`, 10 Bytes)
-| Offset | Length | Field | Format | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xF1` | Device info header |
-| `0x01..0x08` | 8 bytes | Model String | ASCII | `"50F     "` (CMS50F / PO-400) |
-| `0x09` | 1 byte | Checksum | `0x3C` | `sum(bytes[0..8]) % 128` |
+| Offset | Field | Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xF1` | Device info header |
+| `0x01..0x08` | Model String | ASCII | `"50F     "` (CMS50F / PO-400) |
+| `0x09` | Checksum | `0x3C` | `sum(bytes[0..8]) % 128` |
 
 ---
 
@@ -245,11 +265,11 @@ for i in range(7):
 `[0x80, 0x00]` (Checksum: `0x00`)
 
 #### Device Response (`0xCF`, 10 Bytes)
-| Offset | Length | Field | Format | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xCF` | Firmware info header |
-| `0x01..0x08` | 8 bytes | Version String | ASCII | `"V3.1    "` |
-| `0x09` | 1 byte | Checksum | `0..127` | `sum(bytes[0..8]) % 128` |
+| Offset | Field | Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xCF` | Firmware info header |
+| `0x01..0x08` | Version String | ASCII | `"V3.1    "` |
+| `0x09` | Checksum | `0..127` | `sum(bytes[0..8]) % 128` |
 
 ---
 
@@ -263,12 +283,12 @@ for i in range(7):
 | `0x07` | `8E 07 15` | Serial number query |
 
 #### Device Response (`0xFE`, 11 Bytes)
-| Offset | Length | Field | Format | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xFE` | Profile response |
-| `0x01` | 1 byte | Sub-Index Echo | `uint8` | Confirms requested index |
-| `0x02..0x09` | 8 bytes | Text String | ASCII | Username or serial number string |
-| `0x0A` | 1 byte | Checksum | `0..127` | `sum(bytes[0..9]) % 128` |
+| Offset | Field | Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xFE` | Profile response |
+| `0x01` | Sub-Index Echo | `uint8` | Confirms requested index |
+| `0x02..0x09` | Text String | ASCII | Username or serial number string |
+| `0x0A` | Checksum | `0..127` | `sum(bytes[0..9]) % 128` |
 
 ---
 
@@ -278,13 +298,13 @@ for i in range(7):
 `[0x8F, 0x04, 0x00, 0x13]` (Checksum: `0x13`)
 
 #### Device Response (`0xEF`, 8 Bytes)
-| Offset | Length | Field | Format | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xEF` | Flash geometry header |
-| `0x01` | 1 byte | Sector Count | `uint8` | Number of flash sectors |
-| `0x02..0x03` | 2 bytes | Block Size | 14-bit LE | Block size in bytes (64 or 256) |
-| `0x04..0x06` | 3 bytes | Capacity | 21-bit LE | Total capacity |
-| `0x07` | 1 byte | Checksum | `0..127` | `sum(bytes[0..6]) % 128` |
+| Offset | Field | Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xEF` | Flash geometry header |
+| `0x01` | Sector Count | `uint8` | Number of flash sectors |
+| `0x02..0x03` | Block Size | 14-bit LE | Block size in bytes (64 or 256) |
+| `0x04..0x06` | Capacity | 21-bit LE | Total capacity |
+| `0x07` | Checksum | `0..127` | `sum(bytes[0..6]) % 128` |
 
 ---
 
@@ -294,13 +314,13 @@ for i in range(7):
 `[0x94, 0x14]` (Checksum: `0x14`)
 
 #### Device Response (`0xD4`, 18 Bytes)
-| Offset | Length | Field | Format | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xD4` | Sector layout header |
-| `0x01` | 1 byte | Total Blocks | `uint8` | Flash blocks count |
-| `0x02..0x03` | 2 bytes | Block Pages | 14-bit LE | Pages per block |
-| `0x04..0x10` | 13 bytes | Sector Map | Bytes | Sector allocation bitmask |
-| `0x11` | 1 byte | Checksum | `0..127` | `sum(bytes[0..16]) % 128` |
+| Offset | Field | Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xD4` | Sector layout header |
+| `0x01` | Total Blocks | `uint8` | Flash blocks count |
+| `0x02..0x03` | Block Pages | 14-bit LE | Pages per block |
+| `0x04..0x10` | Sector Map | Bytes | Sector allocation bitmask |
+| `0x11` | Checksum | `0..127` | `sum(bytes[0..16]) % 128` |
 
 ---
 
@@ -310,15 +330,15 @@ for i in range(7):
 `[0x90, 0x06, 0x16]` (Checksum: `0x16`)
 
 #### Device Response (`0xE0`, 7 Bytes)
-| Offset | Length | Field | Range | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 byte | Opcode | `0xE0` | Alarm metadata header |
-| `0x01` | 1 byte | Sub-Index Echo | `0x06` | Echo of requested index |
-| `0x02` | 1 byte | SpO2 Low Limit | `0..100 %` | Lower SpO2 alarm limit |
-| `0x03` | 1 byte | SpO2 High Limit | `0..100 %` | Upper SpO2 alarm limit |
-| `0x04` | 1 byte | PR Low Limit | `25..250 BPM` | Lower Pulse Rate alarm limit |
-| `0x05` | 1 byte | PR High Limit | `25..250 BPM` | Upper Pulse Rate alarm limit |
-| `0x06` | 1 byte | Checksum | `0..127` | `sum(bytes[0..5]) % 128` |
+| Offset | Field | Range | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xE0` | Alarm metadata header |
+| `0x01` | Sub-Index Echo | `0x06` | Echo of requested index |
+| `0x02` | SpO2 Low Limit | `0..100 %` | Lower SpO2 alarm limit |
+| `0x03` | SpO2 High Limit | `0..100 %` | Upper SpO2 alarm limit |
+| `0x04` | PR Low Limit | `25..250 BPM` | Lower Pulse Rate alarm limit |
+| `0x05` | PR High Limit | `25..250 BPM` | Upper Pulse Rate alarm limit |
+| `0x06` | Checksum | `0..127` | `sum(bytes[0..5]) % 128` |
 
 ---
 
@@ -348,16 +368,15 @@ Used on serial-stream device models:
 
 The Windows Contec SpO2 Assistant exports decoded sessions in `.SpO2` format:
 
-| Offset | Size | Type | Description |
-| :--- | :--- | :--- | :--- |
-| `0x0000` | 4 bytes | uint32_le | File size hint |
-| `0x0004` | 4 bytes | uint32_le | Format version (`0x01`) |
-| `0x0420` | 4 bytes | uint32_le | Start Year |
-| `0x0424` | 4 bytes | uint32_le | Start Month |
-| `0x0428` | 4 bytes | uint32_le | Start Day |
-| `0x042C` | 4 bytes | uint32_le | Start Hour |
-| `0x0430` | 4 bytes | uint32_le | Start Minute |
-| `0x0434` | 4 bytes | uint32_le | Start Second |
-| `0x0438` | 4 bytes | uint32_le | Total 1 Hz sample count |
-| `0x043C` | N×2 bytes | uint8[2] | `[SpO2 %, Pulse Rate BPM]` pairs per second |
-
+| Offset | Type | Description |
+| :--- | :--- | :--- |
+| `0x0000` | uint32_le | File size hint |
+| `0x0004` | uint32_le | Format version (`0x01`) |
+| `0x0420` | uint32_le | Start Year |
+| `0x0424` | uint32_le | Start Month |
+| `0x0428` | uint32_le | Start Day |
+| `0x042C` | uint32_le | Start Hour |
+| `0x0430` | uint32_le | Start Minute |
+| `0x0434` | uint32_le | Start Second |
+| `0x0438` | uint32_le | Total 1 Hz sample count |
+| `0x043C` | uint8[2] × N | `[SpO2 %, Pulse Rate BPM]` pairs per second |

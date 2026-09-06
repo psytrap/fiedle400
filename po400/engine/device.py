@@ -147,9 +147,6 @@ class SerialDeviceEngine:
         duration_sec = sess_info.duration_seconds
         base_timestamp = sess_info.timestamp or datetime.now()
 
-        # Step 0: Wait until 10 0xEB messages are reported BEFORE starting any other communication
-        self.wait_for_eb_stream(target_count=10, max_timeout=10.0, debug=debug)
-
         # Step 1: Flush stale reports & send unlock handshake + storage init
         while self.dev.read_report(64): pass
 
