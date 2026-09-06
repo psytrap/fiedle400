@@ -228,15 +228,13 @@ Packed consecutively in 64-byte HID input reports:
 | `0x01` | Mode | `0x04` | Flash block transfer mode |
 | `0x02` | Data Type | `0x01` / `0x02` | `0x01` = SpO2 series, `0x02` = Pulse Rate series |
 | `0x03..0x04` | Sequence Index | 14-bit LE | `(Byte[4] << 7) \| Byte[3]` (0-based subframe counter) |
-| `0x05` | Separated MSBs 0 | 7 bits | Bit 7 for payload bytes `0x08..0x0E` |
-| `0x06` | Separated MSBs 1 | 7 bits | Bit 7 for payload bytes `0x0F..0x15` |
-| `0x07` | Separated MSBs 2 | 7 bits | Bit 7 for payload bytes `0x16..0x1C` |
-| `0x08..0x1C` | 7-bit Payload (`& 0x7F`) | 21 bytes | Lower 7 bits of compressed data series |
+| `0x05..0x07` | Separated MSBs | 3 bytes | Bit 7 for compressed data bytes `0x08..0x1C` (7 bits each; Bit 7 unused) |
+| `0x08..0x1C` | Compressed Data | 21 bytes | Lower 7 bits of data series (`& 0x7F`) |
 | `0x1D` | Checksum | `0..127` | `sum(bytes[0..28]) % 128` |
 
 #### MSB Reassembly (7-to-8 Bit Encoding)
 
-In accordance with the [Universal Protocol Principle](#2-command--response-registry), all payload bytes transmitted over the wire are restricted to 7 bits (`MSB = 0`, range `0x00..0x7F`) to prevent collision with frame opcodes and sync markers (`MSB = 1`). Each 8-bit data byte is split during encoding:
+All payload bytes transmitted over the wire are restricted to 7 bits (`MSB = 0`, range `0x00..0x7F`) to prevent collision with frame opcodes and sync markers (`MSB = 1`). Each 8-bit data byte is split during encoding:
 * **Lower 7 Bits (`0x08..0x1C`)**: Masked with `0x7F` (`byte & 0x7F`) and transmitted as 21 payload bytes.
 * **Separated MSBs (`0x05..0x07`)**: The MSB (Bit 7) of each byte is extracted and packed across 3 header bytes (7 MSBs per byte, Bits 0..6).
 
@@ -248,11 +246,15 @@ Each reassembled byte carries two delta nibbles (either SpO2 or Pulse Rate).
 
 ```python
 # Reassemble 8-bit bytes from 7-bit payload and separated MSBs
-reassembled = bytearray(payload[8:29])
-for i in range(7):
-    if (m0 >> i) & 1: reassembled[i] |= 0x80
-    if (m1 >> i) & 1: reassembled[i + 7] |= 0x80
-    if (m2 >> i) & 1: reassembled[i + 14] |= 0x80
+msb_bytes = subframe[5:8]        # 3 bytes carrying 21 separated MSBs
+data_bytes = subframe[8:29]      # 21 compressed data bytes (7-bit)
+
+# Unpack 3 bytes into 21 individual MSB bits (7 bits each)
+msb_bits = [(byte >> bit) & 1 for byte in msb_bytes for bit in range(7)]
+
+reassembled = bytearray()
+for msb, byte in zip(msb_bits, data_bytes):
+    reassembled.append((msb << 7) | byte)
 ```
 
 #### Delta-Nibble Decompression

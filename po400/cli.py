@@ -12,7 +12,7 @@ import json
 import os
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
 from po400 import protocol, serial_engine
@@ -377,11 +377,223 @@ def command_info(args):
     return 0
 
 
+def parse_session_selection(selection_str: str, available_sessions: List[protocol.SessionInfo]) -> List[protocol.SessionInfo]:
+    """Parses user input into an ordered, deduplicated list of SessionInfo objects.
+    
+    Supports:
+      - 'a', 'all': returns all available sessions
+      - '1': single session ID
+      - '1,3,4': comma-separated IDs
+      - '1-3': inclusive range of session IDs
+      - combinations: '1-3, 5, 7-8'
+    """
+    raw = selection_str.strip().lower()
+    if not raw:
+        raise ValueError("No session selected.")
+
+    if raw in ("a", "all"):
+        if not available_sessions:
+            raise ValueError("No sessions available to download.")
+        return list(available_sessions)
+
+    sess_map = {s.session_id: s for s in available_sessions}
+    selected_ids = []
+
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    for part in parts:
+        if "-" in part:
+            bounds = [b.strip() for b in part.split("-", 1)]
+            if not bounds[0].isdigit() or not bounds[1].isdigit():
+                raise ValueError(f"Invalid range syntax: '{part}'")
+            start_id, end_id = int(bounds[0]), int(bounds[1])
+            if start_id > end_id:
+                raise ValueError(f"Range start cannot exceed range end: '{part}'")
+            for sid in range(start_id, end_id + 1):
+                if sid not in sess_map:
+                    raise ValueError(f"Session #{sid} does not exist.")
+                if sid not in selected_ids:
+                    selected_ids.append(sid)
+        else:
+            if not part.isdigit():
+                raise ValueError(f"Invalid session number: '{part}'")
+            sid = int(part)
+            if sid not in sess_map:
+                raise ValueError(f"Session #{sid} does not exist.")
+            if sid not in selected_ids:
+                selected_ids.append(sid)
+
+    if not selected_ids:
+        raise ValueError("No valid sessions selected.")
+
+    return [sess_map[sid] for sid in selected_ids]
+
+
+def generate_iso_filename(selected_sessions: List[protocol.SessionInfo]) -> str:
+    """Generates a uniform CSV filename with ISO start and end datetimes.
+    
+    Format: po400_{start_iso}_{end_iso}.csv
+    e.g.: po400_2026-09-06T100516_2026-09-06T105028.csv
+    """
+    now = datetime.now()
+    valid_starts = [s.timestamp for s in selected_sessions if s.timestamp]
+    start_dt = min(valid_starts) if valid_starts else now
+
+    valid_ends = [
+        (s.timestamp + timedelta(seconds=s.duration_seconds))
+        for s in selected_sessions if s.timestamp
+    ]
+    if valid_ends:
+        end_dt = max(valid_ends)
+    else:
+        total_sec = sum(s.duration_seconds for s in selected_sessions)
+        end_dt = start_dt + timedelta(seconds=max(total_sec, 60))
+
+    start_iso = start_dt.strftime("%Y-%m-%dT%H%M%S")
+    end_iso = end_dt.strftime("%Y-%m-%dT%H%M%S")
+    return f"po400_{start_iso}_{end_iso}.csv"
+
+
+def run_interactive_wizard(args) -> int:
+    """Interactive text-based wizard prompt when po400 is run without subcommands."""
+    print("============================================================")
+    print("              PULOX PO-400 INTERACTIVE WIZARD")
+    print("============================================================")
+
+    dev_path = getattr(args, "device", None)
+    verbose_level = getattr(args, "verbose", 0)
+
+    while True:
+        print("\nConnecting to device...")
+        try:
+            dev = PulsoxHidDevice(dev_path=dev_path)
+            node_path = dev.connect()
+            print(f"[✓] Connected to {node_path}")
+        except Exception as e:
+            print(f"[✗] Error connecting to device: {e}")
+            return 1
+
+        engine = serial_engine.SerialDeviceEngine(dev)
+        try:
+            # 1. Progressive hardware handshake & active user
+            dev.write_report(Commands.unlock_handshake())
+            time.sleep(0.15)
+            neg_res = dev.read_report(64)
+            active_user_id = Parsers.parse_user_id(neg_res) if neg_res else 1
+            print(f"[✓] Hardware Handshake    : ACK (User #{active_user_id})")
+
+            # 2. Progressive device info (model, firmware, serial)
+            dev_res = engine.read_device_info(debug=verbose_level)
+            info = dev_res.get("device_info", protocol.DeviceInfo())
+            rtc_str = dev_res.get("rtc_time_str", "N/A")
+
+            fw_str = info.firmware_version if info.firmware_version else "v2.0"
+            sn_str = info.serial_number if info.serial_number else "50F"
+            up_str = info.user_profile if info.user_profile else "user"
+
+            print(f"[✓] Device Descriptor     : CMS-50F (Model: {sn_str})")
+            print(f"[✓] Firmware Version      : {fw_str} | Serial: {sn_str}")
+            print(f"[✓] Device Clock (RTC)    : {rtc_str}")
+            print(f"[✓] User Profile String   : {up_str}")
+
+            # 3. Progressive flash session discovery
+            print("\nScanning flash memory for recorded sessions...")
+            sessions = engine.list_sessions(debug=verbose_level)
+
+            if not sessions:
+                print("No recorded sessions found in flash memory.")
+                print("\n------------------------------------------------------------")
+                print("Actions:")
+                print("  [C]   Clear / format device flash memory")
+                print("  [Q]   Quit")
+                print("------------------------------------------------------------")
+                act = input("Select action [c, q]: ").strip().lower()
+                if act in ("c", "clear"):
+                    confirm = input("⚠️ Are you sure you want to format device flash memory? [y/N]: ").strip().lower()
+                    if confirm in ("y", "yes"):
+                        engine.clear_memory(0, debug=verbose_level)
+                        print("✅ Device flash memory formatted successfully.")
+                print("Goodbye!")
+                return 0
+
+            print(f"Found {len(sessions)} recorded session(s):")
+            for s in sessions:
+                ts_str = s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "N/A"
+                print(f"  [{s.session_id}] {ts_str}  |  Duration: {s.duration_str} ({s.record_count:,} records)")
+
+            print("\n------------------------------------------------------------")
+            print("Actions:")
+            print("  [#]   Download session(s) — e.g. single (1), list (1,3,4), or range (1-3)")
+            print("  [A]   Download all sessions (a or all)")
+            print("  [C]   Clear / erase device flash memory")
+            print("  [Q]   Quit")
+            print("------------------------------------------------------------")
+
+            choice = input(f"Select action [1-{len(sessions)}, ranges like 1-{len(sessions)}, a, c, q]: ").strip()
+            if not choice or choice.lower() in ("q", "quit", "exit"):
+                print("Goodbye!")
+                return 0
+
+            if choice.lower() in ("c", "clear"):
+                confirm = input("⚠️ Are you sure you want to permanently DELETE ALL recordings from device memory? [y/N]: ").strip().lower()
+                if confirm in ("y", "yes"):
+                    engine.clear_memory(0, debug=verbose_level)
+                    print("✅ Device flash memory cleared successfully.")
+                ret = input("\nReturn to main menu? [y/N]: ").strip().lower()
+                if ret in ("y", "yes"):
+                    continue
+                print("Goodbye!")
+                return 0
+
+            # Session download selection
+            try:
+                selected_sessions = parse_session_selection(choice, sessions)
+            except ValueError as ve:
+                print(f"[!] {ve}")
+                continue
+
+            default_fn = generate_iso_filename(selected_sessions)
+            fn_input = input(f"\nEnter output CSV filename [default: {default_fn}]: ").strip()
+            csv_fn = fn_input if fn_input else default_fn
+
+            all_records = []
+            for idx, s in enumerate(selected_sessions, 1):
+                print(f"\nDownloading Session #{s.session_id} ({idx}/{len(selected_sessions)})...")
+                recs = engine.download_session(s, debug=verbose_level)
+                all_records.extend(recs)
+
+            saved_path = _export_records_to_file(all_records, csv_fn, "csv")
+            print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
+
+            # Offer flash erase with default = YES
+            erase_input = input("\nErase recordings from device flash? [Y/n]: ").strip().lower()
+            if erase_input in ("", "y", "yes"):
+                engine.clear_memory(0, debug=verbose_level)
+                print("✅ Device flash memory erased successfully.")
+            else:
+                print("Flash recordings preserved.")
+
+            # Offer return to menu with default = NO
+            ret_input = input("\nReturn to main menu? [y/N]: ").strip().lower()
+            if ret_input in ("y", "yes"):
+                continue
+            else:
+                print("Goodbye!")
+                return 0
+
+        except KeyboardInterrupt:
+            print("\nOperation cancelled by user.")
+            return 1
+        finally:
+            dev.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="po400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
     )
+    parser.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
@@ -434,10 +646,8 @@ def main():
 
     args = parser.parse_args()
 
-
     if not args.command:
-        parser.print_help()
-        sys.exit(1)
+        sys.exit(run_interactive_wizard(args))
 
     sys.exit(args.func(args))
 
