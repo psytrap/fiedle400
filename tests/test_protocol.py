@@ -31,6 +31,20 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(cmd[10], 0x81)
         self.assertEqual(cmd[11], Opcode.STORAGE_NEGOTIATION)
 
+    def test_parse_30byte_ed_subframes(self):
+        # Sample 30-byte 0xED 0x04 SpO2 subframe with valid 7-bit checksum:
+        # ed 04 01 00 00 03 00 00 76 71 10 00 ... chk=0x7D
+        # 0x76, 0x71 with m0=0x03 unmask to 0xF6 0xF1 -> Base SpO2 = 97.
+        # Byte 10: 0x10 -> Delta nibbles: 97-1 = 96%, 97-0 = 97%.
+        raw = bytes([0xED, 0x04, 0x01, 0x00, 0x00, 0x03, 0x00, 0x00, 0x76, 0x71, 0x10] + [0] * 18)
+        chk = sum(raw[:29]) & 0x7F
+        raw_full = raw[:29] + bytes([chk])
+        
+        pts = Parsers.parse_ed_frames(raw_full)
+        self.assertGreater(len(pts), 0)
+        self.assertEqual(pts[0].spo2, 96)
+        self.assertEqual(pts[1].spo2, 97)
+
     def test_decode_usb_vid_pid(self):
         arch, src = decode_usb_vid_pid("28E9", "028A")
         self.assertIn("GigaDevice MCU HID Oximeter", arch)
@@ -56,6 +70,17 @@ class TestProtocol(unittest.TestCase):
         zero_report = bytes([0xF0, 0x70, 0] + [0]*61)
         zero_sessions = Parsers.parse_session_index(zero_report)
         self.assertEqual(len(zero_sessions), 0)
+
+    def test_parsers_ec_session_index(self):
+        # 0xEC report for Session #2: 102 samples (51s duration at 2 Hz)
+        report_ec = bytes([0xEC, 0x00, 0x01, 0x02, 26, 9, 4, 21, 46, 47, 102, 0, 0, 0, 117, 115, 101, 114, 0, 0, 0] + [0]*43)
+        sessions = Parsers.parse_session_index(report_ec)
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0].session_id, 2)
+        self.assertEqual(sessions[0].user_id, 1)
+        self.assertEqual(sessions[0].duration_sec, 51)
+        self.assertEqual(sessions[0].duration_str, "51s")
+        self.assertEqual(sessions[0].record_count, 51)
 
     def test_parsers_hid_chunks(self):
         chunk0 = [0xF0, 0x00, 0x10, 85, 0, 0]
@@ -85,26 +110,49 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(len(cmd), 64)
         self.assertEqual(cmd[0], 0x9D)
         self.assertEqual(cmd[1], 0x04)
-        self.assertEqual(cmd[7], 0xA4)
+        self.assertEqual(cmd[2], 0x01)
+        self.assertEqual(cmd[3], 0x01)
+        self.assertEqual(cmd[4], 0x01)
+        self.assertEqual(cmd[8], (0x04 + 0x01 + 0x01 + 0x01 + 0x1D) & 0xFF)
+
 
     def test_commands_storage_helpers(self):
         cmd_init = Commands.storage_init()
+        self.assertEqual(len(cmd_init), 64)
         self.assertEqual(cmd_init[0], 0x9D)
         self.assertEqual(cmd_init[1], 0x02)
 
         cmd_block = Commands.storage_block(1, 1)
+        self.assertEqual(len(cmd_block), 64)
         self.assertEqual(cmd_block[0], 0x9D)
         self.assertEqual(cmd_block[1], 0x04)
+        self.assertEqual(cmd_block[2], 0x01)
 
         cmd_fin = Commands.storage_finalize()
+        self.assertEqual(len(cmd_fin), 64)
         self.assertEqual(cmd_fin[0], 0x9D)
         self.assertEqual(cmd_fin[1], 0x7F)
 
+
+
     def test_parsers_eb_frames(self):
-        report = bytes([0xEB, 0x00, 0x04, 64, 0x30, 95] + [0]*58)
+        report = bytes([0xEB, 0x00, 0x04, 48, 64, 95] + [0]*58)
         dps = Parsers.parse_eb_frames(report)
         self.assertEqual(len(dps), 1)
         self.assertEqual(dps[0].spo2, 95)
+        self.assertEqual(dps[0].heart_rate, 48)
+        self.assertEqual(dps[0].ppg_wave, 4)
+        self.assertEqual(dps[0].status_flags, 64)
+
+    def test_parsers_ed_frames(self):
+        report = bytes([0xED, 0x00, 0x04, 48, 64, 95] + [0]*58)
+        dps = Parsers.parse_ed_frames(report)
+        self.assertEqual(len(dps), 1)
+        self.assertEqual(dps[0].spo2, 95)
+        self.assertEqual(dps[0].heart_rate, 48)
+        self.assertEqual(dps[0].ppg_wave, 4)
+        self.assertEqual(dps[0].status_flags, 64)
+
 
     def test_commands_set_time(self):
         dt = datetime(2026, 9, 3, 7, 41, 6)
@@ -134,6 +182,44 @@ class TestProtocol(unittest.TestCase):
         report = bytes([0x9E, 0x70, 0x04, 0x84] + [0]*60)
         geom = Parsers.parse_geometry(report)
         self.assertEqual(geom, "112 Bytes Sub-chunk Payload, 4 KB Address Block")
+
+
+    def test_session_info_duration_str(self):
+        s1 = SessionInfo(session_id=1, user_id=1, record_count=2564)
+        self.assertEqual(s1.duration_seconds, 2564)
+        self.assertEqual(s1.duration_str, "42m 44s")
+
+        s2 = SessionInfo(session_id=2, user_id=1, record_count=13056)
+        self.assertEqual(s2.duration_str, "3h 37m 36s")
+
+        s3 = SessionInfo(session_id=3, user_id=1, record_count=45)
+        self.assertEqual(s3.duration_str, "45s")
+
+        s_zero = SessionInfo(session_id=0, user_id=1, record_count=0)
+        self.assertEqual(s_zero.duration_str, "0s")
+
+    def test_parsers_stored_download_block(self):
+        # 0xED 0x04 report: Byte 5 = 115 (SpO2 = 115 - 18 = 97%), Byte 9 = 114 (HR = 114 - 56 = 58)
+        report = bytes([0xED, 0x04, 0x01, 0, 0, 115, 0, 0x00, 0, 114] + [0]*54)
+        dps = Parsers.parse_stored_block(report)
+        self.assertEqual(len(dps), 1)
+        self.assertEqual(dps[0].spo2, 97)
+        self.assertEqual(dps[0].heart_rate, 58)
+        self.assertEqual(dps[0].status_flags, 0x00)
+
+        # Test out-of-bounds invalid block
+        invalid_report = bytes([0xED, 0x04, 0x01, 0, 0, 1, 0, 0x00, 10, 10] + [0]*54)
+        dps_invalid = Parsers.parse_stored_block(invalid_report)
+        self.assertEqual(len(dps_invalid), 0)
+
+    def test_decode_ed_subframes_real_hardware_payload(self):
+        sf0 = bytes.fromhex("ed040100000300007672333322222333332333333333333322223222211e")
+        sf_term = bytes.fromhex("ed04010500707f7f000000007f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f7f54")
+        samples = Parsers.decode_ed_subframes([sf0, sf_term], is_spo2=True)
+        # sf0 has 19 data bytes (each 2 samples = 38 samples) + sf_term has 4 data bytes (8 samples) = 46 samples
+        self.assertEqual(len(samples), 46)
+        # Verify plausible physiological SpO2 values
+        self.assertTrue(all(94 <= s <= 98 for s in samples))
 
 
 if __name__ == "__main__":

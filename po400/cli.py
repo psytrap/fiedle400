@@ -15,9 +15,45 @@ import time
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from po400 import protocol
+from po400 import protocol, serial_engine
 from po400.protocol import Commands, Parsers
 from po400.hid_driver import PulsoxHidDevice, find_pulsox_hid_devices, get_usb_sysfs_info
+
+
+def command_detect(args) -> int:
+    """Handler for 'detect' subcommand to run live Serial Packet Detector & Decoder."""
+    try:
+        dev = PulsoxHidDevice(dev_path=args.device)
+        node_path = dev.connect()
+    except Exception as e:
+        print(f"Error connecting: {e}")
+        return 1
+
+    engine = serial_engine.SerialDeviceEngine(dev)
+    print("==================================================")
+    print("  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE")
+    print("==================================================")
+    print(f"Connected to {node_path}...")
+    print("Listening for HID report packets... (Press Ctrl+C to stop)\n")
+
+    count = 0
+    try:
+        while True:
+            events = engine.read_packets()
+            for ev in events:
+                count += 1
+                spo2_str = f"{ev.spo2}%" if ev.spo2 else "N/A"
+                hr_str = f"{ev.heart_rate} bpm" if ev.heart_rate else "N/A"
+                print(f"[{count:04d}] Type={ev.packet_type:<15} | SpO2={spo2_str:<6} | HR={hr_str:<8} | Status={ev.status_str}")
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        print("\nPacket detector stopped by user.")
+    finally:
+        dev.close()
+
+    return 0
+
+
 
 
 def command_scan(args):
@@ -44,92 +80,39 @@ def command_scan(args):
 
 
 
-def _discover_sessions_to_download(dev, download_all: bool, target_session: int) -> List[int]:
-    """Helper to discover available session IDs for download."""
-    if not download_all:
-        return [target_session]
+def _discover_sessions_to_download(dev, download_all: bool, target_session: int, debug: bool = False) -> List[protocol.SessionInfo]:
+    """Helper to discover available SessionInfo objects for download using SerialDeviceEngine."""
+    engine = serial_engine.SerialDeviceEngine(dev)
+    session_list = engine.list_sessions(debug=debug)
 
-    print("Querying session index table to download ALL sessions...")
-    dev.write_report(Commands.query_sessions())
-    time.sleep(0.15)
-    
-    session_list = []
-    start_q = time.time()
-    sess_counter = 1
-    while time.time() - start_q < 1.5:
-        report = dev.read_report(64)
-        if report:
-            if report[0] == 0xEC:
-                session_list.append(sess_counter)
-                sess_counter += 1
-            else:
-                parsed_sess = Parsers.parse_session_index(report)
-                if parsed_sess:
-                    session_list.extend([s.session_id for s in parsed_sess])
-        time.sleep(0.02)
-        
+    if not download_all and target_session > 0:
+        matched = [s for s in session_list if s.session_id == target_session]
+        if matched:
+            s = matched[0]
+            print(f"Discovered Session #{target_session} metadata: Duration={s.duration_str}, Timestamp={s.timestamp}")
+            return [s]
+        else:
+            print(f"Target Session #{target_session} not found in index table; using default bounds...")
+            return [protocol.SessionInfo(session_id=target_session, user_id=1, record_count=60, duration_sec=60)]
+
     if not session_list:
         print("No active session table returned; defaulting to downloading Session #1...")
-        return [1]
+        return [protocol.SessionInfo(session_id=1, user_id=1, record_count=60, duration_sec=60)]
 
-    session_list = sorted(list(set(session_list)))
-    print(f"Found {len(session_list)} sessions to download: {session_list}")
+    sess_ids = [s.session_id for s in session_list]
+    print(f"Found {len(session_list)} sessions to download: {sess_ids}")
     return session_list
 
 
-def _download_single_session(dev, sess_id: int, timeout_limit: float) -> List[dict]:
-    """Helper to stream and extract records for a single session ID."""
-    print(f"\n---> Requesting Session #{sess_id} Data Blocks (0x9B / 0x9D / 0xEB)...")
-    
-    # Request data stream activation (0x9B)
-    dev.write_report(Commands.query_data_stream())
-    time.sleep(0.1)
+def _download_single_session(dev, sess_info: protocol.SessionInfo, timeout_limit: float, debug: bool = False) -> List[dict]:
+    """Helper to extract stored records for a single session ID using SerialDeviceEngine."""
+    sess_id = sess_info.session_id
+    dur_str = sess_info.duration_str
+    print(f"\n---> Requesting Session #{sess_id} Data Blocks ({dur_str})...")
 
-    # Ground-truth storage initialization (0x9D 0x02)
-    dev.write_report(Commands.storage_init())
-    time.sleep(0.1)
-    neg_report = dev.read_report(64)
-    user_id = Parsers.parse_user_id(neg_report) if neg_report else 1
+    engine = serial_engine.SerialDeviceEngine(dev)
+    return engine.download_session(sess_info, debug=debug)
 
-    # Request Block 1 & Block 2 data blocks (0x9D 0x04)
-    dev.write_report(Commands.storage_block(1, sess_id))
-    time.sleep(0.1)
-    dev.write_report(Commands.storage_block(2, sess_id))
-    time.sleep(0.1)
-    
-    sess_records = []
-    read_start = time.time()
-    received_packets = 0
-    
-    while time.time() - read_start < timeout_limit:
-        report = dev.read_report(64)
-        if report:
-            received_packets += 1
-            now = datetime.now()
-            
-            # Parse 0xEB/0xED pcap ground-truth frames, 6-byte chunks, or 3-byte stored frames
-            datapoints = Parsers.parse_eb_frames(report, now)
-            if not datapoints:
-                datapoints, spo2, hr, ppg = protocol.parse_hid_chunks(report, now)
-            if not datapoints:
-                datapoints = protocol.parse_stored_data_frames(report, now)
-            
-            for dp in datapoints:
-                if dp.spo2 or dp.heart_rate or dp.ppg_wave:
-                    sess_records.append({
-                        "session_id": sess_id,
-                        "user_id": user_id,
-                        "timestamp": dp.timestamp.isoformat(),
-                        "spo2": dp.spo2,
-                        "heart_rate": dp.heart_rate,
-                        "ppg_wave": dp.ppg_wave,
-                        "flags": dp.status_flags,
-                    })
-            print(f"\rDownloaded {received_packets} packets for Session #{sess_id} ({len(sess_records)} records)...", end="", flush=True)
-        time.sleep(0.02)
-        
-    print(f"\nSession #{sess_id} finished ({len(sess_records)} records). (Memory Preserved / Non-Destructive)")
-    return sess_records
 
 
 def _export_records_to_file(records: List[dict], output_filename: Optional[str], fmt: str) -> str:
@@ -140,7 +123,11 @@ def _export_records_to_file(records: List[dict], output_filename: Optional[str],
 
     if fmt == "csv":
         with open(output_filename, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["session_id", "user_id", "timestamp", "spo2", "heart_rate", "ppg_wave", "flags"])
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["session_id", "user_id", "block_id", "seq", "timestamp", "spo2", "heart_rate", "flags"],
+                extrasaction="ignore"
+            )
             writer.writeheader()
             writer.writerows(records)
     else:  # json
@@ -151,8 +138,17 @@ def _export_records_to_file(records: List[dict], output_filename: Optional[str],
 
 
 def command_download(args):
-    """Handler for 'download' subcommand."""
+    """Handler for 'download' subcommand using SerialDeviceEngine."""
     download_all = args.all or args.session == 0
+    verbose_level = getattr(args, "verbose", 0)
+
+    dump_path = None
+    if getattr(args, "dump", None) is not None:
+        if args.dump == "auto":
+            ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dump_path = f"po400_download_{ts_str}.dump"
+        else:
+            dump_path = args.dump
     
     print("Connecting to Pulsox PO-400 to extract recording data...")
     try:
@@ -163,21 +159,16 @@ def command_download(args):
         print(f"Error connecting: {e}")
         return 1
 
+    engine = serial_engine.SerialDeviceEngine(dev)
     total_records = []
     try:
-        # Step 1: Send Unlock Handshake & Storage Negotiation (0xA7 + 0xA2)
-        dev.write_report(Commands.unlock_handshake())
-        time.sleep(0.15)
-        dev.read_report(64)  # Flush ACK
-
-        # Step 2: Discover target sessions
-        session_list = _discover_sessions_to_download(dev, download_all, args.session)
-
-        # Step 3: Stream and collect records for each session
-        for sess_id in session_list:
-            sess_records = _download_single_session(dev, sess_id, args.timeout)
-            total_records.extend(sess_records)
-
+        total_records = engine.download_all_sessions(
+            target_session=args.session,
+            download_all=download_all,
+            timeout_override=args.timeout,
+            debug=verbose_level,
+            dump_file=dump_path,
+        )
     except KeyboardInterrupt:
         print("\nDownload interrupted by user.")
     finally:
@@ -186,12 +177,16 @@ def command_download(args):
     print(f"\nDownload complete. Total records collected across all sessions: {len(total_records)}")
     saved_path = _export_records_to_file(total_records, args.output, args.format.lower())
     print(f"✅ Saved all session recordings to: {saved_path}")
+    if dump_path:
+        print(f"🔍 Saved diagnostic raw HID frame dump to: {os.path.abspath(dump_path)}")
     return 0
 
 
 
+
+
 def command_sessions(args):
-    """Handler for 'sessions' subcommand to query v2.0.0 session index table."""
+    """Handler for 'sessions' subcommand to query session index table using SerialDeviceEngine."""
     print("Connecting to Pulsox PO-400 to query recorded session index...")
     try:
         dev = PulsoxHidDevice(dev_path=args.device)
@@ -201,43 +196,15 @@ def command_sessions(args):
         print(f"Error connecting: {e}")
         return 1
 
+    engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        # Step 1: Send Unlock Handshake & Storage Negotiation (0xA7 + 0xA2)
-        dev.write_report(Commands.unlock_handshake())
-        time.sleep(0.15)
-        dev.read_report(64)  # Flush ACK
-
-        # Step 2: Send Session Index Query (0x9C)
-        dev.write_report(Commands.query_sessions())
-        time.sleep(0.15)
-
-        sessions = []
-        start = time.time()
-        sess_counter = 1
-        while time.time() - start < 2.0:
-            report = dev.read_report(64)
-            if report:
-                # Check for 0xEC Session Metadata Index Report
-                if report[0] == 0xEC:
-                    dt, user_name = Parsers.parse_segment_metadata(report)
-                    rec_cnt = (report[10] << 8) | report[11] if len(report) >= 12 else 1034
-                    sessions.append(protocol.SessionInfo(
-                        session_id=sess_counter,
-                        user_id=1,
-                        record_count=rec_cnt,
-                        timestamp=dt
-                    ))
-                    sess_counter += 1
-                else:
-                    parsed_sess = Parsers.parse_session_index(report)
-                    if parsed_sess:
-                        sessions.extend(parsed_sess)
-            time.sleep(0.02)
-
+        sessions = engine.list_sessions(debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
         print("\nSession query interrupted by user.")
+        return 1
     finally:
         dev.close()
+
 
     print(f"\n==================================================")
     print(f"  PULSOX PO-400 STORED RECORDING SESSIONS (v2.0.0)")
@@ -247,11 +214,11 @@ def command_sessions(args):
         print("No stored recording sessions found in device memory.")
         print("(Note: To record a session, set Record=ON in PO-400 menu while measuring).")
     else:
-        print(f"{'Session ID':<12} | {'User':<6} | {'Records':<10} | {'Timestamp':<20}")
-        print("-" * 58)
+        print(f"{'Session ID':<12} | {'User':<6} | {'Records':<10} | {'Duration':<12} | {'Timestamp':<20}")
+        print("-" * 73)
         for s in sessions:
             ts_str = s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "N/A"
-            print(f"{s.session_id:<12} | {s.user_id:<6} | {s.record_count:<10} | {ts_str:<20}")
+            print(f"{s.session_id:<12} | {s.user_id:<6} | {s.record_count:<10} | {s.duration_str:<12} | {ts_str:<20}")
         print(f"\nTotal sessions found: {len(sessions)}")
 
     return 0
@@ -277,34 +244,9 @@ def command_clear(args):
         print(f"Error connecting: {e}")
         return 1
 
+    engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        dev.write_report(Commands.build_hid(0xAF))
-        time.sleep(0.1)
-
-        if sess_id > 0:
-            print(f"Sending session delete command (0xAB) for Session #{sess_id}...")
-            dev.write_report(Commands.build_hid(0xAB, [0x01, sess_id]))
-            time.sleep(0.2)
-        else:
-            print(f"Sending flash format command (0xAA)...")
-            dev.write_report(Commands.build_hid(0xAA, [0x80, 0x80]))
-            time.sleep(0.2)
-            
-            print(f"Sending session table delete (0xAB)...")
-            dev.write_report(Commands.build_hid(0xAB, [0x80, 0x80]))
-            time.sleep(0.2)
-
-            print(f"Sending flash memory reset (0xAC)...")
-            dev.write_report(Commands.build_hid(0xAC, [0x80, 0x80]))
-            time.sleep(0.2)
-
-        # Re-verify with 0xA5 query
-        dev.write_report(Commands.build_hid(0xA5))
-        time.sleep(0.3)
-        check_report = dev.read_report(64)
-        if check_report and check_report[0] in [0xF0, 0x7D]:
-            print("Received hardware ACK: Flash memory table erased and reset.")
-
+        engine.clear_memory(session_id=sess_id, debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
         print("\nOperation interrupted by user.")
     finally:
@@ -315,7 +257,7 @@ def command_clear(args):
 
 
 def command_read_time(args):
-    """Handler for 'read-time' subcommand to read active device RTC timestamp."""
+    """Handler for 'read-time' subcommand to read active device RTC timestamp using SerialDeviceEngine."""
     print("Connecting to Pulsox PO-400 to read Real-Time Clock (RTC)...")
     try:
         dev = PulsoxHidDevice(dev_path=args.device)
@@ -325,11 +267,9 @@ def command_read_time(args):
         print(f"Error connecting: {e}")
         return 1
 
+    engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        dev.write_report(Commands.read_time())
-        time.sleep(0.3)
-        report = dev.read_report(64)
-        rtc_dt = Parsers.parse_rtc_time(report) if report else None
+        rtc_dt = engine.read_rtc_time(debug=getattr(args, "verbose", 0))
 
         if rtc_dt:
             ts_str = rtc_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -346,7 +286,7 @@ def command_read_time(args):
 
 
 def command_set_time(args):
-    """Handler for 'set-time' subcommand to set device RTC timestamp."""
+    """Handler for 'set-time' subcommand to set device RTC timestamp using SerialDeviceEngine."""
     if hasattr(args, "timestamp") and args.timestamp:
         try:
             target_dt = datetime.fromisoformat(args.timestamp.replace(" ", "T"))
@@ -366,20 +306,11 @@ def command_set_time(args):
         print(f"Error connecting: {e}")
         return 1
 
+    engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        # Step 1: Send Unlock Handshake & Storage Negotiation (0xA7 + 0xA2)
-        dev.write_report(Commands.unlock_handshake())
-        time.sleep(0.15)
-        dev.read_report(64)  # Flush ACK
-
-        # Step 2: Send Set-RTC command (0x83)
         print(f"Sending Set-RTC command (0x83) for timestamp: {ts_str}...")
-        dev.write_report(Commands.set_time(target_dt))
-        time.sleep(0.3)
-        
-        ack = dev.read_report(64)
-        if ack:
-            print("Received device ACK: Real-Time Clock synchronized!")
+        engine.set_rtc_time(target_dt, debug=getattr(args, "verbose", 0))
+        print("Received device ACK: Real-Time Clock synchronized!")
 
     except KeyboardInterrupt:
         print("\nSet RTC interrupted by user.")
@@ -392,7 +323,7 @@ def command_set_time(args):
 
 
 def command_negotiate(args):
-    """Handler for 'negotiate' subcommand to execute Packet #549 (0xA7 unlock + 0xA2 negotiation)."""
+    """Handler for 'negotiate' subcommand to execute Packet #549 (0xA7 unlock + 0xA2 negotiation) using SerialDeviceEngine."""
     print("Connecting to Pulsox PO-400 to execute unlock handshake & storage negotiation...")
     try:
         dev = PulsoxHidDevice(dev_path=args.device)
@@ -402,25 +333,17 @@ def command_negotiate(args):
         print(f"Error connecting: {e}")
         return 1
 
+    engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        rep_handshake = Commands.unlock_handshake()
-        print(f"\n---> Sending Unlock Handshake (0xA7) + Storage Negotiation (0xA2)...")
-        print(f"     Hex OUT: {rep_handshake[:24].hex()}")
-        dev.write_report(rep_handshake)
-        time.sleep(0.2)
-
-        res = dev.read_report(64)
-        if res:
-            print(f"     Incoming ACK Report: {res[:24].hex()}")
-            user_id = Parsers.parse_user_id(res)
-            print(f"  ✅ Handshake ACK Success! Active Session User ID: {user_id}")
-        else:
-            print("  ⚠️ Handshake sent (no immediate report returned).")
+        user_id = engine.unlock_handshake(debug=getattr(args, "verbose", 0))
+        print(f"  ✅ Handshake ACK Success! Active Session User ID: User #{user_id}")
 
     except KeyboardInterrupt:
         print("\nNegotiation interrupted by user.")
     finally:
         dev.close()
+    return 0
+
     return 0
 
 
@@ -435,67 +358,15 @@ def command_info(args):
         print(f"Error connecting: {e}")
         return 1
 
-    info = protocol.DeviceInfo()
-    raw_hex_str = "None"
-    rtc_time_str = "N/A"
-    active_user_id = 1
-
+    engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        # Step 1: Send Unlock Handshake & Storage Negotiation (0xA7 + 0xA2)
-        dev.write_report(Commands.unlock_handshake())
-        time.sleep(0.15)
-        neg_res = dev.read_report(64)
-        if neg_res:
-            active_user_id = Parsers.parse_user_id(neg_res)
-
-        # Step 2: Query RTC Clock (0x82)
-        dev.write_report(Commands.read_time())
-        time.sleep(0.15)
-        rtc_report = dev.read_report(64)
-        if rtc_report:
-            rtc_dt = Parsers.parse_rtc_time(rtc_report)
-            if rtc_dt:
-                rtc_time_str = rtc_dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Step 3: Query Info (0xAD)
-        dev.write_report(Commands.build_hid(0xAD))
-        time.sleep(0.15)
-        report = dev.read_report(64)
-        if report:
-            info = Parsers.parse_device_info(report)
-            raw_hex_str = " ".join([f"{b:02X}" for b in report[:16]])
-
-        # Step 4: Query 0x81 (Firmware Version Query)
-        dev.write_report(Commands.build_hid(0x81, [0x01]))
-        time.sleep(0.1)
-        fw_report = dev.read_report(64)
-        if fw_report and fw_report[0] == 0x81:
-            fw_info = Parsers.parse_device_info(fw_report)
-            if fw_info.firmware_version:
-                info.firmware_version = fw_info.firmware_version
-
-        # Step 5: Query 0x8E (Serial Number / User Profile Query)
-        dev.write_report(Commands.build_hid(0x8E, [0x03, 0x11]))
-        time.sleep(0.1)
-        for _ in range(3):
-            serial_report = dev.read_report(64)
-            if serial_report:
-                sn, up = Parsers.parse_serial(serial_report)
-                if sn and info:
-                    info.serial_number = sn
-                if up and info:
-                    info.user_profile = up
-            time.sleep(0.05)
-
-        # Step 6: Query 0x9E (Extended Storage Architecture Query)
-        dev.write_report(Commands.build_hid(0x9E, [0x40, 0x04]))
-        time.sleep(0.1)
-        geom_report = dev.read_report(64)
-        if geom_report and info:
-            info.flash_geometry = Parsers.parse_geometry(geom_report)
-
+        res = engine.read_device_info(debug=getattr(args, "verbose", 0))
+        info = res["device_info"]
+        active_user_id = res["active_user_id"]
+        rtc_time_str = res["rtc_time_str"]
     except KeyboardInterrupt:
         print("\nOperation interrupted by user.")
+        return 1
     finally:
         dev.close()
 
@@ -568,16 +439,19 @@ def main():
     # Subcommand: scan (alias for info)
     parser_scan = subparsers.add_parser("scan", help="Scan and display connected device information and permissions.")
     parser_scan.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_scan.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_scan.set_defaults(func=command_info)
 
     # Subcommand: info
     parser_info = subparsers.add_parser("info", help="Read hardware model, firmware version, and USB descriptors.")
     parser_info.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_info.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_info.set_defaults(func=command_info)
 
     # Subcommand: sessions
     parser_sess = subparsers.add_parser("sessions", help="List all stored recording sessions on device (v2.0.0).")
     parser_sess.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_sess.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_sess.set_defaults(func=command_sessions)
 
     # Subcommand: download
@@ -587,7 +461,9 @@ def main():
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
     parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.csv).")
     parser_dl.add_argument("-f", "--format", choices=["csv", "json"], default="csv", help="Output format (csv or json).")
-    parser_dl.add_argument("-t", "--timeout", type=int, default=5, help="Read duration per session in seconds (default: 5).")
+    parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
+    parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
+    parser_dl.add_argument("-v", "--verbose", "--debug", dest="verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_dl.set_defaults(func=command_download)
 
     # Subcommand: clear
@@ -613,7 +489,13 @@ def main():
     parser_neg.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
     parser_neg.set_defaults(func=command_negotiate)
 
+    # Subcommand: detect
+    parser_det = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")
+    parser_det.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_det.set_defaults(func=command_detect)
+
     args = parser.parse_args()
+
 
     if not args.command:
         parser.print_help()

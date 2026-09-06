@@ -164,3 +164,28 @@ class PulsoxHidDevice:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+
+class MockHidDevice:
+    """Mock HID Device simulator for offline parameter sweeps and unit testing."""
+
+    def __init__(self, responses=None):
+        self.responses = responses or []
+        self.written = []
+
+    def connect(self) -> str:
+        return "/dev/hidraw_mock"
+
+    def write_report(self, data: bytes) -> int:
+        self.written.append(data)
+        return len(data)
+
+    def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
+        if self.responses:
+            return self.responses.pop(0)
+        # Default mock response: COMMAND_ACK (0xF0 0x70)
+        return bytes([0xF0, 0x70] + [0x00] * 62)
+
+    def close(self):
+        pass
+
