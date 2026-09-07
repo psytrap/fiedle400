@@ -13,7 +13,5 @@ test_parse_stored_dump.py
 *.tmp
 exe/
 *.zip
-*.exe
-*.pcap
-*.pcapng
+archive/
 

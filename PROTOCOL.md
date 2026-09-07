@@ -184,14 +184,14 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 
 #### Device Response: Live Sub-Frames (`0xEB`, 6 Bytes each)
 Packed consecutively in 64-byte HID input reports:
-| Offset | Field | Range | Description |
-| :--- | :--- | :--- | :--- |
-| `0x00` | Sync Opcode | `0xEB` | Live frame identifier |
-| `0x01` | Status & Quality | Bitfield | Bit 0: Finger-out (`1` = probe off, `0` = OK)<br>Bits 1..3: Signal bars (0..8)<br>Bit 4: Beat trigger (1 = pulse tick) |
-| `0x02` | Plethysmogram | `0..127` | Real-time PPG waveform curve amplitude |
-| `0x03` | Pulse Rate | `0..254` | Pulse rate in BPM (`0xFF` = invalid) |
-| `0x04` | SpO2 | `0..100` | Blood oxygen saturation % (`0x7F` = invalid) |
-| `0x05` | Checksum | `0..127` | `sum(bytes[0..4]) % 128` |
+| Offset | Field | Wire Range | Decoded Range | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `0x00` | Sync Opcode | `0xEB` | — | Live frame identifier (`MSB=1`) |
+| `0x01` | Status & Quality | `0x00..0x7F` | Bitfield | Bit 0: Finger-out (`1` = probe off, `0` = OK)<br>Bits 1..3: Signal bars (0..8)<br>Bit 4: Beat trigger (1 = pulse tick)<br>Bit 6: Pulse Rate MSB (Bit 7) *(Derived assumption based on CMS-50 UART protocol)* |
+| `0x02` | Plethysmogram | `0x00..0x7F` | `0..127` | Real-time PPG waveform curve amplitude |
+| `0x03` | Pulse Rate | `0x00..0x7F` | `0..254` | Pulse rate in BPM (`0xFF` = invalid); MSB is taken from `0x01` field (Bit 6) |
+| `0x04` | SpO2 | `0x00..0x64` | `0..100` | Blood oxygen saturation % (`0x7F` = invalid / searching) |
+| `0x05` | Checksum | `0x00..0x7F` | `0..127` | `sum(bytes[0..4]) % 128` |
 
 ---
 
