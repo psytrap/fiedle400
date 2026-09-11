@@ -164,6 +164,49 @@ class LinuxHidrawBackend:
             time.sleep(0.02)
         return None
 
+    def get_descriptor_info(self) -> dict:
+        """Extracts USB device descriptor and sysfs metadata on Linux."""
+        sysfs_mfg, sysfs_prod, sysfs_bus = None, None, None
+        hid_id = f"0003:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}"
+        hid_name = "Pulse Oximeter"
+        vid_hex, pid_hex = VENDOR_ID_HEX, PRODUCT_ID_HEX
+
+        if self.dev_path and os.path.exists(self.dev_path):
+            sysfs_mfg, sysfs_prod, sysfs_bus = get_usb_sysfs_info(self.dev_path)
+            node_name = os.path.basename(self.dev_path)
+            uevent_file = f"/sys/class/hidraw/{node_name}/device/uevent"
+            if os.path.exists(uevent_file):
+                try:
+                    with open(uevent_file, "r", encoding="utf-8", errors="ignore") as f:
+                        for line in f:
+                            if line.startswith("HID_ID="):
+                                hid_id = line.strip().split("=", 1)[1]
+                            elif line.startswith("HID_NAME="):
+                                hid_name = line.strip().split("=", 1)[1]
+                except Exception:
+                    pass
+
+        if ":" in hid_id:
+            parts = hid_id.split(":")
+            if len(parts) >= 3:
+                vid_hex, pid_hex = parts[1], parts[2]
+
+        clean_mfg = sysfs_mfg.strip() if (sysfs_mfg and sysfs_mfg.strip()) else None
+        clean_prod = sysfs_prod.strip() if (sysfs_prod and sysfs_prod.strip()) else (hid_name.strip() if (hid_name and hid_name.strip()) else None)
+
+        return {
+            "manufacturer": clean_mfg,
+            "product": clean_prod,
+            "serial_number": None,
+            "release_number": None,
+            "bus_path": sysfs_bus,
+            "hid_id": hid_id,
+            "hid_name": hid_name,
+            "vid_hex": vid_hex.upper(),
+            "pid_hex": pid_hex.upper(),
+            "metadata_source": "Linux sysfs (/sys/class/hidraw)",
+        }
+
     def close(self):
         if self._fd is not None:
             try:
@@ -179,6 +222,7 @@ class HidBackend:
     def __init__(self, dev_path: Optional[str] = None):
         self.dev_path = dev_path
         self._dev = None
+        self._enum_info = {}
 
     def _get_hid_module(self):
         try:
@@ -197,18 +241,25 @@ class HidBackend:
 
         try:
             connected_path = self.dev_path
+            matched_list = []
+            try:
+                matched_list = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
+                if matched_list:
+                    self._enum_info = matched_list[0]
+            except Exception:
+                pass
+
             if hasattr(hid, "Device"):
                 # ctypes hid package (apmorton/pyhidapi)
                 if self.dev_path:
                     path_bytes = self.dev_path.encode("utf-8") if isinstance(self.dev_path, str) else self.dev_path
                     dev_inst = hid.Device(path=path_bytes)
                 else:
-                    matched = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
-                    if not matched:
+                    if not matched_list:
                         raise RuntimeError(
                             "No Pulsox PO-400 device found via 'hid'! Ensure USB cable is plugged in and device is powered ON."
                         )
-                    raw_path = matched[0].get("path")
+                    raw_path = matched_list[0].get("path")
                     if raw_path:
                         dev_inst = hid.Device(path=raw_path)
                         connected_path = raw_path.decode("utf-8", errors="ignore") if isinstance(raw_path, bytes) else str(raw_path)
@@ -223,12 +274,11 @@ class HidBackend:
                     path_bytes = self.dev_path.encode("utf-8") if isinstance(self.dev_path, str) else self.dev_path
                     dev_inst.open_path(path_bytes)
                 else:
-                    matched = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
-                    if not matched:
+                    if not matched_list:
                         raise RuntimeError(
                             "No Pulsox PO-400 device found via 'hid'! Ensure USB cable is plugged in and device is powered ON."
                         )
-                    raw_path = matched[0].get("path")
+                    raw_path = matched_list[0].get("path")
                     if raw_path:
                         dev_inst.open_path(raw_path)
                         connected_path = raw_path.decode("utf-8", errors="ignore") if isinstance(raw_path, bytes) else str(raw_path)
@@ -277,6 +327,71 @@ class HidBackend:
                 return data
             time.sleep(0.02)
         return None
+
+    def get_descriptor_info(self) -> dict:
+        """Extracts USB device descriptor metadata via import hid."""
+        mfg = None
+        prod = None
+        serial = None
+        release = None
+        bus_path = None
+        vid_hex = VENDOR_ID_HEX
+        pid_hex = PRODUCT_ID_HEX
+
+        # Check cached enumeration metadata if available
+        if hasattr(self, "_enum_info") and self._enum_info:
+            info = self._enum_info
+            mfg = info.get("manufacturer_string")
+            prod = info.get("product_string")
+            serial = info.get("serial_number")
+            release = info.get("release_number")
+            if "interface_number" in info:
+                bus_path = f"HID Interface #{info['interface_number']}"
+            if "vendor_id" in info and "product_id" in info:
+                vid_hex = f"{info['vendor_id']:04X}"
+                pid_hex = f"{info['product_id']:04X}"
+
+        # If device handle is open, query live strings if not already found
+        if self._dev is not None:
+            try:
+                if not mfg:
+                    if hasattr(self._dev, "get_manufacturer_string"):
+                        mfg = self._dev.get_manufacturer_string()
+                    elif hasattr(self._dev, "manufacturer"):
+                        mfg = self._dev.manufacturer
+                if not prod:
+                    if hasattr(self._dev, "get_product_string"):
+                        prod = self._dev.get_product_string()
+                    elif hasattr(self._dev, "product"):
+                        prod = self._dev.product
+                if not serial:
+                    if hasattr(self._dev, "get_serial_number_string"):
+                        serial = self._dev.get_serial_number_string()
+                    elif hasattr(self._dev, "serial"):
+                        serial = self._dev.serial
+            except Exception:
+                pass
+
+        clean_mfg = mfg.strip() if (mfg and isinstance(mfg, str) and mfg.strip()) else None
+        clean_prod = prod.strip() if (prod and isinstance(prod, str) and prod.strip()) else None
+        clean_serial = serial.strip() if (serial and isinstance(serial, str) and serial.strip()) else None
+
+        release_str = None
+        if release is not None and isinstance(release, int):
+            release_str = f"v{release >> 8}.{release & 0xFF:02x} (BCD 0x{release:04X})"
+
+        return {
+            "manufacturer": clean_mfg,
+            "product": clean_prod,
+            "serial_number": clean_serial,
+            "release_number": release_str,
+            "bus_path": bus_path,
+            "hid_id": f"0003:{vid_hex}:{pid_hex}",
+            "hid_name": clean_prod,
+            "vid_hex": vid_hex,
+            "pid_hex": pid_hex,
+            "metadata_source": "USB HID Descriptors (import hid)",
+        }
 
     def close(self):
         if self._dev is not None:
@@ -348,6 +463,23 @@ class PulsoxHidDevice:
     def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
         return self._backend.read_report_blocking(max_bytes, timeout_sec)
 
+    def get_descriptor_info(self) -> dict:
+        """Returns normalized USB hardware and descriptor metadata from the active backend."""
+        if hasattr(self._backend, "get_descriptor_info"):
+            return self._backend.get_descriptor_info()
+        return {
+            "manufacturer": None,
+            "product": None,
+            "serial_number": None,
+            "release_number": None,
+            "bus_path": None,
+            "hid_id": f"0003:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}",
+            "hid_name": None,
+            "vid_hex": VENDOR_ID_HEX,
+            "pid_hex": PRODUCT_ID_HEX,
+            "metadata_source": "Default fallback",
+        }
+
     def close(self):
         self._backend.close()
 
@@ -385,6 +517,20 @@ class MockHidDevice:
 
     def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
         return self.read_report(max_bytes)
+
+    def get_descriptor_info(self) -> dict:
+        return {
+            "manufacturer": "Contec Medical Systems (Mock)",
+            "product": "Pulse Oximeter (Mock)",
+            "serial_number": "MOCK-50F",
+            "release_number": "v1.00 (BCD 0x0100)",
+            "bus_path": "Mock-USB-Bus",
+            "hid_id": "0003:28E9:028A",
+            "hid_name": "Pulse Oximeter Mock",
+            "vid_hex": "28E9",
+            "pid_hex": "028A",
+            "metadata_source": "Mock Simulator",
+        }
 
     def close(self):
         pass

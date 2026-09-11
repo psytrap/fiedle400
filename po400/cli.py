@@ -307,6 +307,7 @@ def command_info(args):
         print(f"Error connecting: {e}")
         return 1
 
+    meta = dev.get_descriptor_info()
     engine = serial_engine.SerialDeviceEngine(dev)
     try:
         res = engine.read_device_info(debug=getattr(args, "verbose", 0))
@@ -322,33 +323,12 @@ def command_info(args):
     backend_label = "Linux hidraw (native)" if dev.backend_name == "hidraw" else "hid (cross-platform)"
 
     readable, writable = True, True
-    sysfs_mfg, sysfs_prod, sysfs_bus = None, None, None
-    hid_id, hid_name = "N/A", "N/A"
-
-    if node_path.startswith("/dev/hidraw"):
+    if node_path.startswith("/dev/"):
         readable = os.access(node_path, os.R_OK)
         writable = os.access(node_path, os.W_OK)
-        sysfs_mfg, sysfs_prod, sysfs_bus = get_usb_sysfs_info(node_path)
-        node_name = os.path.basename(node_path)
-        uevent_file = f"/sys/class/hidraw/{node_name}/device/uevent"
-        if os.path.exists(uevent_file):
-            try:
-                with open(uevent_file, "r") as f:
-                    for line in f:
-                        if line.startswith("HID_ID="):
-                            hid_id = line.strip().split("=", 1)[1]
-                        elif line.startswith("HID_NAME="):
-                            hid_name = line.strip().split("=", 1)[1]
-            except Exception:
-                pass
 
-    # Decode USB VID:PID hardware model
-    vid_hex, pid_hex = "28E9", "028A"
-    if ":" in hid_id:
-        parts = hid_id.split(":")
-        if len(parts) >= 3:
-            vid_hex, pid_hex = parts[1], parts[2]
-            
+    vid_hex = meta.get("vid_hex", "28E9")
+    pid_hex = meta.get("pid_hex", "028A")
     decoded_model, model_source = protocol.decode_usb_vid_pid(vid_hex, pid_hex)
 
     fw_str = info.firmware_version if (info and info.firmware_version) else "v2.0 (CMS-60D/PO-400 v2)"
@@ -359,16 +339,20 @@ def command_info(args):
     print(f"\n==================================================")
     print(f"  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
     print(f"==================================================")
-    print(f"  Kernel Device Node     : {node_path}")
+    print(f"  Device Path / Node     : {node_path}")
     print(f"  Active HID Backend     : {backend_label}")
     print(f"  Hardware Model         : {decoded_model}")
     print(f"  └─ Provenance Source   : [{model_source}]")
     print(f"  USB Vendor:Product ID  : {vid_hex}:{pid_hex}")
-    print(f"  sysfs Product String   : {sysfs_prod if sysfs_prod else 'Pulse Oximeter'}")
-    print(f"  sysfs Manufacturer     : {sysfs_mfg if sysfs_mfg else 'Contec Medical Systems'}")
-    print(f"  sysfs USB Bus Path     : {sysfs_bus if sysfs_bus else 'N/A'}")
-    print(f"  sysfs HID ID           : {hid_id}")
-    print(f"  sysfs HID Name         : {hid_name}")
+    print(f"  USB Product Name       : {meta.get('product') or 'N/A (Not reported in USB descriptor)'}")
+    print(f"  USB Manufacturer       : {meta.get('manufacturer') or 'N/A (Not reported in USB descriptor)'}")
+    if meta.get("serial_number"):
+        print(f"  USB Serial Descriptor  : {meta['serial_number']}")
+    if meta.get("release_number"):
+        print(f"  USB Hardware Release   : {meta['release_number']}")
+    if meta.get("bus_path"):
+        print(f"  USB Bus / Topology     : {meta['bus_path']}")
+    print(f"  Descriptor Data Source : {meta.get('metadata_source', 'N/A')}")
     print(f"  Read/Write Access      : Readable={readable}, Writable={writable}")
     print(f"  Firmware Version       : {fw_str}")
     print(f"  Serial Number          : {sn_str}")
