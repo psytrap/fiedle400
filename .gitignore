@@ -14,4 +14,5 @@ test_parse_stored_dump.py
 exe/
 *.zip
 archive/
-
+.venv/
+venv/

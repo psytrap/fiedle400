@@ -1,11 +1,17 @@
 # Pulsox PO-400 CLI Tool (`po400`)
 
-A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID on Linux.
+A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID.
 
 For detailed hardware & protocol specifications, see [DESIGN.md](file:///home/mik/Documents/Bastel/2023-/po400/DESIGN.md).
 
+---
+
 ## Features
-- **Zero-Dependency Core**: Communicates natively with `/dev/hidraw*` device nodes without relying on buggy libusb C-wrappers.
+- **Dual-Backend Driver**:
+  - **Linux Default (`hidraw`)**: 100% standard library Python. Communicates directly with `/dev/hidraw*` device nodes with **zero external dependencies** (`pip install` is NOT required).
+  - **Windows & macOS Default (`hid`)**: Cross-platform driver via `import hid` library (automatically included as a dependency when installing on Windows or macOS).
+  - **Switchable**: Pass `--backend hid` on Linux to develop and test cross-platform logic locally.
+- **Interactive Wizard (`po400`)**: Running without arguments opens a guided menu to inspect device status, download session recordings, and manage device memory.
 - **Device Info Reader (`po400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries hardware model, raw sysfs parameters, firmware version, serial number (`50F`), user profile string (`user`), and storage geometry (`112B Sub-chunk Payload, 4KB Address Block`).
 - **Real-Time Clock Read & Write (`po400 read-time` / `po400 set-time`)**: Reads hardware RTC clock (`0x82`) and synchronizes device RTC clock (`0x83`) with PC system time.
 - **Session Index Lister (`po400 sessions`)**: Queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
@@ -14,10 +20,10 @@ For detailed hardware & protocol specifications, see [DESIGN.md](file:///home/mi
 
 ---
 
-## Installation & Setup
+## Running on Linux
 
-### 1. Permissions Setup (Linux)
-On Linux, raw USB HID devices require read/write access. You can grant access permanently by adding a udev rule:
+### 1. Permissions Setup (udev rule)
+On Linux, raw USB HID devices require read/write access. Grant access permanently by adding a udev rule:
 
 ```bash
 echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="28e9", ATTRS{idProduct}=="028a", MODE="0666"' | sudo tee /etc/udev/rules.d/99-pulsox.rules
@@ -29,56 +35,99 @@ Alternatively, grant temporary access:
 sudo chmod 666 /dev/hidraw*
 ```
 
-### 2. Package Installation & Running Commands
-
-Run commands directly without installing (`pip install` is not required):
+### 2. Run Directly (Zero Dependencies)
+No external libraries or `pip install` required:
 ```bash
-# 1. Read hardware information, serial (50F), and storage geometry
-python3 -m po400.cli info
+# Launch interactive wizard:
+python3 -m po400
 
-# 2. Read & set device Real-Time Clock (RTC)
-python3 -m po400.cli read-time
-python3 -m po400.cli set-time
-python3 -m po400.cli set-time "2026-09-03 09:45:30"
+# Or execute subcommands:
+python3 -m po400 info
+python3 -m po400 sessions
+python3 -m po400 download -o recording.csv
+```
 
-# 3. List all stored recording sessions on device
-python3 -m po400.cli sessions
+---
 
-# 4. Download ALL stored recording sessions (Default)
-python3 -m po400.cli download -o all_sessions.csv
+## Running on Windows
 
-# 5. Download a specific session (e.g. Session #1)
-python3 -m po400.cli download -s 1 -o session_1.csv
+### 1. Requirements
+- Python 3.8+
+- `hid` library (automatically installed when installing via wheel or pip):
+  ```cmd
+  pip install hid
+  ```
 
-# 6. Clear/delete ALL stored recording sessions from device flash memory
-python3 -m po400.cli clear -y
+### 2. Execution Options
+From the project folder:
+```cmd
+REM Option A: Use the Windows batch wrapper
+po400.bat --help
+po400.bat info
+
+REM Option B: Run via Python module
+python -m po400 --help
+python -m po400 info
+
+REM Option C: Run standalone executable ZipApp
+python dist\po400.pyz --help
+
+REM Option D: Install package via pip
+pip install dist\po400-0.1.0-py3-none-any.whl
+po400 --help
+```
+
+---
+
+## Driver Backend Selection
+
+You can explicitly choose the driver backend via the `--backend` (`--driver`) flag:
+
+| Backend | Description | Default On | Dependencies |
+|---|---|---|---|
+| `hidraw` | Linux kernel direct `/dev/hidraw*` interface | **Linux** | Standard Library only (0 dependencies) |
+| `hid` | Cross-platform driver via `import hid` | **Windows** | `pip install hid` |
+
+```bash
+# Force hidraw (Linux default):
+po400 --backend hidraw info
+
+# Force hid (Windows default, or for testing on Linux):
+po400 --backend hid info
 ```
 
 ---
 
 ## Usage Examples
 
-You can run commands using `po400 <command>` (if installed) or `python3 -m po400.cli <command>` (without installing):
-
-### 1. Read Device Information
 ```bash
+# 1. Read device information
 po400 info
-# or
-python3 -m po400.cli info
+
+# 2. Read & synchronize device Real-Time Clock (RTC)
+po400 read-time
+po400 set-time
+
+# 3. List all stored recording sessions
+po400 sessions
+
+# 4. Download all sessions to CSV
+po400 download -o all_sessions.csv
+
+# 5. Download a specific session to JSON
+po400 download -s 1 -o session_1.json -f json
+
+# 6. Format / delete stored recording sessions from device flash memory
+po400 clear -y
 ```
 
-### 2. Extract Saved Recording Sessions to CSV
-```bash
-po400 download -o overnight_recording.csv
-# or
-python3 -m po400.cli download -o overnight_recording.csv
-```
+---
 
-### 3. Extract Recording Sessions to JSON
+## Running Unit Tests
+
+Run the complete test suite (all tests use mocks and require 0 external dependencies):
 ```bash
-po400 download -o overnight_recording.json -f json
-# or
-python3 -m po400.cli download -o overnight_recording.json -f json
+python3 -m unittest discover tests
 ```
 
 ---
@@ -87,10 +136,4 @@ python3 -m po400.cli download -o overnight_recording.json -f json
 
 - **[DESIGN.md](file:///home/mik/Documents/Bastel/2023-/po400/DESIGN.md)**: Full technical specification, USB HID framing, command codes, and memory architecture.
 - **[PROTOCOL.md](file:///home/mik/Documents/Bastel/2023-/po400/PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
-
----
-
-## Running Unit Tests
-```bash
-python3 -m unittest discover tests
-```
+- **[PACKAGING.md](file:///home/mik/Documents/Bastel/2023-/po400/PACKAGING.md)**: Distribution and installer design specifications.

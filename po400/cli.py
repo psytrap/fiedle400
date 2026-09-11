@@ -23,7 +23,7 @@ from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 def command_detect(args) -> int:
     """Handler for 'detect' subcommand to run live Serial Packet Detector & Decoder."""
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
     except Exception as e:
         print(f"Error connecting: {e}")
@@ -126,7 +126,7 @@ def command_download(args):
     
     print("Connecting to Pulsox PO-400 to extract recording data...")
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
         print(f"Connected to {node_path}!")
     except Exception as e:
@@ -163,7 +163,7 @@ def command_sessions(args):
     """Handler for 'sessions' subcommand to query session index table using SerialDeviceEngine."""
     print("Connecting to Pulsox PO-400 to query recorded session index...")
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
         print(f"Connected to {node_path}!")
     except Exception as e:
@@ -211,7 +211,7 @@ def command_clear(args):
 
     print(f"Connecting to Pulsox PO-400 to delete {target_str}...")
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
         print(f"Connected to {node_path}!")
     except Exception as e:
@@ -234,7 +234,7 @@ def command_read_time(args):
     """Handler for 'read-time' subcommand to read active device RTC timestamp using SerialDeviceEngine."""
     print("Connecting to Pulsox PO-400 to read Real-Time Clock (RTC)...")
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
         print(f"Connected to {node_path}!")
     except Exception as e:
@@ -273,7 +273,7 @@ def command_set_time(args):
     ts_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
     print(f"Connecting to Pulsox PO-400 to set Real-Time Clock (RTC)...")
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
         print(f"Connected to {node_path}!")
     except Exception as e:
@@ -300,7 +300,7 @@ def command_info(args):
     """Handler for 'info' subcommand to read hardware and firmware information."""
     print("Connecting to Pulsox PO-400 to read device information...")
     try:
-        dev = PulsoxHidDevice(dev_path=args.device)
+        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
         print(f"Connected to {node_path}!")
     except Exception as e:
@@ -319,25 +319,28 @@ def command_info(args):
     finally:
         dev.close()
 
-    readable = os.access(node_path, os.R_OK)
-    writable = os.access(node_path, os.W_OK)
+    backend_label = "Linux hidraw (native)" if dev.backend_name == "hidraw" else "hid (cross-platform)"
 
-    # Read USB Manufacturer, Product, and Bus ID dynamically from sysfs
-    sysfs_mfg, sysfs_prod, sysfs_bus = get_usb_sysfs_info(node_path)
-
-    node_name = os.path.basename(node_path)
-    uevent_file = f"/sys/class/hidraw/{node_name}/device/uevent"
+    readable, writable = True, True
+    sysfs_mfg, sysfs_prod, sysfs_bus = None, None, None
     hid_id, hid_name = "N/A", "N/A"
-    if os.path.exists(uevent_file):
-        try:
-            with open(uevent_file, "r") as f:
-                for line in f:
-                    if line.startswith("HID_ID="):
-                        hid_id = line.strip().split("=", 1)[1]
-                    elif line.startswith("HID_NAME="):
-                        hid_name = line.strip().split("=", 1)[1]
-        except Exception:
-            pass
+
+    if node_path.startswith("/dev/hidraw"):
+        readable = os.access(node_path, os.R_OK)
+        writable = os.access(node_path, os.W_OK)
+        sysfs_mfg, sysfs_prod, sysfs_bus = get_usb_sysfs_info(node_path)
+        node_name = os.path.basename(node_path)
+        uevent_file = f"/sys/class/hidraw/{node_name}/device/uevent"
+        if os.path.exists(uevent_file):
+            try:
+                with open(uevent_file, "r") as f:
+                    for line in f:
+                        if line.startswith("HID_ID="):
+                            hid_id = line.strip().split("=", 1)[1]
+                        elif line.startswith("HID_NAME="):
+                            hid_name = line.strip().split("=", 1)[1]
+            except Exception:
+                pass
 
     # Decode USB VID:PID hardware model
     vid_hex, pid_hex = "28E9", "028A"
@@ -357,6 +360,7 @@ def command_info(args):
     print(f"  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
     print(f"==================================================")
     print(f"  Kernel Device Node     : {node_path}")
+    print(f"  Active HID Backend     : {backend_label}")
     print(f"  Hardware Model         : {decoded_model}")
     print(f"  └─ Provenance Source   : [{model_source}]")
     print(f"  USB Vendor:Product ID  : {vid_hex}:{pid_hex}")
@@ -460,12 +464,13 @@ def run_interactive_wizard(args) -> int:
     print("============================================================")
 
     dev_path = getattr(args, "device", None)
+    backend = getattr(args, "backend", None)
     verbose_level = getattr(args, "verbose", 0)
 
     while True:
         print("\nConnecting to device...")
         try:
-            dev = PulsoxHidDevice(dev_path=dev_path)
+            dev = PulsoxHidDevice(dev_path=dev_path, backend=backend)
             node_path = dev.connect()
             print(f"[✓] Connected to {node_path}")
         except Exception as e:
@@ -592,26 +597,27 @@ def main():
         prog="po400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
     )
-    parser.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=None, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
 
     # Subcommand: info
     parser_info = subparsers.add_parser("info", help="Read hardware model, firmware version, and USB descriptors.")
-    parser_info.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_info.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_info.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_info.set_defaults(func=command_info)
 
     # Subcommand: sessions
     parser_sess = subparsers.add_parser("sessions", help="List all stored recording sessions on device (v2.0.0).")
-    parser_sess.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_sess.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_sess.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_sess.set_defaults(func=command_sessions)
 
     # Subcommand: download
     parser_dl = subparsers.add_parser("download", help="Download recorded sessions from device memory (defaults to ALL sessions).")
-    parser_dl.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_dl.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
     parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.csv).")
@@ -623,26 +629,29 @@ def main():
 
     # Subcommand: clear
     parser_clear = subparsers.add_parser("clear", help="Clear/delete stored recording sessions from device flash memory.")
-    parser_clear.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_clear.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_clear.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to delete (default: 0 = delete ALL sessions).")
     parser_clear.add_argument("-y", "--yes", action="store_true", help="Bypass confirmation prompt.")
     parser_clear.set_defaults(func=command_clear)
 
     # Subcommand: read-time
     parser_rt = subparsers.add_parser("read-time", help="Read active device Real-Time Clock (RTC) timestamp.")
-    parser_rt.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_rt.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_rt.set_defaults(func=command_read_time)
 
     # Subcommand: set-time
     parser_st = subparsers.add_parser("set-time", help="Set device Real-Time Clock (RTC) to specified timestamp or current system time.")
     parser_st.add_argument("timestamp", nargs="?", help="Optional timestamp string 'YYYY-MM-DD HH:MM:SS' (defaults to current system time).")
-    parser_st.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_st.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_st.set_defaults(func=command_set_time)
 
     # Subcommand: detect
     parser_det = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")
-    parser_det.add_argument("-d", "--device", help="Specific /dev/hidraw node path (optional).")
+    parser_det.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_det.set_defaults(func=command_detect)
+
+    for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det]:
+        p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=argparse.SUPPRESS, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
 
     args = parser.parse_args()
 

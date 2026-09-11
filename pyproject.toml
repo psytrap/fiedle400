@@ -11,7 +11,14 @@ authors = [
     { name = "Developer" }
 ]
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+    "hid; sys_platform == 'win32' or sys_platform == 'darwin'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "hid",
+]
 
 [project.scripts]
 po400 = "po400.cli:main"

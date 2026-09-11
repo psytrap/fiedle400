@@ -1,20 +1,35 @@
 """Pulsox PO-400 USB HID Device Driver.
 
-Discovers and interfaces directly with raw Linux /dev/hidraw nodes for 
-GigaDevice / Contec pulse oximeters (VID 0x28E9, PID 0x028A).
+Supports dual driver backends:
+  - 'hidraw': Direct Linux kernel /dev/hidraw nodes (default on Linux, 0 external dependencies).
+  - 'hid': Cross-platform HID library via `import hid` (default on Windows & macOS,
+           selectable on Linux for cross-platform development/testing).
 """
 
 import os
-import stat
+import sys
 import time
 from typing import List, Optional, Tuple
 
 VENDOR_ID_HEX = "28E9"
 PRODUCT_ID_HEX = "028A"
+VENDOR_ID_INT = 0x28E9
+PRODUCT_ID_INT = 0x028A
+
+
+def resolve_default_backend() -> str:
+    """Returns the default backend based on the host operating system.
+    
+    Linux defaults to 'hidraw' (zero dependencies).
+    Windows and macOS default to 'hid'.
+    """
+    if sys.platform.startswith("linux"):
+        return "hidraw"
+    return "hid"
 
 
 def find_pulsox_hid_devices() -> List[Tuple[str, str, bool]]:
-    """Scans system for connected Pulsox PO-400 HID devices.
+    """Scans system for connected Pulsox PO-400 HID devices via Linux sysfs.
     
     Returns:
         List of tuples: (dev_path, uevent_info, is_readable)
@@ -92,8 +107,8 @@ def get_usb_sysfs_info(dev_path: str) -> Tuple[Optional[str], Optional[str], Opt
     return mfg, prod, bus_id
 
 
-class PulsoxHidDevice:
-    """Manager for communicating with the Pulsox PO-400 raw HID node."""
+class LinuxHidrawBackend:
+    """Direct Linux /dev/hidraw driver backend using standard library POSIX file descriptors."""
 
     def __init__(self, dev_path: Optional[str] = None):
         self.dev_path = dev_path
@@ -115,7 +130,10 @@ class PulsoxHidDevice:
                 )
 
         try:
-            self._fd = os.open(self.dev_path, os.O_RDWR | os.O_NONBLOCK)
+            o_flags = os.O_RDWR
+            if hasattr(os, "O_NONBLOCK"):
+                o_flags |= os.O_NONBLOCK
+            self._fd = os.open(self.dev_path, o_flags)
             return self.dev_path
         except Exception as e:
             raise RuntimeError(f"Failed to open HID device '{self.dev_path}': {e}") from e
@@ -124,13 +142,11 @@ class PulsoxHidDevice:
         return self._fd is not None
 
     def write_report(self, report_bytes: bytes) -> int:
-        """Sends a report to the HID device."""
         if self._fd is None:
             raise RuntimeError("Device is not connected.")
         return os.write(self._fd, report_bytes)
 
     def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
-        """Reads a raw report from the HID device (non-blocking)."""
         if self._fd is None:
             raise RuntimeError("Device is not connected.")
         try:
@@ -140,7 +156,6 @@ class PulsoxHidDevice:
             return None
 
     def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
-        """Polls for a report until received or timeout occurs."""
         start = time.time()
         while time.time() - start < timeout_sec:
             data = self.read_report(max_bytes)
@@ -150,13 +165,191 @@ class PulsoxHidDevice:
         return None
 
     def close(self):
-        """Closes the file descriptor."""
         if self._fd is not None:
             try:
                 os.close(self._fd)
             except Exception:
                 pass
             self._fd = None
+
+
+class HidBackend:
+    """Cross-platform driver backend using the `import hid` library."""
+
+    def __init__(self, dev_path: Optional[str] = None):
+        self.dev_path = dev_path
+        self._dev = None
+
+    def _get_hid_module(self):
+        try:
+            import hid
+            return hid
+        except ImportError as e:
+            raise RuntimeError(
+                "The 'hid' library is required for the 'hid' backend but is not installed.\n"
+                "Install it with: pip install hid\n"
+                "(On Linux, the default 'hidraw' backend requires no extra libraries)."
+            ) from e
+
+    def connect(self) -> str:
+        """Locates and opens the device via import hid."""
+        hid = self._get_hid_module()
+
+        try:
+            connected_path = self.dev_path
+            if hasattr(hid, "Device"):
+                # ctypes hid package (apmorton/pyhidapi)
+                if self.dev_path:
+                    path_bytes = self.dev_path.encode("utf-8") if isinstance(self.dev_path, str) else self.dev_path
+                    dev_inst = hid.Device(path=path_bytes)
+                else:
+                    matched = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
+                    if not matched:
+                        raise RuntimeError(
+                            "No Pulsox PO-400 device found via 'hid'! Ensure USB cable is plugged in and device is powered ON."
+                        )
+                    raw_path = matched[0].get("path")
+                    if raw_path:
+                        dev_inst = hid.Device(path=raw_path)
+                        connected_path = raw_path.decode("utf-8", errors="ignore") if isinstance(raw_path, bytes) else str(raw_path)
+                    else:
+                        dev_inst = hid.Device(VENDOR_ID_INT, PRODUCT_ID_INT)
+                        connected_path = f"hid:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}"
+                dev_inst.nonblocking = True
+            elif hasattr(hid, "device"):
+                # cython-hidapi package (trezor/cython-hidapi)
+                dev_inst = hid.device()
+                if self.dev_path:
+                    path_bytes = self.dev_path.encode("utf-8") if isinstance(self.dev_path, str) else self.dev_path
+                    dev_inst.open_path(path_bytes)
+                else:
+                    matched = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
+                    if not matched:
+                        raise RuntimeError(
+                            "No Pulsox PO-400 device found via 'hid'! Ensure USB cable is plugged in and device is powered ON."
+                        )
+                    raw_path = matched[0].get("path")
+                    if raw_path:
+                        dev_inst.open_path(raw_path)
+                        connected_path = raw_path.decode("utf-8", errors="ignore") if isinstance(raw_path, bytes) else str(raw_path)
+                    else:
+                        dev_inst.open(VENDOR_ID_INT, PRODUCT_ID_INT)
+                        connected_path = f"hid:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}"
+                dev_inst.set_nonblocking(1)
+            else:
+                raise RuntimeError("Unsupported 'hid' module layout.")
+
+            self._dev = dev_inst
+            self.dev_path = connected_path or f"hid:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}"
+            return self.dev_path
+        except Exception as e:
+            if isinstance(e, RuntimeError):
+                raise
+            raise RuntimeError(f"Failed to open HID device via 'hid': {e}") from e
+
+    def is_connected(self) -> bool:
+        return self._dev is not None
+
+    def write_report(self, report_bytes: bytes) -> int:
+        if self._dev is None:
+            raise RuntimeError("Device is not connected.")
+        # On Windows / hid: prepends 0x00 Report ID for devices using unnumbered reports
+        if len(report_bytes) == 64 and report_bytes[0] != 0x00:
+            payload = bytes([0x00]) + report_bytes
+        else:
+            payload = report_bytes
+        return self._dev.write(payload)
+
+    def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
+        if self._dev is None:
+            raise RuntimeError("Device is not connected.")
+        try:
+            res = self._dev.read(max_bytes)
+            return bytes(res) if res else None
+        except Exception:
+            return None
+
+    def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
+        start = time.time()
+        while time.time() - start < timeout_sec:
+            data = self.read_report(max_bytes)
+            if data:
+                return data
+            time.sleep(0.02)
+        return None
+
+    def close(self):
+        if self._dev is not None:
+            try:
+                self._dev.close()
+            except Exception:
+                pass
+            self._dev = None
+
+
+# Backward compatibility alias
+HidapiBackend = HidBackend
+
+
+class PulsoxHidDevice:
+    """Manager for communicating with the Pulsox PO-400 raw HID node.
+    
+    Supports 'hidraw' (default on Linux, 0 external dependencies) and
+    'hid' (default on Windows/macOS, available on Linux for testing).
+    """
+
+    def __init__(self, dev_path: Optional[str] = None, backend: Optional[str] = None):
+        self.dev_path = dev_path
+
+        if backend is None:
+            self.backend_name = resolve_default_backend()
+        else:
+            b = backend.lower().strip()
+            if b in ("raw", "hidraw"):
+                self.backend_name = "hidraw"
+            elif b in ("hid", "api", "hidapi"):
+                self.backend_name = "hid"
+            else:
+                raise ValueError(f"Unknown HID backend '{backend}'. Supported backends: 'hidraw', 'hid'.")
+
+        if self.backend_name == "hidraw":
+            if not sys.platform.startswith("linux"):
+                raise RuntimeError(
+                    f"The 'hidraw' backend is only supported on Linux (current OS: {sys.platform}).\n"
+                    "On Windows and macOS, please use the 'hid' backend."
+                )
+            self._backend = LinuxHidrawBackend(dev_path=self.dev_path)
+        else:
+            self._backend = HidBackend(dev_path=self.dev_path)
+
+    @property
+    def _fd(self) -> Optional[int]:
+        """Provides access to the underlying file descriptor when using LinuxHidrawBackend."""
+        return getattr(self._backend, "_fd", None)
+
+    @_fd.setter
+    def _fd(self, val: Optional[int]):
+        if hasattr(self._backend, "_fd"):
+            self._backend._fd = val
+
+    def connect(self) -> str:
+        self.dev_path = self._backend.connect()
+        return self.dev_path
+
+    def is_connected(self) -> bool:
+        return self._backend.is_connected()
+
+    def write_report(self, report_bytes: bytes) -> int:
+        return self._backend.write_report(report_bytes)
+
+    def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
+        return self._backend.read_report(max_bytes)
+
+    def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
+        return self._backend.read_report_blocking(max_bytes, timeout_sec)
+
+    def close(self):
+        self._backend.close()
 
     def __enter__(self):
         self.connect()
@@ -172,9 +365,13 @@ class MockHidDevice:
     def __init__(self, responses=None):
         self.responses = responses or []
         self.written = []
+        self.backend_name = "mock"
 
     def connect(self) -> str:
         return "/dev/hidraw_mock"
+
+    def is_connected(self) -> bool:
+        return True
 
     def write_report(self, data: bytes) -> int:
         self.written.append(data)
@@ -186,6 +383,15 @@ class MockHidDevice:
         # Default mock response: COMMAND_ACK (0xF0 0x70)
         return bytes([0xF0, 0x70] + [0x00] * 62)
 
+    def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
+        return self.read_report(max_bytes)
+
     def close(self):
         pass
 
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
