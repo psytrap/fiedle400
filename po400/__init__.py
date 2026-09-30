@@ -8,11 +8,19 @@ from .engine import (
     SerialDeviceEngine,
     DecodedPacket,
 )
+from .export import (
+    export_records,
+    build_spo2_binary,
+)
+from .plot import plot_session
 
 __all__ = [
     "SerialByteStreamBuffer",
     "SerialPacketDetector",
     "SerialDeviceEngine",
     "DecodedPacket",
+    "export_records",
+    "build_spo2_binary",
+    "plot_session",
     "__version__",
 ]

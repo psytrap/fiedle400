@@ -111,13 +111,18 @@ po400 set-time
 # 3. List all stored recording sessions
 po400 sessions
 
-# 4. Download all sessions to CSV
-po400 download -o all_sessions.csv
+# 4. Download all sessions (defaults to Contec .SpO2 binary format)
+po400 download -o all_sessions.spo2
 
-# 5. Download a specific session to JSON
+# 5. Download a specific session to CSV or JSON
+po400 download -s 1 -o session_1.csv -f csv
 po400 download -s 1 -o session_1.json -f json
 
-# 6. Format / delete stored recording sessions from device flash memory
+# 6. Generate high-resolution PNG plot of session
+po400 plot                           # Automatically plots latest recording in output/
+po400 plot output/session_1.spo2     # Explicit recording file (.spo2, .csv, or .json)
+
+# 7. Format / delete stored recording sessions from device flash memory
 po400 clear -y
 ```
 
@@ -134,6 +139,7 @@ python3 -m unittest discover tests
 
 ## Documentation & Protocol References
 
+- **[SPO2_FORMAT.md](file:///home/mik/Documents/Bastel/2023-/po400/SPO2_FORMAT.md)**: Full binary format specification for Contec / Pulsox `.SpO2` files.
 - **[DESIGN.md](file:///home/mik/Documents/Bastel/2023-/po400/DESIGN.md)**: Full technical specification, USB HID framing, command codes, and memory architecture.
 - **[PROTOCOL.md](file:///home/mik/Documents/Bastel/2023-/po400/PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
 - **[PACKAGING.md](file:///home/mik/Documents/Bastel/2023-/po400/PACKAGING.md)**: Distribution and installer design specifications.

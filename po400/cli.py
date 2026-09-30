@@ -10,14 +10,42 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Tuple
 
-from po400 import protocol, serial_engine
+try:
+    import readline  # Enable terminal arrow keys, line editing, and history in input()
+except ImportError:
+    pass
+
+from po400 import export, protocol, serial_engine
 from po400.protocol import Commands, Parsers
 from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
+
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+
+def clean_input(prompt: str = "") -> str:
+    """Wrapper around built-in input() that strips ANSI escape sequences and non-printable control chars."""
+    raw = input(prompt)
+    cleaned = ANSI_ESCAPE_RE.sub("", raw)
+    cleaned = "".join(ch for ch in cleaned if ch.isprintable() or ch in " \t")
+    return cleaned.strip()
+
+
+def command_plot(args) -> int:
+    """Handler for 'plot' subcommand to generate PNG graph from recording file."""
+    try:
+        from po400 import plot
+        saved_path = plot.plot_session(filepath=args.file, output_png=args.output, dpi=args.dpi)
+        print(f"📊 Successfully generated session plot: {saved_path}")
+        return 0
+    except Exception as e:
+        print(f"❌ Error generating plot: {e}")
+        return 1
 
 
 def command_detect(args) -> int:
@@ -89,26 +117,9 @@ def _download_single_session(dev, sess_info: protocol.SessionInfo, timeout_limit
 
 
 
-def _export_records_to_file(records: List[dict], output_filename: Optional[str], fmt: str) -> str:
-    """Helper to save extracted records into CSV or JSON format."""
-    if not output_filename:
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"po400_all_sessions_{timestamp_str}.{fmt}"
-
-    if fmt == "csv":
-        with open(output_filename, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(
-                f,
-                fieldnames=["session_id", "user_id", "block_id", "seq", "timestamp", "spo2", "heart_rate", "flags"],
-                extrasaction="ignore"
-            )
-            writer.writeheader()
-            writer.writerows(records)
-    else:  # json
-        with open(output_filename, "w", encoding="utf-8") as f:
-            json.dump(records, f, indent=2)
-
-    return os.path.abspath(output_filename)
+def _export_records_to_file(records: List[dict], output_filename: Optional[str] = None, fmt: str = "spo2") -> str:
+    """Helper to save extracted records into .SpO2, CSV, or JSON format."""
+    return export.export_records(records, output_filename=output_filename, fmt=fmt)
 
 
 def command_download(args):
@@ -204,7 +215,7 @@ def command_clear(args):
     target_str = f"Session #{sess_id}" if sess_id > 0 else "ALL stored recording sessions"
     
     if not args.yes:
-        confirm = input(f"⚠️ Are you sure you want to permanently DELETE {target_str} from device memory? [y/N]: ")
+        confirm = clean_input(f"⚠️ Are you sure you want to permanently DELETE {target_str} from device memory? [y/N]: ")
         if confirm.lower() not in ["y", "yes"]:
             print("Operation cancelled.")
             return 0
@@ -375,7 +386,8 @@ def parse_session_selection(selection_str: str, available_sessions: List[protoco
       - '1-3': inclusive range of session IDs
       - combinations: '1-3, 5, 7-8'
     """
-    raw = selection_str.strip().lower()
+    raw = ANSI_ESCAPE_RE.sub("", selection_str)
+    raw = "".join(ch for ch in raw if ch.isprintable() or ch in " \t").strip().lower()
     if not raw:
         raise ValueError("No session selected.")
 
@@ -403,7 +415,7 @@ def parse_session_selection(selection_str: str, available_sessions: List[protoco
                     selected_ids.append(sid)
         else:
             if not part.isdigit():
-                raise ValueError(f"Invalid session number: '{part}'")
+                raise ValueError(f"Invalid session number or syntax: '{part}'")
             sid = int(part)
             if sid not in sess_map:
                 raise ValueError(f"Session #{sid} does not exist.")
@@ -416,11 +428,11 @@ def parse_session_selection(selection_str: str, available_sessions: List[protoco
     return [sess_map[sid] for sid in selected_ids]
 
 
-def generate_iso_filename(selected_sessions: List[protocol.SessionInfo]) -> str:
-    """Generates a uniform CSV filename with ISO start and end datetimes.
+def generate_iso_filename(selected_sessions: List[protocol.SessionInfo], ext: str = "spo2") -> str:
+    """Generates a uniform filename with ISO start and end datetimes.
     
-    Format: po400_{start_iso}_{end_iso}.csv
-    e.g.: po400_2026-09-06T100516_2026-09-06T105028.csv
+    Format: po400_{start_iso}_{end_iso}.{ext}
+    e.g.: po400_2026-09-06T100516_2026-09-06T105028.spo2
     """
     now = datetime.now()
     valid_starts = [s.timestamp for s in selected_sessions if s.timestamp]
@@ -438,20 +450,43 @@ def generate_iso_filename(selected_sessions: List[protocol.SessionInfo]) -> str:
 
     start_iso = start_dt.strftime("%Y-%m-%dT%H%M%S")
     end_iso = end_dt.strftime("%Y-%m-%dT%H%M%S")
-    return f"po400_{start_iso}_{end_iso}.csv"
+    clean_ext = ext.lower().lstrip(".")
+    return f"po400_{start_iso}_{end_iso}.{clean_ext}"
+
+
+def get_next_available_filename(filepath: str, max_attempts: int = 10000) -> str:
+    """Generate next available filename by appending a counter suffix (_1, _2, etc.) that does not yet exist on disk."""
+    if not os.path.exists(filepath):
+        return filepath
+    base, ext = os.path.splitext(filepath)
+    m = re.search(r"^(.*)_(\d+)$", base)
+    if m:
+        prefix = m.group(1)
+        idx = int(m.group(2)) + 1
+    else:
+        prefix = base
+        idx = 1
+
+    for _ in range(max_attempts):
+        candidate = f"{prefix}_{idx}{ext}"
+        if not os.path.exists(candidate):
+            return candidate
+        idx += 1
+
+    return f"{prefix}_{idx}{ext}"
 
 
 def run_interactive_wizard(args) -> int:
     """Interactive text-based wizard prompt when po400 is run without subcommands."""
-    print("============================================================")
-    print("              PULOX PO-400 INTERACTIVE WIZARD")
-    print("============================================================")
-
     dev_path = getattr(args, "device", None)
     backend = getattr(args, "backend", None)
     verbose_level = getattr(args, "verbose", 0)
 
     while True:
+        print("\n============================================================")
+        print("          PULOX PO-400 INTERACTIVE USER INTERFACE")
+        print("============================================================")
+
         print("\nConnecting to device...")
         try:
             dev = PulsoxHidDevice(dev_path=dev_path, backend=backend)
@@ -495,9 +530,9 @@ def run_interactive_wizard(args) -> int:
                 print("  [C]   Clear / format device flash memory")
                 print("  [Q]   Quit")
                 print("------------------------------------------------------------")
-                act = input("Select action [c, q]: ").strip().lower()
+                act = clean_input("Select action [c, q]: ").lower()
                 if act in ("c", "clear"):
-                    confirm = input("⚠️ Are you sure you want to format device flash memory? [y/N]: ").strip().lower()
+                    confirm = clean_input("⚠️ Are you sure you want to format device flash memory? [y/N]: ").lower()
                     if confirm in ("y", "yes"):
                         engine.clear_memory(0, debug=verbose_level)
                         print("✅ Device flash memory formatted successfully.")
@@ -511,38 +546,74 @@ def run_interactive_wizard(args) -> int:
 
             print("\n------------------------------------------------------------")
             print("Actions:")
+            print("  [W]   Download Wizard (all sessions, save, erase device) [Default]")
             print("  [#]   Download session(s) — e.g. single (1), list (1,3,4), or range (1-3)")
             print("  [A]   Download all sessions (a or all)")
             print("  [C]   Clear / erase device flash memory")
             print("  [Q]   Quit")
             print("------------------------------------------------------------")
 
-            choice = input(f"Select action [1-{len(sessions)}, ranges like 1-{len(sessions)}, a, c, q]: ").strip()
-            if not choice or choice.lower() in ("q", "quit", "exit"):
+            choice = clean_input(f"Select action [W, 1-{len(sessions)}, ranges, a, c, q; default: W]: ")
+            if not choice or choice.lower() in ("w", "wizard"):
+                confirm_wizard = clean_input("\nStart Download Wizard to download all sessions? [Y/n]: ").lower()
+                if confirm_wizard not in ("", "y", "yes"):
+                    print("Download Wizard cancelled.")
+                    continue
+                selected_sessions = sessions
+            elif choice.lower() in ("a", "all"):
+                selected_sessions = sessions
+            elif choice.lower() in ("q", "quit", "exit"):
                 print("Goodbye!")
                 return 0
-
-            if choice.lower() in ("c", "clear"):
-                confirm = input("⚠️ Are you sure you want to permanently DELETE ALL recordings from device memory? [y/N]: ").strip().lower()
+            elif choice.lower() in ("c", "clear"):
+                confirm = clean_input("⚠️ Are you sure you want to permanently DELETE ALL recordings from device memory? [y/N]: ").lower()
                 if confirm in ("y", "yes"):
                     engine.clear_memory(0, debug=verbose_level)
                     print("✅ Device flash memory cleared successfully.")
-                ret = input("\nReturn to main menu? [y/N]: ").strip().lower()
+                ret = clean_input("\nReturn to main menu? [y/N]: ").lower()
                 if ret in ("y", "yes"):
                     continue
                 print("Goodbye!")
                 return 0
-
-            # Session download selection
-            try:
-                selected_sessions = parse_session_selection(choice, sessions)
-            except ValueError as ve:
-                print(f"[!] {ve}")
+            elif choice.isalpha():
+                print(f"[!] Unknown action: '{choice}'. Valid actions: [W] Wizard, [A] All, [C] Clear, [Q] Quit, or session number(s).")
                 continue
+            else:
+                try:
+                    selected_sessions = parse_session_selection(choice, sessions)
+                except ValueError as ve:
+                    print(f"[!] {ve}")
+                    continue
 
-            default_fn = generate_iso_filename(selected_sessions)
-            fn_input = input(f"\nEnter output CSV filename [default: {default_fn}]: ").strip()
-            csv_fn = fn_input if fn_input else default_fn
+            default_fn = generate_iso_filename(selected_sessions, ext="spo2")
+            fn_input = clean_input(f"\nSave as [default: {default_fn}]: ")
+            if not fn_input:
+                out_fn = default_fn
+            elif fn_input in ("1", "spo2"):
+                out_fn = generate_iso_filename(selected_sessions, ext="spo2")
+            elif fn_input in ("2", "csv"):
+                out_fn = generate_iso_filename(selected_sessions, ext="csv")
+            elif fn_input in ("3", "json"):
+                out_fn = generate_iso_filename(selected_sessions, ext="json")
+            else:
+                out_fn = fn_input
+
+            # Overwrite protection if target file already exists
+            file_confirmed = True
+            while os.path.exists(out_fn):
+                ow = clean_input(f"⚠️ File '{out_fn}' already exists. Overwrite? [y/N]: ").lower()
+                if ow in ("y", "yes"):
+                    break
+                suggested_fn = get_next_available_filename(out_fn)
+                alt_fn = clean_input(f"Save as [default: {suggested_fn}; 'q' to cancel]: ")
+                if alt_fn.lower() in ("q", "quit", "cancel"):
+                    print("Download cancelled.")
+                    file_confirmed = False
+                    break
+                out_fn = suggested_fn if not alt_fn else alt_fn
+
+            if not file_confirmed:
+                continue
 
             all_records = []
             for idx, s in enumerate(selected_sessions, 1):
@@ -550,11 +621,11 @@ def run_interactive_wizard(args) -> int:
                 recs = engine.download_session(s, debug=verbose_level)
                 all_records.extend(recs)
 
-            saved_path = _export_records_to_file(all_records, csv_fn, "csv")
+            saved_path = _export_records_to_file(all_records, out_fn)
             print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
 
             # Offer flash erase with default = YES
-            erase_input = input("\nErase recordings from device flash? [Y/n]: ").strip().lower()
+            erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()
             if erase_input in ("", "y", "yes"):
                 engine.clear_memory(0, debug=verbose_level)
                 print("✅ Device flash memory erased successfully.")
@@ -562,7 +633,7 @@ def run_interactive_wizard(args) -> int:
                 print("Flash recordings preserved.")
 
             # Offer return to menu with default = NO
-            ret_input = input("\nReturn to main menu? [y/N]: ").strip().lower()
+            ret_input = clean_input("\nReturn to main menu? [y/N]: ").lower()
             if ret_input in ("y", "yes"):
                 continue
             else:
@@ -604,8 +675,8 @@ def main():
     parser_dl.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
-    parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.csv).")
-    parser_dl.add_argument("-f", "--format", choices=["csv", "json"], default="csv", help="Output format (csv or json).")
+    parser_dl.add_argument("-o", "--output", help="Output file path (default: output/po400_all_sessions_<timestamp>.spo2).")
+    parser_dl.add_argument("-f", "--format", choices=["spo2", "csv", "json"], default="spo2", help="Output format: 'spo2' (default), 'csv', or 'json'.")
     parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
     parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
     parser_dl.add_argument("-v", "--verbose", "--debug", dest="verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
@@ -633,6 +704,13 @@ def main():
     parser_det = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")
     parser_det.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_det.set_defaults(func=command_detect)
+
+    # Subcommand: plot
+    parser_plot = subparsers.add_parser("plot", help="Generate high-resolution PNG graph from .spo2, .csv, or .json recording files.")
+    parser_plot.add_argument("file", nargs="?", help="Path to recording file (.spo2, .csv, or .json). Defaults to latest in output/.")
+    parser_plot.add_argument("-o", "--output", help="Output PNG file path (default: output/<filename>.png).")
+    parser_plot.add_argument("--dpi", type=int, default=150, help="Resolution in DPI (default: 150).")
+    parser_plot.set_defaults(func=command_plot)
 
     for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det]:
         p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=argparse.SUPPRESS, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")

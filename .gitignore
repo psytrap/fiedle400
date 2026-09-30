@@ -7,7 +7,12 @@ dist/
 build/
 
 # Downloaded Session Outputs & Temp Files
+output/
 po400_all_sessions_*.csv
+po400_all_sessions_*.spo2
+*.spo2
+*.SpO2
+*.dump
 session.csv
 test_parse_stored_dump.py
 *.tmp

@@ -202,8 +202,8 @@ class LinuxHidrawBackend:
             "bus_path": sysfs_bus,
             "hid_id": hid_id,
             "hid_name": hid_name,
-            "vid_hex": vid_hex.upper(),
-            "pid_hex": pid_hex.upper(),
+            "vid_hex": vid_hex.upper()[-4:],
+            "pid_hex": pid_hex.upper()[-4:],
             "metadata_source": "Linux sysfs (/sys/class/hidraw)",
         }
 

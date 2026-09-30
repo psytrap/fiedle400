@@ -1,5 +1,6 @@
 """Unit tests for PO-400 interactive CLI wizard, range parsing, and ISO filename generation."""
 
+import os
 import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
@@ -79,13 +80,16 @@ class TestCliInteractive(unittest.TestCase):
 
     def test_generate_iso_filename_single(self):
         fn = generate_iso_filename([self.s1])
-        # s1: 10:00:00 + 100s = 10:01:40
-        self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T100140.csv")
+        # s1: 10:00:00 + 100s = 10:01:40 (default ext is spo2)
+        self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T100140.spo2")
+        # test explicit csv extension
+        fn_csv = generate_iso_filename([self.s1], ext="csv")
+        self.assertEqual(fn_csv, "po400_2026-09-06T100000_2026-09-06T100140.csv")
 
     def test_generate_iso_filename_multiple(self):
         fn = generate_iso_filename([self.s1, self.s3])
         # s1 starts at 10:00:00; s3 ends at 12:00:00 + 300s = 12:05:00
-        self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T120500.csv")
+        self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T120500.spo2")
 
     @patch("po400.cli.PulsoxHidDevice")
     @patch("po400.cli.serial_engine.SerialDeviceEngine")
@@ -138,7 +142,7 @@ class TestCliInteractive(unittest.TestCase):
         mock_export.assert_called_once()
         args_export = mock_export.call_args[0]
         self.assertEqual(len(args_export[0]), 2)  # 2 sessions * 1 record each
-        self.assertTrue(args_export[1].endswith(".csv"))
+        self.assertTrue(args_export[1].endswith(".spo2"))
 
     @patch("po400.cli.PulsoxHidDevice")
     @patch("po400.cli.serial_engine.SerialDeviceEngine")
@@ -160,6 +164,237 @@ class TestCliInteractive(unittest.TestCase):
         ret = run_interactive_wizard(args)
         self.assertEqual(ret, 0)
         mock_engine.clear_memory.assert_called_with(0, debug=0)
+
+    @patch("po400.cli._export_records_to_file", return_value="/tmp/test.spo2")
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["", "", "", "n", "n"])
+    def test_wizard_default_enter_downloads_all(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(serial_number="50F123", firmware_version="v2.0"),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        mock_engine_cls.return_value = mock_engine
+
+        args = MagicMock(device=None, verbose=0)
+        ret = run_interactive_wizard(args)
+        self.assertEqual(ret, 0)
+
+        # Verified that ALL 4 sessions were downloaded when Enter was pressed on action prompt
+        self.assertEqual(mock_engine.download_session.call_count, len(self.sessions))
+        mock_export.assert_called_once()
+        args_export = mock_export.call_args[0]
+        self.assertEqual(len(args_export[0]), 4)
+        self.assertTrue(args_export[1].endswith(".spo2"))
+
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["w", "n", "q"])
+    def test_wizard_cancel(self, mock_input, mock_engine_cls, mock_dev_cls):
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine_cls.return_value = mock_engine
+
+        args = MagicMock(device=None, verbose=0)
+        ret = run_interactive_wizard(args)
+        self.assertEqual(ret, 0)
+        mock_engine.download_session.assert_not_called()
+
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["\x1b[A\x1b[Bq"])
+    def test_wizard_quit_with_ansi_escape_keys(self, mock_input, mock_engine_cls, mock_dev_cls):
+        """Verifies that arrow keys (^[[A^[[B) preceding 'q' do not trigger 'Invalid session number'."""
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine_cls.return_value = mock_engine
+
+        args = MagicMock(device=None, verbose=0)
+        ret = run_interactive_wizard(args)
+        self.assertEqual(ret, 0)
+        mock_engine.download_session.assert_not_called()
+
+    @patch("builtins.input", return_value="  \x1b[A\x1b[Bq  ")
+    def test_clean_input_helper(self, mock_input):
+        from po400.cli import clean_input
+        cleaned = clean_input()
+        self.assertEqual(cleaned, "q")
+
+    def test_parse_session_selection_with_ansi(self):
+        res = parse_session_selection("\x1b[A1\x1b[B", self.sessions)
+        self.assertEqual([s.session_id for s in res], [1])
+
+        res_range = parse_session_selection("\x1b[C1-2\x1b[D", self.sessions)
+        self.assertEqual([s.session_id for s in res_range], [1, 2])
+
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["x", "q"])
+    def test_wizard_unknown_action(self, mock_input, mock_engine_cls, mock_dev_cls):
+        """Verifies that an unknown action like 'x' outputs 'Unknown action' and does not crash."""
+        import io
+        from contextlib import redirect_stdout
+
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine_cls.return_value = mock_engine
+
+        buf = io.StringIO()
+        args = MagicMock(device=None, verbose=0)
+        with redirect_stdout(buf):
+            ret = run_interactive_wizard(args)
+
+        self.assertEqual(ret, 0)
+        out = buf.getvalue()
+        self.assertIn("Unknown action: 'x'", out)
+        self.assertNotIn("Invalid session number: 'x'", out)
+
+    @patch("po400.cli._export_records_to_file", return_value="/tmp/test.spo2")
+    @patch("os.path.exists", side_effect=[True, False, False, False])
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["1", "", "y", "n", "n"])
+    def test_wizard_overwrite_confirmed(self, mock_input, mock_engine_cls, mock_dev_cls, mock_exists, mock_export):
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        mock_engine_cls.return_value = mock_engine
+
+        args = MagicMock(device=None, verbose=0)
+        ret = run_interactive_wizard(args)
+        self.assertEqual(ret, 0)
+        mock_export.assert_called_once()
+
+    @patch("po400.cli._export_records_to_file")
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["1", "", "n", "q", "q"])
+    def test_wizard_overwrite_cancelled(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine_cls.return_value = mock_engine
+
+        def fake_exists(p):
+            return p.endswith(".spo2") and "_1" not in p
+
+        with patch("os.path.exists", side_effect=fake_exists):
+            args = MagicMock(device=None, verbose=0)
+            ret = run_interactive_wizard(args)
+
+        self.assertEqual(ret, 0)
+        mock_export.assert_not_called()
+
+    @patch("po400.cli._export_records_to_file", return_value="/tmp/test_1.spo2")
+    @patch("po400.cli.PulsoxHidDevice")
+    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["1", "", "n", "", "n", "n"])
+    def test_wizard_overwrite_accepts_suggested_suffix(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        mock_engine_cls.return_value = mock_engine
+
+        # Mock os.path.exists so that initial file exists, but suffixed _1 does not
+        orig_exists = os.path.exists
+        def fake_exists(p):
+            if "_1.spo2" in p:
+                return False
+            if p.endswith(".spo2"):
+                return True
+            return orig_exists(p)
+
+        with patch("os.path.exists", side_effect=fake_exists):
+            args = MagicMock(device=None, verbose=0)
+            ret = run_interactive_wizard(args)
+
+        self.assertEqual(ret, 0)
+        mock_export.assert_called_once()
+        saved_fn = mock_export.call_args[0][1]
+        self.assertTrue(saved_fn.endswith("_1.spo2"))
+
+    def test_get_next_available_filename(self):
+        import tempfile
+        from po400.cli import get_next_available_filename
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f0 = os.path.join(tmpdir, "rec.spo2")
+            # When file does not exist, returns original
+            self.assertEqual(get_next_available_filename(f0), f0)
+
+            # Create rec.spo2 -> should return rec_1.spo2
+            with open(f0, "w") as f:
+                f.write("0")
+            self.assertEqual(get_next_available_filename(f0), os.path.join(tmpdir, "rec_1.spo2"))
+
+            # Create rec_1.spo2 -> should return rec_2.spo2
+            f1 = os.path.join(tmpdir, "rec_1.spo2")
+            with open(f1, "w") as f:
+                f.write("1")
+            self.assertEqual(get_next_available_filename(f0), os.path.join(tmpdir, "rec_2.spo2"))
+
+            # Also starting from rec_1.spo2 directly should increment to rec_2.spo2
+            self.assertEqual(get_next_available_filename(f1), os.path.join(tmpdir, "rec_2.spo2"))
+
+            # Create rec_2.spo2 -> should return rec_3.spo2
+            f2 = os.path.join(tmpdir, "rec_2.spo2")
+            with open(f2, "w") as f:
+                f.write("2")
+            self.assertEqual(get_next_available_filename(f0), os.path.join(tmpdir, "rec_3.spo2"))
 
 
 if __name__ == "__main__":

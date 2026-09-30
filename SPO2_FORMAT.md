@@ -1,0 +1,159 @@
+# Contec / Pulsox PO-400 `.SpO2` Binary File Format Specification
+
+## 1. Overview
+
+The `.SpO2` (or `.spo2`) binary format is the proprietary recording format produced and consumed by **Contec Medical Systems** software (specifically **SpO2 Assistant**) for pulse oximeters such as the CMS-50 series, CMS-60D, and Pulsox PO-400.
+
+This format stores continuous 1 Hz pulse oximetry recordings consisting of:
+- Blood Oxygen Saturation ($\text{SpO}_2$) in percent ($0 - 100\%$).
+- Pulse Rate (PR / Heart Rate) in beats per minute ($0 - 250\text{ bpm}$).
+
+It is also recognized and imported by open-source sleep analysis software such as **OSCAR** (Open Source CPAP Analysis Reporter) via its oximetry import wizard.
+
+---
+
+## 2. File Structure
+
+A `.SpO2` file consists of two primary segments:
+1. **Fixed Header**: Exactly 1,084 bytes (`0x043C` bytes).
+2. **Data Payload**: Exactly $N \times 2$ bytes, where $N$ is the number of 1-second sample records.
+
+$$\text{Total File Size} = 1084 + (N \times 2) \text{ bytes}$$
+
+---
+
+## 3. Header Specification (1,084 Bytes / `0x043C`)
+
+All multi-byte numeric fields are stored in **Little-Endian** byte order (`<I`).
+
+| Byte Offset | Size | Type | Field Name | Description / Valid Values |
+| :--- | :---: | :--- | :--- | :--- |
+| `0x0000` | 4 B | `uint32_le` | **Magic / Format ID** | Fixed constant `0x00000358` (decimal `856`). Validated by `SpO2.exe` at offset `0x4E2277`. |
+| `0x0004` | 4 B | `uint32_le` | **Format Version** | Fixed constant `0x00000001` (Version 1). |
+| `0x0008` – `0x0357` | 848 B | `bytes` | **Reserved Block 1** | Zero-filled (`0x00`). |
+| `0x0358` | 4 B | `uint32_le` | **Device / Stream Flag** | Fixed constant `0x00000001` (Active channel / mode flag). |
+| `0x035C` | 4 B | `bytes` | **Reserved Block 2** | Zero-filled (`0x00`). |
+| `0x0360` – `0x0365` | 6 B | `bytes` | **Protocol / Transport Tag** | UTF-16LE string `b"B\x00L\x00E\x00"` (`"BLE\0"`). |
+| `0x0366` – `0x041F` | 186 B | `bytes` | **Reserved Block 3** | Zero-filled (`0x00`). |
+| `0x0420` | 4 B | `uint32_le` | **Start Year** | Year of recording start (e.g., `2026`). |
+| `0x0424` | 4 B | `uint32_le` | **Start Month** | Month of recording start (`1` – `12`). |
+| `0x0428` | 4 B | `uint32_le` | **Start Day** | Day of recording start (`1` – `31`). |
+| `0x042C` | 4 B | `uint32_le` | **Start Hour** | Hour of recording start (`0` – `23`, 24-hour format). |
+| `0x0430` | 4 B | `uint32_le` | **Start Minute** | Minute of recording start (`0` – `59`). |
+| `0x0434` | 4 B | `uint32_le` | **Start Second** | Second of recording start (`0` – `59`). |
+| `0x0438` | 4 B | `uint32_le` | **Sample Count ($N$)** | Total number of 1-second sample records ($1\text{ Hz}$). |
+
+---
+
+## 4. Payload Specification (Starting at Offset `0x043C`)
+
+Each record represents 1 second of continuous measurement. Each record is exactly 2 bytes:
+
+| Byte Offset | Type | Field Name | Range / Meaning | Sentinel / Invalid Value |
+| :--- | :--- | :--- | :--- | :--- |
+| $+0$ | `uint8` | **SpO2** | $1 - 100\%$ | `0x7F` (`127`) or `0x00` = Invalid / Probe-Out / Disconnected |
+| $+1$ | `uint8` | **Heart Rate** | $1 - 250\text{ bpm}$ | `0xFF` (`255`) or `0x00` = Invalid / Probe-Out / Disconnected |
+
+### Sentinel & Probe-Out Values
+- The official Windows application `SpO2.exe` writes `[0x7F, 0xFF]` (`127, 255`) when the sensor probe is detached or signal is lost.
+- Any values where $\text{SpO}_2 > 100$ or $\text{Pulse Rate} > 250$ (or equal to $0$) are treated as **probe-out / invalid** by decoders.
+
+---
+
+## 5. Software & Tooling Compatibility
+
+1. **Contec SpO2 Assistant (Windows)**:
+   - File dialog filter: `*.SpO2` (`.SpO2(Saves the complete data and can be opened with the current software only)`).
+   - Expected default path: `%USERPROFILE%\AppData\Local\VirtualStore\Program Files (x86)\SpO2\Data\`.
+   - Validates `magic == 0x358` (856) and parses start date/time block at offset `0x0420`.
+
+2. **OSCAR (Open Source CPAP Analysis Reporter)**:
+   - Imports `.SpO2` files via the **Oximetry Import Wizard**.
+   - Aligns 1 Hz oximetry data against CPAP flow and pressure data using the header timestamp.
+
+3. **`po400` CLI & Python Library**:
+   - Native export support: `--format spo2` / `-f spo2` (default format).
+   - File extension: `.spo2` or `.SpO2`.
+
+---
+
+## 6. Reference Implementation (Python)
+
+### 6.1 Writer / Exporter
+
+```python
+import struct
+from datetime import datetime
+from typing import List, Optional, Tuple
+
+HEADER_SIZE = 1084
+
+def build_spo2_file(start_dt: datetime, samples: List[Tuple[Optional[int], Optional[int]]]) -> bytes:
+    """Build a complete binary .SpO2 file.
+    
+    Args:
+        start_dt: Recording start timestamp.
+        samples: List of (spo2, heart_rate) tuples, 1 per second.
+                 None indicates invalid / probe-out.
+    Returns:
+        bytes: Complete binary .SpO2 file content.
+    """
+    hdr = bytearray(HEADER_SIZE)
+    # 0x0000: Magic (0x0358 = 856), 0x0004: Version (1)
+    struct.pack_into("<II", hdr, 0x0000, 0x0358, 0x0001)
+    # 0x0358: Channel flag (1)
+    struct.pack_into("<I", hdr, 0x0358, 0x0001)
+    # 0x0360: "BLE" UTF-16LE tag
+    hdr[0x0360:0x0366] = b"B\x00L\x00E\x00"
+    # 0x0420: Datetime block and sample count
+    struct.pack_into(
+        "<7I",
+        hdr,
+        0x0420,
+        start_dt.year,
+        start_dt.month,
+        start_dt.day,
+        start_dt.hour,
+        start_dt.minute,
+        start_dt.second,
+        len(samples),
+    )
+    payload = bytearray(len(samples) * 2)
+    for i, (spo2, hr) in enumerate(samples):
+        # 127 (0x7F) and 255 (0xFF) are native sentinel values
+        s_byte = spo2 if (spo2 is not None and 1 <= spo2 <= 100) else 127
+        h_byte = hr if (hr is not None and 1 <= hr <= 250) else 255
+        payload[i * 2] = s_byte
+        payload[i * 2 + 1] = h_byte
+
+    return bytes(hdr + payload)
+```
+
+### 6.2 Reader / Decoder
+
+```python
+def read_spo2_file(data: bytes) -> Tuple[datetime, List[dict]]:
+    """Parse a .SpO2 binary file."""
+    if len(data) < HEADER_SIZE:
+        raise ValueError("Data smaller than header size (1084 bytes)")
+    magic, ver = struct.unpack_from("<II", data, 0x0000)
+    if magic != 0x0358:
+        raise ValueError(f"Invalid magic: 0x{magic:08x} (expected 0x00000358)")
+    
+    y, m, d, H, M, S, count = struct.unpack_from("<7I", data, 0x0420)
+    start_dt = datetime(y, m, d, H, M, S)
+    payload = data[HEADER_SIZE:]
+    
+    records = []
+    for i in range(min(count, len(payload) // 2)):
+        s_val = payload[i * 2]
+        h_val = payload[i * 2 + 1]
+        is_valid = (1 <= s_val <= 100) and (1 <= h_val <= 250)
+        records.append({
+            "second": i,
+            "spo2": s_val if is_valid else None,
+            "heart_rate": h_val if is_valid else None,
+            "valid": is_valid,
+        })
+    return start_dt, records
+```

@@ -399,17 +399,23 @@ Used on serial-stream device models:
 
 ## 4. Proprietary `.SpO2` Binary File Format
 
-The Windows Contec SpO2 Assistant exports decoded sessions in `.SpO2` format:
+The Windows Contec SpO2 Assistant software and PO-400 use the `.SpO2` binary format for storing 1 Hz recording sessions (also supported by OSCAR for CPAP oximetry imports).
+
+For the exhaustive specification, byte offsets, and reference code, see **[SPO2_FORMAT.md](file:///home/mik/Documents/Bastel/2023-/po400/SPO2_FORMAT.md)**.
 
 | Offset | Type | Description |
 | :--- | :--- | :--- |
-| `0x0000` | uint32_le | File size hint |
-| `0x0004` | uint32_le | Format version (`0x01`) |
-| `0x0420` | uint32_le | Start Year |
-| `0x0424` | uint32_le | Start Month |
-| `0x0428` | uint32_le | Start Day |
-| `0x042C` | uint32_le | Start Hour |
-| `0x0430` | uint32_le | Start Minute |
-| `0x0434` | uint32_le | Start Second |
-| `0x0438` | uint32_le | Total 1 Hz sample count |
-| `0x043C` | uint8[2] × N | `[SpO2 %, Pulse Rate BPM]` pairs per second |
+| `0x0000` | `uint32_le` | Magic / Format ID (`0x00000358` / `856`) |
+| `0x0004` | `uint32_le` | Format version (`0x00000001` / `1`) |
+| `0x0008` – `0x0357` | `848 B` | Zero padding (`0x00`) |
+| `0x0358` | `uint32_le` | Channel / Mode Flag (`0x00000001` / `1`) |
+| `0x0360` – `0x0365` | `6 B` | Protocol tag `"BLE\0"` (UTF-16LE: `42 00 4C 00 45 00`) |
+| `0x0366` – `0x041F` | `186 B` | Zero padding (`0x00`) |
+| `0x0420` | `uint32_le` | Start Year |
+| `0x0424` | `uint32_le` | Start Month |
+| `0x0428` | `uint32_le` | Start Day |
+| `0x042C` | `uint32_le` | Start Hour |
+| `0x0430` | `uint32_le` | Start Minute |
+| `0x0434` | `uint32_le` | Start Second |
+| `0x0438` | `uint32_le` | Total 1 Hz sample count ($N$) |
+| `0x043C` | `uint8[2] × N` | `[SpO2 %, Pulse Rate BPM]` pairs per second (`0x7F, 0xFF` for probe-out/invalid) |
