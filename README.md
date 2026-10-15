@@ -2,7 +2,7 @@
 
 A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID.
 
-For detailed hardware & protocol specifications, see [DESIGN.md](file:///home/mik/Documents/Bastel/2023-/po400/DESIGN.md).
+For detailed hardware & protocol specifications, see [DESIGN.md](DESIGN.md).
 
 ---
 
@@ -166,11 +166,20 @@ Run the complete test suite (all tests use mocks and require 0 external dependen
 python3 -m unittest discover tests
 ```
 
+The hardware tests in `tests/test_device_live.py` are opt-in, so the default run gives
+the same result whether or not a device is attached. With a PO-400 plugged in:
+```bash
+PO400_LIVE=1 python3 -m unittest tests.test_device_live -v
+```
+With `PO400_LIVE=1` and no reachable device, the suite fails instead of skipping.
+Concurrent live runs are serialised through a lock file (`po400-live-tests.lock` in the
+temp directory), because two processes opening the oximeter at once collide.
+
 ---
 
 ## Documentation & Protocol References
 
-- **[SPO2_FORMAT.md](file:///home/mik/Documents/Bastel/2023-/po400/SPO2_FORMAT.md)**: Full binary format specification for Contec / Pulsox `.SpO2` files.
-- **[DESIGN.md](file:///home/mik/Documents/Bastel/2023-/po400/DESIGN.md)**: Full technical specification, USB HID framing, command codes, and memory architecture.
-- **[PROTOCOL.md](file:///home/mik/Documents/Bastel/2023-/po400/PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
-- **[PACKAGING.md](file:///home/mik/Documents/Bastel/2023-/po400/PACKAGING.md)**: Distribution and installer design specifications.
+- **[SPO2_FORMAT.md](SPO2_FORMAT.md)**: Full binary format specification for Contec / Pulsox `.SpO2` files.
+- **[DESIGN.md](DESIGN.md)**: Full technical specification, USB HID framing, command codes, and memory architecture.
+- **[PROTOCOL.md](PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
+- **[PACKAGING.md](PACKAGING.md)**: Distribution and installer design specifications.

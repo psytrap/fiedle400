@@ -3,14 +3,26 @@
 This test suite executes end-to-end communication tests directly against
 a connected physical PO-400 device.
 
-When no physical device is detected (or in headless CI environments),
-the entire suite is automatically skipped to prevent test failures.
+The suite is opt-in: it only runs when PO400_LIVE=1 is set, so the default
+`python3 -m unittest discover` run is pure mocks and its result does not depend
+on whether (or in what state) a device happens to be attached. With
+PO400_LIVE=1 and no reachable device, the suite fails loudly instead of
+silently skipping.
+
+    PO400_LIVE=1 python3 -m unittest tests.test_device_live -v
 """
 
+import os
 import sys
+import tempfile
 import time
 import unittest
 from datetime import datetime
+
+try:
+    import fcntl
+except ImportError:  # Windows
+    fcntl = None
 
 from po400.hid_driver import (
     PulsoxHidDevice,
@@ -62,9 +74,59 @@ def wait_for_hidraw_reattach(timeout: float = 5.0, interval: float = 0.02) -> bo
     return False
 
 
-@unittest.skipUnless(is_device_connected(), "No physical Pulsox PO-400 device connected or accessible.")
+LIVE_ENABLED = os.environ.get("PO400_LIVE") == "1"
+LOCK_PATH = os.path.join(tempfile.gettempdir(), "po400-live-tests.lock")
+LOCK_TIMEOUT_SEC = 120.0
+
+
+def acquire_device_lock(path: str = LOCK_PATH, timeout: float = LOCK_TIMEOUT_SEC):
+    """Serialises live-device test runs across processes.
+
+    Two test processes opening the oximeter at once collide (and the libusb
+    backend even makes /dev/hidraw* vanish for the other one), producing
+    failures that are not real. Returns the open lock file, or None where
+    fcntl is unavailable. Raises TimeoutError if another run holds the lock.
+    """
+    if fcntl is None:
+        return None
+    fh = open(path, "w")
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return fh
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                fh.close()
+                raise TimeoutError(f"Another live-device test run still holds {path} after {timeout:.0f}s.")
+            time.sleep(0.1)
+
+
+@unittest.skipUnless(LIVE_ENABLED, "Hardware tests are opt-in: set PO400_LIVE=1 with a PO-400 attached.")
 class TestLiveDevice(unittest.TestCase):
     """End-to-end hardware tests against real Pulsox PO-400 device."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._lock = acquire_device_lock()
+        # Detect at run time (not import time), right before the tests use the device.
+        if not is_device_connected():
+            cls._release_lock()
+            raise AssertionError(
+                "PO400_LIVE=1 but no readable Pulsox PO-400 was found "
+                "(check the USB cable, power, and the udev rules in README.md)."
+            )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._release_lock()
+
+    @classmethod
+    def _release_lock(cls):
+        lock = getattr(cls, "_lock", None)
+        if lock is not None:
+            lock.close()  # closing the file releases the flock
+            cls._lock = None
 
     def test_01_device_detection(self):
         """Verifies that find_pulsox_hid_devices discovers the connected hardware."""
@@ -127,15 +189,15 @@ class TestLiveDevice(unittest.TestCase):
             engine = SerialDeviceEngine(dev)
             res = engine.read_device_info(debug=0)
 
-            self.assertIn("device_info", res)
-            self.assertIn("active_user_id", res)
-            self.assertIn("rtc_time_str", res)
+            self.assertIn("device_info", res, f"read_device_info result: {res!r}")
+            self.assertIn("active_user_id", res, f"read_device_info result: {res!r}")
+            self.assertIn("rtc_time_str", res, f"read_device_info result: {res!r}")
 
             info = res["device_info"]
-            self.assertEqual(res["active_user_id"], 1)
-            self.assertEqual(info.flash_geometry, "112 Bytes Sub-chunk Payload")
-            self.assertEqual(info.user_profile, "user")
-            self.assertNotEqual(res["rtc_time_str"], "N/A")
+            self.assertEqual(res["active_user_id"], 1, f"read_device_info result: {res!r}")
+            self.assertEqual(info.flash_geometry, "112 Bytes Sub-chunk Payload", f"device_info: {info!r}")
+            self.assertEqual(info.user_profile, "user", f"device_info: {info!r}")
+            self.assertNotEqual(res["rtc_time_str"], "N/A", f"read_device_info result: {res!r}")
         finally:
             dev.close()
 
@@ -161,9 +223,9 @@ class TestLiveDevice(unittest.TestCase):
             sessions = engine.list_sessions(debug=0)
             self.assertIsInstance(sessions, list)
             for sess in sessions:
-                self.assertGreaterEqual(sess.session_id, 1)
-                self.assertGreaterEqual(sess.record_count, 0)
-                self.assertGreaterEqual(sess.duration_sec, 0)
+                self.assertGreaterEqual(sess.session_id, 1, f"session: {sess!r}")
+                self.assertGreaterEqual(sess.record_count, 0, f"session: {sess!r}")
+                self.assertGreaterEqual(sess.duration_sec, 0, f"session: {sess!r}")
         finally:
             dev.close()
 
