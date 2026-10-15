@@ -280,6 +280,36 @@ took priority; the USBPcap/Wireshark capture tooling installed for this
 (`enable_testsigning`, TESTSIGNING now on) remains unused for that specific
 question and sits on the laptop for whenever it is revisited.
 
+**Update: the running-baseline fix mostly works for Pulse, not yet for
+SpO2 (psytrap, live-tested 2026-10-15).** Re-decoded the captured subframes
+as a running chain (`S_n = S_{n-1} +/- delta`, not a fixed per-subframe base)
+with per-series sentinels (`0x7F` for SpO2, `0xFF` for Pulse, matching a
+deeper disassembly pass relayed separately) and a hard stop on the
+sign=1/delta=7 terminator rather than treating it as a per-point gap.
+Two Pulse subframes landed in genuinely plausible heart-rate ranges
+(base 96 -> 103 bpm; base 112 -> 119 bpm). SpO2 subframes still run slightly
+over the 0-100% ceiling (116 -> 123; 120 -> 127) -- closer than before, not
+yet right. Do not wire this into any automatic decoder until SpO2 converges
+into valid range too.
+
+**Static cross-check of the relayed disassembly addresses: inconclusive, not
+a contradiction.** Two cited addresses (the delta-decode loop, the `0xD8`
+handler) were disassembled directly from this project's own
+`archive/bruteforce/SpO2.exe` (build timestamp 2025-03-13) and neither
+matches the relayed instructions at all -- almost certainly because that
+disassembly was done against a different SpO2.exe build (plausibly the
+`SpO2 Assistant V3.0.5` actually installed on the Windows laptop, not this
+local archive copy), not because the relayed findings are wrong. A
+heuristic instruction-level scan (via `capstone`, searching `cmp` immediates
+rather than raw bytes -- precise where the earlier whole-binary byte-pattern
+scan was too noisy) found a genuine command-whitelist routine in *this*
+build recognizing `0xA2/0xA3/0xA4/0xA5/0xA6` together, corroborating that
+A2/A3 are real opcodes here too, and surfacing a **new, previously
+undocumented opcode `0xA4`** grouped alongside them -- not yet investigated.
+Did not reach the actual decode arithmetic; tracing further into a
+confirmed-mismatched binary was judged lower-value than continuing
+empirically on real hardware.
+
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
 (`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other
 queries, now also seen on the session-index query itself. psytrap: "storage

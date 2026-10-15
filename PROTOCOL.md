@@ -552,6 +552,22 @@ From the `SpO2.exe` disassembly (`0x004c4875`):
 > value per subframe, but this is not yet tested. Do not implement a decoder
 > against the formula above without re-deriving it against a fresh capture.
 
+> [!NOTE]
+> **Update, live-tested 2026-10-15:** the running-chain correction is
+> confirmed to be the right shape, but is not fully correct yet. Re-decoding
+> with `S_n = S_{n-1} ± magnitude` (sign/magnitude nibble, running from
+> the first byte of each subframe rather than a fixed base), with
+> per-series sentinels (`0x7F`/127 for SpO2, `0xFF`/255 for Pulse) and a
+> hard stop on the terminator (sign=1, magnitude=7, ends the subframe
+> rather than skipping one point), makes **Pulse** land in a
+> physiologically plausible range for 2 of 7 captured subframes (base 96
+> → 103 bpm, base 112 → 119 bpm). **SpO2** is still wrong: decoded
+> values run slightly over the 0-100% ceiling (116 → 123, 120 →
+> 127), so something about the SpO2 series' base/delta relationship --
+> possibly the starting base value, possibly a clamp or scale this series
+> applies that Pulse doesn't -- remains unresolved. Do not treat this
+> formula as final for SpO2.
+
 ---
 
 ## 4. Proprietary `.SpO2` Binary File Format
