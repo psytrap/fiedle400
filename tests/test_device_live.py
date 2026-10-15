@@ -10,6 +10,13 @@ PO400_LIVE=1 and no reachable device, the suite fails loudly instead of
 silently skipping.
 
     PO400_LIVE=1 python3 -m unittest tests.test_device_live -v
+
+Platform coverage: tests 01 and 02 exercise Linux sysfs and the hidraw backend
+and are skipped elsewhere with a reason naming the platform. Test 01b gives the
+same detection coverage through hid.enumerate(), the path Windows and macOS use;
+test 03 drives the 'hid' backend everywhere. Tests 04-06 are platform-neutral.
+Off Linux the 'hid' module is the only way to reach the device, so a missing
+'hid' fails there instead of skipping.
 """
 
 import os
@@ -29,6 +36,22 @@ from po400.hid_driver import (
     find_pulsox_hid_devices,
 )
 from po400.serial_engine import SerialDeviceEngine
+
+
+IS_LINUX = sys.platform.startswith("linux")
+LINUX_ONLY_REASON = f"Linux-only (sysfs / hidraw); not applicable on {sys.platform}."
+VENDOR_ID, PRODUCT_ID = 0x28E9, 0x028A
+
+
+def import_hid_or_skip(test: unittest.TestCase):
+    """Import the 'hid' module. Missing is a skip on Linux (hidraw covers it) but a failure elsewhere."""
+    try:
+        import hid
+        return hid
+    except ImportError:
+        if IS_LINUX:
+            test.skipTest("The 'hid' library is not installed (optional on Linux, where hidraw is used).")
+        test.fail(f"The 'hid' library is required on {sys.platform}: pip install hidapi")
 
 
 def is_device_connected() -> bool:
@@ -61,7 +84,11 @@ def wait_for_hidraw_reattach(timeout: float = 5.0, interval: float = 0.02) -> bo
     the missing node and fails with a misleading PermissionError.
 
     Returns True once a readable node is back, False if the timeout elapsed.
+    Off Linux there is no hidraw node and no kernel-driver detach (Windows uses
+    the native HID API), so there is nothing to wait for and it returns True.
     """
+    if not sys.platform.startswith("linux"):
+        return True
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -128,6 +155,7 @@ class TestLiveDevice(unittest.TestCase):
             lock.close()  # closing the file releases the flock
             cls._lock = None
 
+    @unittest.skipUnless(IS_LINUX, LINUX_ONLY_REASON)
     def test_01_device_detection(self):
         """Verifies that find_pulsox_hid_devices discovers the connected hardware."""
         devices = find_pulsox_hid_devices()
@@ -138,6 +166,17 @@ class TestLiveDevice(unittest.TestCase):
         self.assertIn("000028E9", uevent_str.upper())
         self.assertIn("0000028A", uevent_str.upper())
 
+    def test_01b_hid_enumeration(self):
+        """Verifies the device is visible through hid.enumerate(), the detection path off Linux."""
+        hid = import_hid_or_skip(self)
+        matched = hid.enumerate(VENDOR_ID, PRODUCT_ID)
+        self.assertTrue(matched, f"hid.enumerate(0x{VENDOR_ID:04X}, 0x{PRODUCT_ID:04X}) returned no interfaces.")
+        first = matched[0]
+        self.assertEqual(first.get("vendor_id"), VENDOR_ID, f"enumerate entry: {first!r}")
+        self.assertEqual(first.get("product_id"), PRODUCT_ID, f"enumerate entry: {first!r}")
+        self.assertTrue(first.get("path"), f"enumerate entry has no path: {first!r}")
+
+    @unittest.skipUnless(IS_LINUX, LINUX_ONLY_REASON)
     def test_02_hidraw_backend_connection_and_descriptors(self):
         """Verifies connection and descriptor extraction using native Linux hidraw."""
         dev = PulsoxHidDevice(backend="hidraw")
@@ -157,10 +196,7 @@ class TestLiveDevice(unittest.TestCase):
 
     def test_03_hid_backend_connection_and_descriptors(self):
         """Verifies connection and descriptor extraction using cross-platform import hid."""
-        try:
-            import hid
-        except ImportError:
-            self.skipTest("The 'hid' library is not installed in the current environment.")
+        import_hid_or_skip(self)
 
         dev = PulsoxHidDevice(backend="hid")
         node_path = dev.connect()
@@ -174,7 +210,7 @@ class TestLiveDevice(unittest.TestCase):
             self.assertIn("import hid", meta["metadata_source"])
         finally:
             dev.close()
-            # Do not leak the detached-kernel-driver state into later hidraw tests.
+            # Linux/libusb only: do not leak the detached-kernel-driver state into later hidraw tests.
             self.assertTrue(
                 wait_for_hidraw_reattach(),
                 "Kernel hidraw node did not reappear after closing the libusb-backed handle.",

@@ -33,6 +33,60 @@ class TestLiveGate(unittest.TestCase):
         self.assertIn("PO400_LIVE=1", str(cm.exception))
 
 
+class TestPlatformGating(unittest.TestCase):
+    """Tests 01/02 are Linux-only off Linux; the hid-path tests stay enabled everywhere."""
+
+    def _reload_as(self, platform):
+        import importlib
+        with mock.patch("sys.platform", platform):
+            module = importlib.reload(live)
+        self.addCleanup(importlib.reload, live)
+        return module
+
+    def test_linux_runs_all_hardware_tests(self):
+        m = self._reload_as("linux")
+        for name in ("test_01_device_detection", "test_02_hidraw_backend_connection_and_descriptors"):
+            self.assertFalse(getattr(getattr(m.TestLiveDevice, name), "__unittest_skip__", False), name)
+
+    def test_windows_skips_linux_only_tests_with_reason(self):
+        m = self._reload_as("win32")
+        for name in ("test_01_device_detection", "test_02_hidraw_backend_connection_and_descriptors"):
+            fn = getattr(m.TestLiveDevice, name)
+            self.assertTrue(getattr(fn, "__unittest_skip__", False), name)
+            self.assertIn("win32", fn.__unittest_skip_why__)
+        for name in ("test_01b_hid_enumeration", "test_03_hid_backend_connection_and_descriptors",
+                     "test_04_handshake_and_device_info", "test_05_rtc_clock_read", "test_06_list_stored_sessions"):
+            self.assertFalse(getattr(getattr(m.TestLiveDevice, name), "__unittest_skip__", False), name)
+
+    def test_reattach_wait_is_noop_off_linux(self):
+        with mock.patch("sys.platform", "win32"), \
+                mock.patch.object(live, "find_pulsox_hid_devices") as probe:
+            self.assertTrue(live.wait_for_hidraw_reattach(timeout=0.05))
+        probe.assert_not_called()
+
+    def test_reattach_wait_still_checks_on_linux(self):
+        with mock.patch("sys.platform", "linux"), \
+                mock.patch.object(live, "find_pulsox_hid_devices", return_value=[]):
+            self.assertFalse(live.wait_for_hidraw_reattach(timeout=0.05, interval=0.01))
+
+    def _fake_test(self):
+        class T(unittest.TestCase):
+            def runTest(self):
+                pass
+        return T()
+
+    def test_missing_hid_fails_off_linux(self):
+        with mock.patch.object(live, "IS_LINUX", False), mock.patch.dict(sys.modules, {"hid": None}):
+            with self.assertRaises(AssertionError) as cm:
+                live.import_hid_or_skip(self._fake_test())
+        self.assertIn("pip install hidapi", str(cm.exception))
+
+    def test_missing_hid_skips_on_linux(self):
+        with mock.patch.object(live, "IS_LINUX", True), mock.patch.dict(sys.modules, {"hid": None}):
+            with self.assertRaises(unittest.SkipTest):
+                live.import_hid_or_skip(self._fake_test())
+
+
 @unittest.skipIf(live.fcntl is None, "fcntl not available on this platform")
 class TestDeviceLock(unittest.TestCase):
     def setUp(self):
