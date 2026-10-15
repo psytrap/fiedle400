@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from po400.serial_engine import (
+from fiedle400.serial_engine import (
     SerialByteStreamBuffer,
     SerialPacketDetector,
     DecodedPacket,
@@ -88,7 +88,7 @@ class TestSerialEngine(unittest.TestCase):
         self.assertEqual(events[0].device_info.firmware_version, "v2.0.1")
 
     def test_read_device_info_engine(self):
-        from po400.serial_engine import SerialDeviceEngine
+        from fiedle400.serial_engine import SerialDeviceEngine
         mock_dev = MockHidDevice(responses=[
             bytes([0xF0, 0x70, 0x01] + [0] * 61), # unlock negotiation ACK
             bytes([0xF2, 0, 0, 2, 7, 1, 12, 7, 0] + [0] * 55), # RTC clock 2002-07-01 12:07:00
@@ -107,7 +107,7 @@ class TestSerialEngine(unittest.TestCase):
         self.assertEqual(res["device_info"].firmware_version, "v2.0.0")
 
     def test_list_sessions_engine(self):
-        from po400.serial_engine import SerialDeviceEngine
+        from fiedle400.serial_engine import SerialDeviceEngine
         mock_dev = MockHidDevice(responses=[
             bytes([0xF0, 0x70, 0x01] + [0] * 61), # unlock ACK
             None,
@@ -123,7 +123,7 @@ class TestSerialEngine(unittest.TestCase):
         self.assertEqual(sessions[1].session_id, 2)
 
     def test_read_rtc_time_engine(self):
-        from po400.serial_engine import SerialDeviceEngine
+        from fiedle400.serial_engine import SerialDeviceEngine
         mock_dev = MockHidDevice(responses=[
             bytes([0xF2, 0, 0, 26, 9, 5, 14, 25, 0] + [0] * 55),
         ])
@@ -135,7 +135,7 @@ class TestSerialEngine(unittest.TestCase):
         self.assertEqual(dt.day, 5)
 
     def test_unlock_handshake_engine(self):
-        from po400.serial_engine import SerialDeviceEngine
+        from fiedle400.serial_engine import SerialDeviceEngine
         mock_dev = MockHidDevice(responses=[
             bytes([0xF0, 0x70, 0x02] + [0] * 61),
         ])
@@ -144,7 +144,7 @@ class TestSerialEngine(unittest.TestCase):
         self.assertEqual(user_id, 2)
 
     def test_clear_memory_engine_mock(self):
-        from po400.serial_engine import SerialDeviceEngine
+        from fiedle400.serial_engine import SerialDeviceEngine
         mock_dev = MockHidDevice(responses=[
             bytes([0xF0, 0x70] + [0] * 62),
         ])
@@ -171,7 +171,7 @@ class TestSerialEngine(unittest.TestCase):
 
 
     def test_wait_for_10_eb_messages(self):
-        from po400.serial_engine import SerialDeviceEngine
+        from fiedle400.serial_engine import SerialDeviceEngine
         mock_dev = MockHidDevice(responses=[
             bytes([0xEB, 0x00, 0x04, 64, 0x00, 96] + [0] * 58) for _ in range(15)
         ])
@@ -211,8 +211,8 @@ class TestSerialEngine(unittest.TestCase):
 
     def test_download_session_terminates_on_flash_sentinel(self):
         """A FLASH_SENTINEL packet (block_id=0) must terminate the session download cleanly."""
-        from po400.serial_engine import SerialDeviceEngine
-        from po400.protocol import SessionInfo
+        from fiedle400.serial_engine import SerialDeviceEngine
+        from fiedle400.protocol import SessionInfo
 
         eb_frame     = bytes([0xEB, 0x00, 0x04, 64, 0x00, 96] + [0] * 58)
         unlock_ack   = bytes([0xF0, 0x70, 0x01] + [0] * 61)
@@ -237,8 +237,8 @@ class TestSerialEngine(unittest.TestCase):
 
     def test_download_session_preserves_probe_out_and_valid_blocks(self):
         """Probe-out records are preserved with status flags; session continues without dropping records."""
-        from po400.serial_engine import SerialDeviceEngine
-        from po400.protocol import SessionInfo
+        from fiedle400.serial_engine import SerialDeviceEngine
+        from fiedle400.protocol import SessionInfo
 
         eb_frame   = bytes([0xEB, 0x00, 0x04, 64, 0x00, 96] + [0] * 58)
         unlock_ack = bytes([0xF0, 0x70, 0x01] + [0] * 61)
@@ -285,8 +285,8 @@ class TestSerialEngine(unittest.TestCase):
 
     def test_download_session_multipage_and_no_ppg_wave(self):
         """Verify multi-page iteration across Page 0 and Page 1 and absence of ppg_wave in records."""
-        from po400.serial_engine import SerialDeviceEngine
-        from po400.protocol import SessionInfo
+        from fiedle400.serial_engine import SerialDeviceEngine
+        from fiedle400.protocol import SessionInfo
 
         eb_frame   = bytes([0xEB, 0x00, 0x04, 64, 0x00, 96] + [0] * 58)
         unlock_ack = bytes([0xF0, 0x70, 0x01] + [0] * 61)

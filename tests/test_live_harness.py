@@ -15,13 +15,13 @@ import test_device_live as live
 class TestLiveGate(unittest.TestCase):
     def test_suite_skipped_without_opt_in(self):
         if live.LIVE_ENABLED:
-            self.skipTest("PO400_LIVE=1 is set; the gate is open on purpose")
+            self.skipTest("FIEDLE400_LIVE=1 is set; the gate is open on purpose")
         self.assertTrue(getattr(live.TestLiveDevice, "__unittest_skip__", False))
 
     def test_device_detection_not_run_at_import(self):
         """Importing the module must not probe the device (that made skip counts vary)."""
         import importlib
-        with mock.patch("po400.hid_driver.find_pulsox_hid_devices", return_value=[]) as probe:
+        with mock.patch("fiedle400.hid_driver.find_pulsox_hid_devices", return_value=[]) as probe:
             importlib.reload(live)
         probe.assert_not_called()
 
@@ -30,7 +30,7 @@ class TestLiveGate(unittest.TestCase):
                 mock.patch.object(live, "acquire_device_lock", return_value=None):
             with self.assertRaises(AssertionError) as cm:
                 live.TestLiveDevice.setUpClass()
-        self.assertIn("PO400_LIVE=1", str(cm.exception))
+        self.assertIn("FIEDLE400_LIVE=1", str(cm.exception))
 
 
 class TestPlatformGating(unittest.TestCase):

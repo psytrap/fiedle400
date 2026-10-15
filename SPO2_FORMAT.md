@@ -71,7 +71,7 @@ Each record represents 1 second of continuous measurement. Each record is exactl
    - Imports `.SpO2` files via the **Oximetry Import Wizard**.
    - Aligns 1 Hz oximetry data against CPAP flow and pressure data using the header timestamp.
 
-3. **`po400` CLI & Python Library**:
+3. **`fiedle400` CLI & Python Library**:
    - Native export support: `--format spo2` / `-f spo2` (default format).
    - File extension: `.spo2` or `.SpO2`.
 

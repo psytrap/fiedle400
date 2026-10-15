@@ -21,15 +21,15 @@ jobs:
           - os: windows
             runner: windows-latest
             arch: x64
-            asset_name: po400-windows-x64.exe
+            asset_name: fiedle400-windows-x64.exe
           - os: linux
             runner: ubuntu-latest
             arch: x64
-            asset_name: po400-linux-x64
+            asset_name: fiedle400-linux-x64
           - os: macos
             runner: macos-latest
             arch: arm64
-            asset_name: po400-macos-arm64
+            asset_name: fiedle400-macos-arm64
 
     steps:
       - name: Checkout Code
@@ -47,16 +47,16 @@ jobs:
 
       - name: Build Standalone Binary with PyInstaller
         run: |
-          pyinstaller po400.spec
+          pyinstaller fiedle400.spec
 
       - name: Rename Output Binary
         shell: bash
         run: |
           mkdir -p release
           if [ "${{ matrix.os }}" = "windows" ]; then
-            cp dist/po400.exe release/${{ matrix.asset_name }}
+            cp dist/fiedle400.exe release/${{ matrix.asset_name }}
           else
-            cp dist/po400 release/${{ matrix.asset_name }}
+            cp dist/fiedle400 release/${{ matrix.asset_name }}
             chmod +x release/${{ matrix.asset_name }}
           fi
 
@@ -83,22 +83,22 @@ jobs:
       - name: Download Windows Binary
         uses: actions/download-artifact@v4
         with:
-          name: po400-windows-x64.exe
+          name: fiedle400-windows-x64.exe
           path: artifact
 
       - name: Stage Binary Where the Installer Script Expects It
         shell: bash
         run: |
           mkdir -p dist
-          cp artifact/po400-windows-x64.exe dist/po400.exe
+          cp artifact/fiedle400-windows-x64.exe dist/fiedle400.exe
 
       - name: Read Package Version
         id: ver
         shell: bash
         run: |
-          version=$(python -c "import po400; print(po400.__version__)")
+          version=$(python -c "import fiedle400; print(fiedle400.__version__)")
           echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "Building installer for po400 ${version}"
+          echo "Building installer for fiedle400 ${version}"
 
       - name: Ensure Inno Setup Is Available
         shell: pwsh
@@ -113,19 +113,19 @@ jobs:
       - name: Build Installer
         shell: pwsh
         run: |
-          & "$env:ISCC" /DAppVersion=${{ steps.ver.outputs.version }} packaging\windows\po400.iss
+          & "$env:ISCC" /DAppVersion=${{ steps.ver.outputs.version }} packaging\windows\fiedle400.iss
 
       - name: Smoke Test the Installer (silent install, run, uninstall)
         shell: pwsh
         run: |
-          $setup = "installer\po400-setup.exe"
+          $setup = "installer\fiedle400-setup.exe"
           if (-not (Test-Path $setup)) { throw "installer was not produced" }
 
           # /VERYSILENT needs no UAC: the script installs per-user into LOCALAPPDATA.
           Start-Process -FilePath $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
 
-          $installed = "$env:LOCALAPPDATA\Programs\po400\po400.exe"
-          if (-not (Test-Path $installed)) { throw "po400.exe was not installed to $installed" }
+          $installed = "$env:LOCALAPPDATA\Programs\fiedle400\fiedle400.exe"
+          if (-not (Test-Path $installed)) { throw "fiedle400.exe was not installed to $installed" }
 
           # The shortcut's WorkingDir must exist, or Explorer silently falls back.
           $datadir = [Environment]::GetFolderPath("MyDocuments") + "\PO-400"
@@ -141,7 +141,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "--help exited $LASTEXITCODE" }
 
           # Leave the runner clean so a rerun starts from nothing.
-          $uninst = Get-ChildItem "$env:LOCALAPPDATA\Programs\po400" -Filter "unins*.exe" | Select-Object -First 1
+          $uninst = Get-ChildItem "$env:LOCALAPPDATA\Programs\fiedle400" -Filter "unins*.exe" | Select-Object -First 1
           if ($uninst) {
             Start-Process -FilePath $uninst.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
           }
@@ -149,8 +149,8 @@ jobs:
       - name: Upload Installer
         uses: actions/upload-artifact@v4
         with:
-          name: po400-setup.exe
-          path: installer/po400-setup.exe
+          name: fiedle400-setup.exe
+          path: installer/fiedle400-setup.exe
 
   release:
     name: Create GitHub Release
@@ -172,9 +172,9 @@ jobs:
           body: |
             ### Pulsox PO-400 Standalone Executables & Installers
             
-            - **Windows (installer)**: Download `po400-setup.exe` -- installs per-user, no admin rights needed.
-            - **Windows (portable)**: Download `po400-windows-x64.exe` (run directly from PowerShell or CMD).
-            - **Linux**: Download `po400-linux-x64` (`chmod +x po400-linux-x64 && ./po400-linux-x64`).
-            - **macOS**: Download `po400-macos-arm64` (Apple Silicon M1/M2/M3/M4).
+            - **Windows (installer)**: Download `fiedle400-setup.exe` -- installs per-user, no admin rights needed.
+            - **Windows (portable)**: Download `fiedle400-windows-x64.exe` (run directly from PowerShell or CMD).
+            - **Linux**: Download `fiedle400-linux-x64` (`chmod +x fiedle400-linux-x64 && ./fiedle400-linux-x64`).
+            - **macOS**: Download `fiedle400-macos-arm64` (Apple Silicon M1/M2/M3/M4).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,11 +1,11 @@
 """Console window sizing for Windows.
 
-When po400.exe is started from the Start Menu or by double-click, Windows gives
+When fiedle400.exe is started from the Start Menu or by double-click, Windows gives
 it a fresh console of the system default size (often 80x25 or 120x30), which
 wraps the information report and the wizard menu. This module enlarges that
 window once at startup.
 
-It only ever touches a console that po400 owns. A console shared with cmd.exe,
+It only ever touches a console that fiedle400 owns. A console shared with cmd.exe,
 PowerShell or another program belongs to the user, who has sized it the way
 they want, so it is left alone. It only grows the window and the scrollback
 buffer, never shrinks them, and every failure is silent: sizing is cosmetic and
@@ -81,7 +81,7 @@ def enlarge_owned_console(
     platform: str = None,
     frozen: bool = None,
 ) -> bool:
-    """Grow a console that po400 owns to at least columns x lines.
+    """Grow a console that fiedle400 owns to at least columns x lines.
 
     Returns True when the window was resized, False when it was left as it was
     (not Windows, shared console, already big enough, or any API failure).

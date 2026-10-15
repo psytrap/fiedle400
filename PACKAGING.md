@@ -1,4 +1,4 @@
-# po400 — Packaging & Distribution Strategy
+# fiedle400 — Packaging & Distribution Strategy
 
 > **Status: Design / Pre-POC**
 > This document records the agreed packaging approach for both Linux and Windows.
@@ -8,13 +8,13 @@
 
 ## Core Principle
 
-`po400` is distributed as a **self-contained standalone binary** built with PyInstaller.
+`fiedle400` is distributed as a **self-contained standalone binary** built with PyInstaller.
 No Python installation is required on the end-user machine.
 
 ```
-pyinstaller po400.spec
-    ├── Linux  →  dist/po400          (ELF, ~10–20 MB)
-    └── Windows → dist/po400.exe      (PE32, ~10–20 MB)
+pyinstaller fiedle400.spec
+    ├── Linux  →  dist/fiedle400          (ELF, ~10–20 MB)
+    └── Windows → dist/fiedle400.exe      (PE32, ~10–20 MB)
 ```
 
 PyInstaller **cannot cross-compile** — each platform's binary must be built on that platform
@@ -27,7 +27,7 @@ PyInstaller **cannot cross-compile** — each platform's binary must be built on
 ### Distribution Artifact
 
 ```
-po400               ← standalone ELF binary
+fiedle400               ← standalone ELF binary
 install.sh          ← user-local installer script
 ```
 
@@ -35,20 +35,20 @@ install.sh          ← user-local installer script
 
 | Step | Action |
 |------|--------|
-| 1 | Copy `po400` binary to `~/.local/bin/po400` |
-| 2 | `chmod +x ~/.local/bin/po400` |
+| 1 | Copy `fiedle400` binary to `~/.local/bin/fiedle400` |
+| 2 | `chmod +x ~/.local/bin/fiedle400` |
 | 3 | Check whether `~/.local/bin` is in `$PATH`; warn with fix instructions if not |
 | 4 | Print udev rule instructions (see below) |
-| 5 | Print "Installation complete. Run: po400" |
+| 5 | Print "Installation complete. Run: fiedle400" |
 
 **Uninstall:**
 ```bash
-install.sh --uninstall    # removes ~/.local/bin/po400
+install.sh --uninstall    # removes ~/.local/bin/fiedle400
 ```
 
 **Future one-liner:**
 ```bash
-curl -fsSL https://github.com/user/po400/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/psytrap/fiedle400/releases/latest/download/install.sh | bash
 ```
 
 ### udev Rule (HID device access without sudo)
@@ -79,18 +79,18 @@ complexity. A transparent `install.sh` is the more honest and widely understood 
 ### Distribution Artifact
 
 ```
-po400-setup.exe     ← Inno Setup installer wrapping po400.exe
+fiedle400-setup.exe     ← Inno Setup installer wrapping fiedle400.exe
 ```
 
 ### Installer Framework: Inno Setup
 
-- Produces a single `po400-setup.exe` (double-click, no admin rights for user-local install)
-- User-local install path: `%LOCALAPPDATA%\Programs\po400\po400.exe`
-- **No command line required.** The Start Menu entry runs `po400.exe` directly; with no
+- Produces a single `fiedle400-setup.exe` (double-click, no admin rights for user-local install)
+- User-local install path: `%LOCALAPPDATA%\Programs\fiedle400\fiedle400.exe`
+- **No command line required.** The Start Menu entry runs `fiedle400.exe` directly; with no
   arguments the binary starts its interactive wizard, so clicking the icon just works.
 - Does **not** modify `PATH`, and ships no `cmd`/`doskey` launcher shim. This is a
   deliberate UX decision (psytrap, 2026-10-15), pinned in a comment at the top of
-  `packaging/windows/po400.iss`. Adding a PATH entry or a console shim "for
+  `packaging/windows/fiedle400.iss`. Adding a PATH entry or a console shim "for
   convenience" means changing the UX decision first, not just the installer.
 - Registers uninstaller in "Apps & Features"
 - Removes all installed files and registry entries on uninstall
@@ -100,7 +100,7 @@ po400-setup.exe     ← Inno Setup installer wrapping po400.exe
 ```
 Start Menu
 └── PO-400\
-    ├── PO-400 Oximeter      ← launches po400.exe in cmd window
+    ├── PO-400 Oximeter      ← launches fiedle400.exe in cmd window
     └── Uninstall PO-400     ← Inno built-in uninstaller shortcut
 ```
 
@@ -113,14 +113,14 @@ Registered under `HKCU` (current user — no UAC required):
 | Right-click inside a folder (background) | "Open PO-400 here" |
 | Right-click on a folder | "Open PO-400 here" |
 
-Both entries launch `po400.exe` (the interactive wizard) for the relevant directory.
+Both entries launch `fiedle400.exe` (the interactive wizard) for the relevant directory.
 No console window is opened for the user to type into.
-The entry icon uses the embedded `po400.exe` icon resource (index 0).
+The entry icon uses the embedded `fiedle400.exe` icon resource (index 0).
 
 Registry keys written by Inno Setup (auto-removed on uninstall):
 ```
-HKCU\SOFTWARE\Classes\Directory\Background\shell\po400\
-HKCU\SOFTWARE\Classes\Directory\shell\po400\
+HKCU\SOFTWARE\Classes\Directory\Background\shell\fiedle400\
+HKCU\SOFTWARE\Classes\Directory\shell\fiedle400\
 ```
 
 ### Windows Install Result Summary
@@ -146,12 +146,12 @@ The installer will print instructions for this case.
 
 ## Icon
 
-A `po400.ico` file is required for:
+A `fiedle400.ico` file is required for:
 - PyInstaller binary taskbar icon (Windows)
 - Start Menu shortcut icon (Windows)
 - Explorer context menu icon (Windows)
 
-> **TODO**: Create or source `po400.ico` and commit to repo before Windows build.
+> **TODO**: Create or source `fiedle400.ico` and commit to repo before Windows build.
 
 ---
 
@@ -161,8 +161,8 @@ GitHub Actions release workflow on tag push:
 
 | Job | Runner | Output |
 |-----|--------|--------|
-| `build-linux` | `ubuntu-latest` | `po400` (ELF) |
-| `build-windows` | `windows-latest` | `po400-setup.exe` (via Inno Setup) |
+| `build-linux` | `ubuntu-latest` | `fiedle400` (ELF) |
+| `build-windows` | `windows-latest` | `fiedle400-setup.exe` (via Inno Setup) |
 | `release` | — | Upload both artifacts to GitHub Release alongside `install.sh` |
 
 ---
@@ -172,4 +172,4 @@ GitHub Actions release workflow on tag push:
 1. **USB VID/PID**: What does `lsusb` report for the PO-400? Required for the udev rule.
 2. **Windows HID class**: Does the device appear as HID in Device Manager, or does it need Zadig?
 3. **Release hosting**: Confirm GitHub Releases as the distribution channel.
-4. **Icon**: Design or source a `po400.ico` / `po400.png`.
+4. **Icon**: Design or source a `fiedle400.ico` / `fiedle400.png`.

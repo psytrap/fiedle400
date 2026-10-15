@@ -3,13 +3,13 @@
 This test suite executes end-to-end communication tests directly against
 a connected physical PO-400 device.
 
-The suite is opt-in: it only runs when PO400_LIVE=1 is set, so the default
+The suite is opt-in: it only runs when FIEDLE400_LIVE=1 is set, so the default
 `python3 -m unittest discover` run is pure mocks and its result does not depend
 on whether (or in what state) a device happens to be attached. With
-PO400_LIVE=1 and no reachable device, the suite fails loudly instead of
+FIEDLE400_LIVE=1 and no reachable device, the suite fails loudly instead of
 silently skipping.
 
-    PO400_LIVE=1 python3 -m unittest tests.test_device_live -v
+    FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live -v
 
 Platform coverage: tests 01 and 02 exercise Linux sysfs and the hidraw backend
 and are skipped elsewhere with a reason naming the platform. Test 01b gives the
@@ -31,11 +31,12 @@ try:
 except ImportError:  # Windows
     fcntl = None
 
-from po400.hid_driver import (
+from fiedle400.hid_driver import (
     PulsoxHidDevice,
     find_pulsox_hid_devices,
 )
-from po400.serial_engine import SerialDeviceEngine
+from fiedle400 import config
+from fiedle400.serial_engine import SerialDeviceEngine
 
 
 IS_LINUX = sys.platform.startswith("linux")
@@ -101,8 +102,8 @@ def wait_for_hidraw_reattach(timeout: float = 5.0, interval: float = 0.02) -> bo
     return False
 
 
-LIVE_ENABLED = os.environ.get("PO400_LIVE") == "1"
-LOCK_PATH = os.path.join(tempfile.gettempdir(), "po400-live-tests.lock")
+LIVE_ENABLED = config.getenv("FIEDLE400_LIVE") == "1"  # PO400_LIVE still works
+LOCK_PATH = os.path.join(tempfile.gettempdir(), "fiedle400-live-tests.lock")
 LOCK_TIMEOUT_SEC = 120.0
 
 
@@ -129,7 +130,7 @@ def acquire_device_lock(path: str = LOCK_PATH, timeout: float = LOCK_TIMEOUT_SEC
             time.sleep(0.1)
 
 
-@unittest.skipUnless(LIVE_ENABLED, "Hardware tests are opt-in: set PO400_LIVE=1 with a PO-400 attached.")
+@unittest.skipUnless(LIVE_ENABLED, "Hardware tests are opt-in: set FIEDLE400_LIVE=1 with a PO-400 attached.")
 class TestLiveDevice(unittest.TestCase):
     """End-to-end hardware tests against real Pulsox PO-400 device."""
 
@@ -140,7 +141,7 @@ class TestLiveDevice(unittest.TestCase):
         if not is_device_connected():
             cls._release_lock()
             raise AssertionError(
-                "PO400_LIVE=1 but no readable Pulsox PO-400 was found "
+                "FIEDLE400_LIVE=1 but no readable Pulsox PO-400 was found "
                 "(check the USB cable, power, and the udev rules in README.md)."
             )
 

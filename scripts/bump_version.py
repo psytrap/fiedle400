@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bump the po400 version in every manifest at once (stdlib only).
+"""Bump the fiedle400 version in every manifest at once (stdlib only).
 
 Usage:
     python3 scripts/bump_version.py patch            # Phase 1: once per release cycle (pre-flight RC)
@@ -19,7 +19,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 # (relative path, regex with one group capturing the version)
 MANIFESTS = [
     ("pyproject.toml", re.compile(r'^(version\s*=\s*")(\d+\.\d+\.\d+)(")', re.MULTILINE)),
-    ("po400/__init__.py", re.compile(r'^(__version__\s*=\s*")(\d+\.\d+\.\d+)(")', re.MULTILINE)),
+    ("fiedle400/__init__.py", re.compile(r'^(__version__\s*=\s*")(\d+\.\d+\.\d+)(")', re.MULTILINE)),
 ]
 
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")

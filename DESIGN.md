@@ -20,7 +20,7 @@ Unlike legacy UART models, this hardware variant utilizes a native **GigaDevice 
                                                                         |
                                                                         v
                                                               +-------------------+
-                                                              | po400 CLI Tool    |
+                                                              | fiedle400 CLI Tool    |
                                                               |  - info           |
                                                               |  - sessions       |
                                                               |  - download       |
@@ -59,17 +59,17 @@ All low-level USB HID report formats, 64-byte Contec report framing (`0x7D 0x81`
 
 ## 4. Software Architecture & Module Design
 
-The `po400` software package is organized into modular Python components:
+The `fiedle400` software package is organized into modular Python components:
 
 ```text
-po400/
+fiedle400/
 ├── pyproject.toml         # Package specification & console_scripts CLI entry point
-├── po400.spec             # PyInstaller standalone executable build spec
+├── fiedle400.spec             # PyInstaller standalone executable build spec
 ├── DESIGN.md              # Technical architecture & software design document
 ├── PROTOCOL.md            # Hardware wire protocol & report framing specification
 ├── .github/workflows/     # CI/CD Cross-Platform Binary Release Action
 │   └── build-release.yml
-├── po400/
+├── fiedle400/
 │   ├── __init__.py        # Package version (v2.0.0)
 │   ├── hid_driver.py      # /sys/class/hidraw scanner & non-blocking I/O driver
 │   ├── protocol.py        # HID encoders, decoders, SessionInfo dataclass
@@ -79,16 +79,16 @@ po400/
 ```
 
 ### Module Responsibilities:
-1. **`po400.hid_driver` (`PulsoxHidDevice`)**:
+1. **`fiedle400.hid_driver` (`PulsoxHidDevice`)**:
    - Traverses `/sys/class/hidraw` to locate PO-400 hardware (`0x28E9:0x028A`).
    - Reads USB manufacturer, product, and bus ID attributes dynamically.
    - Wraps non-blocking file descriptor I/O with read timeouts and connection state handling.
 
-2. **`po400.protocol` (`Commands`, `Parsers`, `DataPoint`, `SessionInfo`, `DeviceInfo`)**:
+2. **`fiedle400.protocol` (`Commands`, `Parsers`, `DataPoint`, `SessionInfo`, `DeviceInfo`)**:
    - `Commands`: Static helper methods encoding 64-byte HID output reports (`0x7D 0x81` framed).
    - `Parsers`: Decodes 64-byte `0xEC` metadata reports, 6-byte `0xED` sample frames, RTC datetimes, and device descriptors.
 
-3. **`po400.cli` (`main`, `command_*`)**:
+3. **`fiedle400.cli` (`main`, `command_*`)**:
    - Parses CLI flags (`info`, `sessions`, `download`, `clear`, `read-time`, `set-time`, `detect`).
    - Executes session discovery, bounded record download, and CSV/JSON file export.
 
@@ -171,7 +171,7 @@ sequenceDiagram
 Exhaustive parameter sweeps (5,000+ total test cases executed on live `VID 0x28E9: PID 0x028A` hardware) established key protocol behaviors:
 1. **Mandatory Pipe Opening**: `0x9B` is the sole command opcode that opens the USB HID IN Endpoint pipe for report transmission on `0x28E9:0x028A` controllers.
 2. **`0x9D` Sub-Command Constraints**: `0x9D 0x02` (Init) and `0x9D 0x04` (Read Block) are the only active sub-commands defined in the `0x9D` family. All other sub-commands (`0x05`–`0xFF`) return `0xF0 0x70` NACKs.
-3. **Firmware Scope**: On this GigaDevice MCU USB HID firmware build, `0x9B` connects the USB HID transmission pipe directly to the sensor endpoint buffer. Flash session metadata (`0xEC` via `0x9C`) is fully supported and parsed by `po400 sessions`.
+3. **Firmware Scope**: On this GigaDevice MCU USB HID firmware build, `0x9B` connects the USB HID transmission pipe directly to the sensor endpoint buffer. Flash session metadata (`0xEC` via `0x9C`) is fully supported and parsed by `fiedle400 sessions`.
 
 ---
 
@@ -179,22 +179,22 @@ Exhaustive parameter sweeps (5,000+ total test cases executed on live `VID 0x28E
 
 | CLI Command | Action & Operation Description |
 | :--- | :--- |
-| `po400 info` | Scans sysfs and opens node to print USB descriptors, udev access, model provenance (`50F`), serial number, user profile (`user`), firmware version (`v2.0`), and RTC datetime. |
-| `po400 sessions` | Discovers and formats all active recorded session index slots (`0xEC` reports) into a clean tabular view. |
-| `po400 download` | Downloads stored recording sessions from device memory (defaults to ALL sessions, `--session N` for specific session, `--format csv/json`). |
-| `po400 clear` | Erases all stored recording sessions from EEPROM/Flash memory via `0xAA` command (`--yes` to bypass prompt). |
-| `po400 read-time` | Reads device Real-Time Clock (RTC) timestamp (`0x82` command). |
-| `po400 set-time` | Sets device Real-Time Clock (RTC) to specified timestamp or local system time (`0x83` command). |
-| `po400 detect` | Runs live serial packet detector and decoder on incoming USB HID stream. |
+| `fiedle400 info` | Scans sysfs and opens node to print USB descriptors, udev access, model provenance (`50F`), serial number, user profile (`user`), firmware version (`v2.0`), and RTC datetime. |
+| `fiedle400 sessions` | Discovers and formats all active recorded session index slots (`0xEC` reports) into a clean tabular view. |
+| `fiedle400 download` | Downloads stored recording sessions from device memory (defaults to ALL sessions, `--session N` for specific session, `--format csv/json`). |
+| `fiedle400 clear` | Erases all stored recording sessions from EEPROM/Flash memory via `0xAA` command (`--yes` to bypass prompt). |
+| `fiedle400 read-time` | Reads device Real-Time Clock (RTC) timestamp (`0x82` command). |
+| `fiedle400 set-time` | Sets device Real-Time Clock (RTC) to specified timestamp or local system time (`0x83` command). |
+| `fiedle400 detect` | Runs live serial packet detector and decoder on incoming USB HID stream. |
 
 ---
 
 ## 7. Software Packaging & Cross-Platform Executables
 
 ### PyInstaller Standalone Executable Packaging
-Standalone executables (Linux `po400`, Windows `po400.exe`, macOS `po400`) are compiled via `po400.spec`:
+Standalone executables (Linux `fiedle400`, Windows `fiedle400.exe`, macOS `fiedle400`) are compiled via `fiedle400.spec`:
 ```bash
-pyinstaller po400.spec
+pyinstaller fiedle400.spec
 ```
 
 ### GitHub Actions Release Workflow
@@ -213,18 +213,18 @@ The core protocol stack uses an internal **Serial Packet Engine** architecture f
                                                                |
                                                                v
 +---------------------+      Decoded Events       +--------------------------+
-| po400 CLI / Engine  | <======================== | SerialPacketDetector &   |
+| fiedle400 CLI / Engine  | <======================== | SerialPacketDetector &   |
 +---------------------+                           | SerialPacketDecoder      |
                                                   +--------------------------+
 ```
 
 ### 8.1 Engine Architecture Specifications
 
-1. **`SerialByteStreamBuffer`** ([po400/serial_engine.py](po400/serial_engine.py)):
+1. **`SerialByteStreamBuffer`** ([fiedle400/serial_engine.py](fiedle400/serial_engine.py)):
    - **Role**: FIFO byte ring-buffer for continuous report ingestion.
    - **Stream Alignment**: Maintains sliding window offsets to realign misaligned report fragments and handle variable USB interrupt arrival rates.
 
-2. **`SerialPacketDetector`** ([po400/serial_engine.py](po400/serial_engine.py)):
+2. **`SerialPacketDetector`** ([fiedle400/serial_engine.py](fiedle400/serial_engine.py)):
    - **Role**: Signature detection engine scanning report buffers for known header opcodes:
      - `0xEC`: Session index metadata table reports
      - `0xED 0x04`: Stored flash download block sub-chunks (`[0xED, 0x04, idx, ..., flags, spo2, hr]`)
@@ -232,10 +232,10 @@ The core protocol stack uses an internal **Serial Packet Engine** architecture f
      - `0xF0 0x70`: Command ACK success responses
      - `0xF2`: Real-Time Clock (RTC) readback responses
 
-3. **`SerialPacketDecoder`** ([po400/serial_engine.py](po400/serial_engine.py)):
+3. **`SerialPacketDecoder`** ([fiedle400/serial_engine.py](fiedle400/serial_engine.py)):
    - **Role**: Converts matched report payloads into structured `DecodedPacket` event objects containing timestamps, SpO2 percentage, Heart Rate BPM, PPG waveform height, and decoded quality flags (`ok` vs `probe-out`).
 
-4. **`SerialDeviceEngine`** ([po400/serial_engine.py](po400/serial_engine.py)):
-   - **Role**: High-level manager coordinating connection, command writing (`write_command`), stream polling, packet detection, and event dispatch to CLI subcommands (`po400 download`, `po400 detect`, `po400 sessions`).
+4. **`SerialDeviceEngine`** ([fiedle400/serial_engine.py](fiedle400/serial_engine.py)):
+   - **Role**: High-level manager coordinating connection, command writing (`write_command`), stream polling, packet detection, and event dispatch to CLI subcommands (`fiedle400 download`, `fiedle400 detect`, `fiedle400 sessions`).
 
 

@@ -1,9 +1,9 @@
-"""Mock tests for Windows console sizing (po400.console), runnable on any OS."""
+"""Mock tests for Windows console sizing (fiedle400.console), runnable on any OS."""
 
 import ctypes
 import unittest
 
-from po400 import console
+from fiedle400 import console
 
 
 class FakeKernel32:

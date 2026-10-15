@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "po400"
+name = "fiedle400"
 version = "0.1.1"
 description = "CLI tool to read live data and extract recordings from Pulsox PO-400 USB HID pulse oximeter"
 readme = "README.md"
@@ -24,7 +24,7 @@ plot = [
 ]
 
 [project.scripts]
-po400 = "po400.cli:main"
+fiedle400 = "fiedle400.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["po400*"]
+include = ["fiedle400*"]

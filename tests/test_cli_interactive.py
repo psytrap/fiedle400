@@ -5,8 +5,8 @@ import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from po400 import protocol
-from po400.cli import generate_iso_filename, parse_session_selection, run_interactive_wizard
+from fiedle400 import protocol
+from fiedle400.cli import generate_iso_filename, parse_session_selection, run_interactive_wizard
 
 
 class TestCliInteractive(unittest.TestCase):
@@ -91,8 +91,8 @@ class TestCliInteractive(unittest.TestCase):
         # s1 starts at 10:00:00; s3 ends at 12:00:00 + 300s = 12:05:00
         self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T120500.spo2")
 
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["q"])
     def test_wizard_quit(self, mock_input, mock_engine_cls, mock_dev_cls):
         mock_dev = MagicMock()
@@ -112,9 +112,9 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_dev.close.assert_called()
 
-    @patch("po400.cli._export_records_to_file", return_value="/tmp/test.csv")
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.csv")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1-2", "", "y", "n"])
     def test_wizard_download_and_erase(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
@@ -144,8 +144,8 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(len(args_export[0]), 2)  # 2 sessions * 1 record each
         self.assertTrue(args_export[1].endswith(".spo2"))
 
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["c", "y", "n"])
     def test_wizard_clear_from_menu(self, mock_input, mock_engine_cls, mock_dev_cls):
         mock_dev = MagicMock()
@@ -165,9 +165,9 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_engine.clear_memory.assert_called_with(0, debug=0)
 
-    @patch("po400.cli._export_records_to_file", return_value="/tmp/test.spo2")
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["", "", "", "n", "n"])
     def test_wizard_default_enter_downloads_all(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
@@ -194,8 +194,8 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(len(args_export[0]), 4)
         self.assertTrue(args_export[1].endswith(".spo2"))
 
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["w", "n", "q"])
     def test_wizard_cancel(self, mock_input, mock_engine_cls, mock_dev_cls):
         mock_dev = MagicMock()
@@ -215,8 +215,8 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_engine.download_session.assert_not_called()
 
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["\x1b[A\x1b[Bq"])
     def test_wizard_quit_with_ansi_escape_keys(self, mock_input, mock_engine_cls, mock_dev_cls):
         """Verifies that arrow keys (^[[A^[[B) preceding 'q' do not trigger 'Invalid session number'."""
@@ -239,7 +239,7 @@ class TestCliInteractive(unittest.TestCase):
 
     @patch("builtins.input", return_value="  \x1b[A\x1b[Bq  ")
     def test_clean_input_helper(self, mock_input):
-        from po400.cli import clean_input
+        from fiedle400.cli import clean_input
         cleaned = clean_input()
         self.assertEqual(cleaned, "q")
 
@@ -250,8 +250,8 @@ class TestCliInteractive(unittest.TestCase):
         res_range = parse_session_selection("\x1b[C1-2\x1b[D", self.sessions)
         self.assertEqual([s.session_id for s in res_range], [1, 2])
 
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["x", "q"])
     def test_wizard_unknown_action(self, mock_input, mock_engine_cls, mock_dev_cls):
         """Verifies that an unknown action like 'x' outputs 'Unknown action' and does not crash."""
@@ -280,10 +280,10 @@ class TestCliInteractive(unittest.TestCase):
         self.assertIn("Unknown action: 'x'", out)
         self.assertNotIn("Invalid session number: 'x'", out)
 
-    @patch("po400.cli._export_records_to_file", return_value="/tmp/test.spo2")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("os.path.exists", side_effect=[True, False, False, False])
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "y", "n", "n"])
     def test_wizard_overwrite_confirmed(self, mock_input, mock_engine_cls, mock_dev_cls, mock_exists, mock_export):
         mock_dev = MagicMock()
@@ -304,9 +304,9 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_export.assert_called_once()
 
-    @patch("po400.cli._export_records_to_file")
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli._export_records_to_file")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "n", "q", "q"])
     def test_wizard_overwrite_cancelled(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
@@ -331,9 +331,9 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_export.assert_not_called()
 
-    @patch("po400.cli._export_records_to_file", return_value="/tmp/test_1.spo2")
-    @patch("po400.cli.PulsoxHidDevice")
-    @patch("po400.cli.serial_engine.SerialDeviceEngine")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test_1.spo2")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "n", "", "n", "n"])
     def test_wizard_overwrite_accepts_suggested_suffix(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
@@ -369,7 +369,7 @@ class TestCliInteractive(unittest.TestCase):
 
     def test_get_next_available_filename(self):
         import tempfile
-        from po400.cli import get_next_available_filename
+        from fiedle400.cli import get_next_available_filename
 
         with tempfile.TemporaryDirectory() as tmpdir:
             f0 = os.path.join(tmpdir, "rec.spo2")

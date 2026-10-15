@@ -23,9 +23,9 @@ try:
 except ImportError:
     pass
 
-from po400 import __version__, config, console, export, protocol, serial_engine
-from po400.protocol import Commands, Parsers
-from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
+from fiedle400 import __version__, config, console, export, protocol, serial_engine
+from fiedle400.protocol import Commands, Parsers
+from fiedle400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
@@ -48,7 +48,7 @@ _ASCII_FALLBACKS = {
     "️": "",       # variation selector-16, renders as nothing
 }
 
-_ENCODING_ERROR_HANDLER = "po400_ascii_fallback"
+_ENCODING_ERROR_HANDLER = "fiedle400_ascii_fallback"
 
 
 def _ascii_fallback_error_handler(error):
@@ -126,12 +126,12 @@ def command_config(args) -> int:
 def command_plot(args) -> int:
     """Handler for 'plot' subcommand to generate PNG graph from recording file."""
     try:
-        from po400 import plot
+        from fiedle400 import plot
     except ImportError as e:
         if getattr(e, "name", None) != "matplotlib":
             raise
         print("❌ Plotting needs matplotlib, which is not installed.")
-        print("   Install it with: pip install matplotlib   (or: pip install po400[plot])")
+        print("   Install it with: pip install matplotlib   (or: pip install fiedle400[plot])")
         return 1
     try:
         saved_path = plot.plot_session(filepath=args.file, output_png=args.output, dpi=args.dpi)
@@ -153,7 +153,7 @@ def command_detect(args) -> int:
 
     engine = serial_engine.SerialDeviceEngine(dev)
     print("==================================================")
-    print(f"  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE  (po400 v{__version__})")
+    print(f"  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE  (fiedle400 v{__version__})")
     print("==================================================")
     print(f"Connected to {node_path}...")
     print("Listening for HID report packets... (Press Ctrl+C to stop)\n")
@@ -228,7 +228,7 @@ def command_download(args):
     download_all = args.all or args.session == 0
     verbose_level = getattr(args, "verbose", 0)
 
-    # Validate an explicit --workdir / PO400_WORKDIR before touching the device,
+    # Validate an explicit --workdir / FIEDLE400_WORKDIR before touching the device,
     # so a typo fails in a second rather than after a long download.
     try:
         override_dir = None if args.output else config.explicit_workdir(getattr(args, "workdir", None))
@@ -269,7 +269,7 @@ def command_download(args):
         dev.close()
 
     print(f"\nDownload complete. Total records collected across all sessions: {len(total_records)}")
-    # Precedence: -o, then --workdir, then PO400_WORKDIR, then the stored
+    # Precedence: -o, then --workdir, then FIEDLE400_WORKDIR, then the stored
     # setting (prompting once on a first interactive run), then the cwd.
     target_dir = None if args.output else (override_dir or config.resolve_workdir())
     saved_path = _export_records_to_file(
@@ -306,7 +306,7 @@ def command_sessions(args):
 
 
     print(f"\n==================================================")
-    print(f"  PULSOX PO-400 STORED RECORDING SESSIONS  (po400 v{__version__})")
+    print(f"  PULSOX PO-400 STORED RECORDING SESSIONS  (fiedle400 v{__version__})")
     print(f"==================================================")
 
     if not sessions:
@@ -373,7 +373,7 @@ def command_read_time(args):
         if rtc_dt:
             ts_str = rtc_dt.strftime("%Y-%m-%d %H:%M:%S")
             print(f"\n🕒 Device RTC Clock Timestamp: {ts_str}")
-            print(f"   Command format: python3 -m po400.cli set-time \"{ts_str}\"")
+            print(f"   Command format: python3 -m fiedle400.cli set-time \"{ts_str}\"")
         else:
             print("\n🕒 Device RTC Clock Timestamp: Unreported or Default Crystal Clock")
 
@@ -417,7 +417,7 @@ def command_set_time(args):
         dev.close()
 
     print(f"✅ Successfully set PO-400 device clock to: {ts_str}")
-    print(f"   Command format: python3 -m po400.cli set-time \"{ts_str}\"")
+    print(f"   Command format: python3 -m fiedle400.cli set-time \"{ts_str}\"")
     return 0
 
 
@@ -464,7 +464,7 @@ def command_info(args):
     print(f"\n==================================================")
     print(f"  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
     print(f"==================================================")
-    print(f"  po400 Tool Version     : {tool_version_line()}")
+    print(f"  fiedle400 Tool Version     : {tool_version_line()}")
     print(f"  Device Path / Node     : {node_path}")
     print(f"  Active HID Backend     : {backend_label}")
     print(f"  Hardware Model         : {decoded_model}")
@@ -592,7 +592,7 @@ def get_next_available_filename(filepath: str, max_attempts: int = 10000) -> str
 
 
 def run_interactive_wizard(args) -> int:
-    """Interactive text-based wizard prompt when po400 is run without subcommands."""
+    """Interactive text-based wizard prompt when fiedle400 is run without subcommands."""
     dev_path = getattr(args, "device", None)
     backend = getattr(args, "backend", None)
     verbose_level = getattr(args, "verbose", 0)
@@ -600,7 +600,7 @@ def run_interactive_wizard(args) -> int:
     while True:
         print("\n============================================================")
         print("          PULOX PO-400 INTERACTIVE USER INTERFACE")
-        print(f"          po400 v{__version__}".rstrip())
+        print(f"          fiedle400 v{__version__}".rstrip())
         print("============================================================")
 
         print("\nConnecting to device...")
@@ -767,7 +767,7 @@ def main(argv: Optional[List[str]] = None):
     _configure_output_encoding()
     console.enlarge_owned_console()
     parser = argparse.ArgumentParser(
-        prog="po400",
+        prog="fiedle400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -795,7 +795,7 @@ def main(argv: Optional[List[str]] = None):
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
     parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.spo2 in the configured working directory).")
-    parser_dl.add_argument("--workdir", help="Directory for this download only (overrides PO400_WORKDIR and the stored setting; not saved). Ignored with -o.")
+    parser_dl.add_argument("--workdir", help="Directory for this download only (overrides FIEDLE400_WORKDIR and the stored setting; not saved). Ignored with -o.")
     parser_dl.add_argument("-f", "--format", choices=["spo2", "csv", "json"], default="spo2", help="Output format: 'spo2' (default), 'csv', or 'json'.")
     parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
     parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
@@ -848,7 +848,7 @@ def main(argv: Optional[List[str]] = None):
 def run_guarded(handler, args) -> int:
     """Run a command handler, turning unexpected errors into a short message and exit code.
 
-    Set PO400_DEBUG=1 to get the full traceback instead.
+    Set FIEDLE400_DEBUG=1 to get the full traceback instead.
     """
     try:
         return handler(args)
@@ -856,10 +856,10 @@ def run_guarded(handler, args) -> int:
         print("\nAborted.", file=sys.stderr)
         return 130
     except Exception as e:
-        if os.environ.get("PO400_DEBUG"):
+        if config.getenv("FIEDLE400_DEBUG"):
             raise
-        print(f"❌ po400 {__version__}: unexpected error: {type(e).__name__}: {e}", file=sys.stderr)
-        print("   Re-run with PO400_DEBUG=1 for the full traceback.", file=sys.stderr)
+        print(f"❌ fiedle400 {__version__}: unexpected error: {type(e).__name__}: {e}", file=sys.stderr)
+        print("   Re-run with FIEDLE400_DEBUG=1 for the full traceback.", file=sys.stderr)
         return 1
 
 

@@ -1,10 +1,10 @@
-"""Persisted user settings for po400.
+"""Persisted user settings for fiedle400.
 
 Stores the working directory -- where recordings are saved -- in a small JSON
 file in the platform's conventional settings location:
 
-    Windows        %APPDATA%\\po400\\config.json
-    Linux / macOS  $XDG_CONFIG_HOME/po400/config.json  ($XDG_CONFIG_HOME
+    Windows        %APPDATA%\\fiedle400\\config.json
+    Linux / macOS  $XDG_CONFIG_HOME/fiedle400/config.json  ($XDG_CONFIG_HOME
                    defaults to ~/.config)
 
 Only the *path* lives there, never the recordings themselves: the settings
@@ -14,6 +14,11 @@ invisible to the user.
 The settings directory is deliberately separate from the install directory, so
 uninstalling the program does not discard the preference, and reinstalling does
 not reset it.
+
+The tool used to be called po400. Settings saved under that name are copied to
+the new location the first time they are read (the old file is left in place),
+and the old PO400_* environment variables are still honoured when the
+FIEDLE400_* ones are unset.
 """
 
 import json
@@ -21,18 +26,37 @@ import os
 import sys
 from typing import Optional
 
-APP_NAME = "po400"
+APP_NAME = "fiedle400"
+LEGACY_APP_NAME = "po400"
+ENV_PREFIX = "FIEDLE400_"
+LEGACY_ENV_PREFIX = "PO400_"
 CONFIG_FILENAME = "config.json"
 WORKDIR_KEY = "workdir"
-WORKDIR_ENV = "PO400_WORKDIR"
+WORKDIR_ENV = "FIEDLE400_WORKDIR"
 
 
 class WorkdirError(ValueError):
     """An explicitly requested working directory cannot be created or written to."""
 
 
-def config_dir() -> str:
-    """Return the directory holding the settings file (not created by this call)."""
+def getenv(name: str, default: str = "") -> str:
+    """Read a FIEDLE400_* variable, falling back to its pre-rename PO400_* name."""
+    found = env_source(name)
+    return os.environ[found] if found else default
+
+
+def env_source(name: str) -> Optional[str]:
+    """Return which variable actually supplies `name` (new or legacy), or None."""
+    if name in os.environ:
+        return name
+    if name.startswith(ENV_PREFIX):
+        legacy = LEGACY_ENV_PREFIX + name[len(ENV_PREFIX):]
+        if legacy in os.environ:
+            return legacy
+    return None
+
+
+def _settings_base() -> str:
     if sys.platform == "win32":
         base = os.environ.get("APPDATA") or os.path.join(
             os.path.expanduser("~"), "AppData", "Roaming"
@@ -41,7 +65,38 @@ def config_dir() -> str:
         base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(
             os.path.expanduser("~"), ".config"
         )
-    return os.path.join(base, APP_NAME)
+    return base
+
+
+def config_dir() -> str:
+    """Return the directory holding the settings file (not created by this call)."""
+    return os.path.join(_settings_base(), APP_NAME)
+
+
+def legacy_config_path() -> str:
+    """Where po400 (the pre-rename tool) kept its settings file."""
+    return os.path.join(_settings_base(), LEGACY_APP_NAME, CONFIG_FILENAME)
+
+
+def migrate_legacy_config() -> bool:
+    """Copy a po400 settings file to the fiedle400 location if only the old one exists.
+
+    Returns True when a file was copied. The old file is kept, so an older
+    po400 install on the same machine keeps working. Any failure is silent:
+    the user is simply asked for the working directory again.
+    """
+    new, old = config_path(), legacy_config_path()
+    if os.path.exists(new) or not os.path.isfile(old):
+        return False
+    try:
+        with open(old, "r", encoding="utf-8") as fh:
+            content = fh.read()
+        os.makedirs(os.path.dirname(new), exist_ok=True)
+        with open(new, "w", encoding="utf-8") as fh:
+            fh.write(content)
+        return True
+    except OSError:
+        return False
 
 
 def config_path() -> str:
@@ -63,6 +118,7 @@ def default_workdir() -> str:
 
 def load_config() -> dict:
     """Read the settings file. A missing or unreadable file yields {}."""
+    migrate_legacy_config()
     try:
         with open(config_path(), "r", encoding="utf-8") as fh:
             data = json.load(fh)
@@ -113,7 +169,7 @@ def ensure_usable_dir(path: str) -> Optional[str]:
 
 
 def explicit_workdir(flag_value: Optional[str] = None) -> Optional[str]:
-    """Return a per-run working directory from the --workdir flag or PO400_WORKDIR.
+    """Return a per-run working directory from the --workdir flag or FIEDLE400_WORKDIR.
 
     The flag beats the environment variable. Neither is saved to the settings
     file and neither prompts, so scripts and CI can choose a location without
@@ -124,10 +180,10 @@ def explicit_workdir(flag_value: Optional[str] = None) -> Optional[str]:
     if flag_value and flag_value.strip():
         source, value = "--workdir", flag_value
     else:
-        value = os.environ.get(WORKDIR_ENV, "")
+        source = env_source(WORKDIR_ENV)
+        value = os.environ[source] if source else ""
         if not value.strip():
             return None
-        source = WORKDIR_ENV
     usable = ensure_usable_dir(value)
     if not usable:
         raise WorkdirError(f"{source}: cannot create or write to {value}")
@@ -138,7 +194,7 @@ def resolve_workdir(prompt_func=None, stream=None) -> str:
     """Return the directory new recordings should be written to.
 
     Callers check explicit_workdir() first: the --workdir flag and the
-    PO400_WORKDIR variable override everything below for a single run.
+    FIEDLE400_WORKDIR variable override everything below for a single run.
 
     Order of precedence:
       1. the configured working directory, when one is stored and usable;
@@ -175,7 +231,7 @@ def resolve_workdir(prompt_func=None, stream=None) -> str:
 
     saved = set_workdir(chosen)
     if saved:
-        print(f"Saved to {saved}. Change it any time with: po400 config --workdir <path>", file=stream)
+        print(f"Saved to {saved}. Change it any time with: fiedle400 config --workdir <path>", file=stream)
     return chosen
 
 

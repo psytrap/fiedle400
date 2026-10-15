@@ -1,6 +1,6 @@
 import unittest
 from datetime import datetime
-from po400.protocol import (
+from fiedle400.protocol import (
     Commands,
     Parsers,
     Opcode,

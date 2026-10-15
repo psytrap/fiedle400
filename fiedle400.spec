@@ -12,15 +12,15 @@ block_cipher = None
 hid_binaries = collect_dynamic_libs('hid')
 
 a = Analysis(
-    ['po400/cli.py'],
+    ['fiedle400/cli.py'],
     pathex=[],
     binaries=hid_binaries,
     datas=[],
-    hiddenimports=['po400', 'po400.protocol', 'po400.engine', 'po400.serial_engine', 'po400.hid_driver', 'po400.export', 'hid'],
+    hiddenimports=['fiedle400', 'fiedle400.protocol', 'fiedle400.engine', 'fiedle400.serial_engine', 'fiedle400.hid_driver', 'fiedle400.export', 'hid'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['matplotlib'],  # plot is not shipped in the binary; `po400 plot` prints an install hint
+    excludes=['matplotlib'],  # plot is not shipped in the binary; `fiedle400 plot` prints an install hint
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -36,7 +36,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='po400',
+    name='fiedle400',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

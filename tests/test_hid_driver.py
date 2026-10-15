@@ -4,7 +4,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 
-from po400.hid_driver import (
+from fiedle400.hid_driver import (
     HidBackend,
     LinuxHidrawBackend,
     MockHidDevice,

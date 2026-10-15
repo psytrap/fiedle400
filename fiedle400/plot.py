@@ -340,7 +340,7 @@ def plot_session(
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="po400-plot",
+        prog="fiedle400-plot",
         description="Generate high-resolution PNG graph from Pulsox PO-400 .SpO2, .csv, or .json recording files.",
     )
     parser.add_argument("file", nargs="?", help="Path to recording file (.spo2, .csv, or .json). Defaults to latest in output/.")

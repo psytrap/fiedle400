@@ -23,11 +23,11 @@ import sys
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Tuple, Optional
 
-# Ensure the po400 package (repository root, two levels up) can be imported
+# Ensure the fiedle400 package (repository root, two levels up) can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from po400.protocol import Parsers, SessionInfo
-from po400.serial_engine import SerialPacketDetector, SerialByteStreamBuffer
+from fiedle400.protocol import Parsers, SessionInfo
+from fiedle400.serial_engine import SerialPacketDetector, SerialByteStreamBuffer
 
 
 def parse_pcap_file(filepath: str) -> List[Tuple[int, bytes]]:

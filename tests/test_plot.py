@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from datetime import datetime
 
-from po400.export import build_spo2_binary
+from fiedle400.export import build_spo2_binary
 
 try:
-    from po400.plot import (
+    from fiedle400.plot import (
         load_session_file,
         plot_session,
         find_latest_session_file,

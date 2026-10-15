@@ -1,7 +1,7 @@
-"""Tests for the persisted working-directory setting (po400/config.py).
+"""Tests for the persisted working-directory setting (fiedle400/config.py).
 
 Every test redirects the settings directory into a temporary folder, so none of
-these touch the developer's real ~/.config/po400 or %APPDATA%\\po400.
+these touch the developer's real ~/.config/fiedle400 or %APPDATA%\\fiedle400.
 
 The non-interactive cases matter most: resolve_workdir() must never reach
 input() when stdin is not a terminal. If that guard regresses, a piped command,
@@ -9,13 +9,14 @@ a CI run, or this very suite would block forever waiting for a keystroke.
 """
 
 import io
+import json
 import os
 import sys
 import tempfile
 import unittest
 from unittest import mock
 
-from po400 import config
+from fiedle400 import config
 
 
 class ConfigTestBase(unittest.TestCase):
@@ -149,8 +150,10 @@ class TestResolveWorkdirInteractive(ConfigTestBase):
 
 
 
+
+
 class TestExplicitWorkdir(ConfigTestBase):
-    """--workdir and PO400_WORKDIR: per-run, no prompt, nothing saved."""
+    """--workdir and FIEDLE400_WORKDIR: per-run, no prompt, nothing saved."""
 
     def setUp(self):
         super().setUp()
@@ -210,7 +213,7 @@ class TestDownloadWorkdirFlag(ConfigTestBase):
     """The download command validates --workdir before it touches the device."""
 
     def test_bad_workdir_fails_before_connecting(self):
-        from po400 import cli
+        from fiedle400 import cli
         blocker = os.path.join(self.tmp.name, "is-a-file")
         with open(blocker, "w", encoding="utf-8") as fh:
             fh.write("x")
@@ -223,13 +226,64 @@ class TestDownloadWorkdirFlag(ConfigTestBase):
         self.assertIn("cannot create or write to", out.getvalue())
 
     def test_explicit_output_ignores_workdir(self):
-        from po400 import cli
+        from fiedle400 import cli
         with mock.patch.object(config, "explicit_workdir") as explicit, \
                 mock.patch.object(cli, "PulsoxHidDevice") as dev_cls:
             dev_cls.return_value.connect.side_effect = RuntimeError("stop here")
             with mock.patch("sys.stdout", new_callable=io.StringIO), self.assertRaises(SystemExit):
                 cli.main(["download", "-o", "x.csv", "--workdir", "/nonexistent"])
         explicit.assert_not_called()
+
+
+class TestRenameCompatibility(ConfigTestBase):
+    """po400 -> fiedle400: old settings carry over, old env var names still work."""
+
+    def _write_legacy(self, data):
+        path = config.legacy_config_path()
+        os.makedirs(os.path.dirname(path))
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+        return path
+
+    def test_settings_live_under_the_new_name(self):
+        self.assertEqual(os.path.basename(config.config_dir()), "fiedle400")
+        self.assertIn(os.path.join("po400", "config.json"), config.legacy_config_path())
+
+    def test_legacy_settings_are_copied_on_first_read(self):
+        legacy = self._write_legacy({"workdir": self.tmp.name})
+        self.assertEqual(config.get_workdir(), self.tmp.name)
+        self.assertTrue(os.path.isfile(config.config_path()))
+        self.assertTrue(os.path.isfile(legacy), "the old file must be kept for an older install")
+
+    def test_existing_new_settings_are_not_overwritten(self):
+        self._write_legacy({"workdir": "/old"})
+        config.save_config({"workdir": "/new"})
+        self.assertFalse(config.migrate_legacy_config())
+        self.assertEqual(config.load_config()["workdir"], "/new")
+
+    def test_nothing_to_migrate(self):
+        self.assertFalse(config.migrate_legacy_config())
+        self.assertFalse(os.path.exists(config.config_path()))
+
+    def test_legacy_env_name_is_a_fallback(self):
+        with mock.patch.dict(os.environ, {"PO400_DEBUG": "1"}):
+            os.environ.pop("FIEDLE400_DEBUG", None)
+            self.assertEqual(config.getenv("FIEDLE400_DEBUG"), "1")
+            self.assertEqual(config.env_source("FIEDLE400_DEBUG"), "PO400_DEBUG")
+        with mock.patch.dict(os.environ, {"PO400_DEBUG": "old", "FIEDLE400_DEBUG": "new"}):
+            self.assertEqual(config.getenv("FIEDLE400_DEBUG"), "new")
+
+    def test_legacy_workdir_env_is_honoured_and_named_in_errors(self):
+        os.environ.pop(config.WORKDIR_ENV, None)
+        target = os.path.join(self.tmp.name, "legacy-run")
+        with mock.patch.dict(os.environ, {"PO400_WORKDIR": target}):
+            self.assertEqual(config.explicit_workdir(), target)
+        blocker = os.path.join(self.tmp.name, "a-file")
+        open(blocker, "w").close()
+        with mock.patch.dict(os.environ, {"PO400_WORKDIR": blocker}), \
+                self.assertRaises(config.WorkdirError) as cm:
+            config.explicit_workdir()
+        self.assertIn("PO400_WORKDIR", str(cm.exception))
 
 
 if __name__ == "__main__":

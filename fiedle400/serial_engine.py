@@ -1,7 +1,7 @@
 """Internal Serial Packet Engine facade for backward compatibility.
 
-This module re-exports components from `po400.engine` and `po400.protocol`.
-New code should import directly from `po400.engine`.
+This module re-exports components from `fiedle400.engine` and `fiedle400.protocol`.
+New code should import directly from `fiedle400.engine`.
 """
 
 from .engine import (
