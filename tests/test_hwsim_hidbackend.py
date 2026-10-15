@@ -168,8 +168,18 @@ class TestSelftest(FlowCase):
         # query correctly is the scenario, not a specific trace file.
         info = mock.MagicMock()
         info.hardware_id = "50F"
-        with mock.patch.object(SerialDeviceEngine, "read_device_info",
-                                return_value={"device_info": info}), \
+        # command_selftest's sysfs-detection check (Linux only, unconditional
+        # regardless of --backend) calls the REAL find_pulsox_hid_devices()
+        # against the real filesystem. On a machine with the actual device
+        # attached that passes by coincidence; on a CI runner with no USB
+        # device at all it legitimately finds nothing -- this is what broke
+        # CI (twice) despite passing locally every time. Faked here along
+        # with the engine calls so the whole check is deterministic regardless
+        # of what hardware the test happens to run on.
+        with mock.patch("fiedle400.hid_driver.find_pulsox_hid_devices",
+                         return_value=[("/dev/hidraw0", "", True)]), \
+                mock.patch.object(SerialDeviceEngine, "read_device_info",
+                                   return_value={"device_info": info}), \
                 mock.patch.object(SerialDeviceEngine, "read_rtc_time",
                                    return_value="2002-07-01 12:07:00"), \
                 mock.patch.object(SerialDeviceEngine, "list_sessions",
