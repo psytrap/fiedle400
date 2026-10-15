@@ -11,8 +11,8 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
    `checksum = sum(bytes[0..N-1]) % 128` (or `sum(bytes[0..N-1]) & 0x7F`)
 3. **14-Bit Integer Packing (7-bit Little-Endian)**:
    `value_14 = byte[0] | (byte[1] << 7)`
-4. **28-Bit Integer Packing (Duration in 0xEC Header)**:
-   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` (Recorded session duration in seconds / 1 Hz records)
+4. **28-Bit Integer Packing (Raw Sample Count in 0xEC Header)**:
+   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` -- counts raw 2 Hz half-second samples, **not** seconds or 1 Hz records (confirmed: psytrap, 2026-10-15; see §3.2 and §3.5.3, and RELEASE_PLAN.md T3). Real duration/record count = `value_28 // 2`.
 5. **USB HID Report Size**: Outbound and inbound reports are 64 bytes fixed-length (`REPORT_SIZE = 64`), zero-padded.
 
 ---
@@ -131,7 +131,7 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 | `0x07` | Hour | `0..23` | Start hour |
 | `0x08` | Minute | `0..59` | Start minute |
 | `0x09` | Second | `0..59` | Start second |
-| `0x0A..0x0D` | Duration (s) | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. Total recorded duration in seconds (1 Hz records). |
+| `0x0A..0x0D` | Raw Sample Count | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. **Not seconds.** Counts raw 2 Hz half-second samples (confirmed: psytrap, 2026-10-15; previously mislabelled here as "1 Hz records", see RELEASE_PLAN.md T3). `duration_sec = raw_count // 2`. |
 | `0x0E..0x1D` | Username | ASCII | Null-terminated username string (e.g. `"user"`) |
 | `0x1E..0x3F` | Padding | `0x00...` | Reserved zero padding |
 
@@ -274,6 +274,13 @@ for msb, byte in zip(msb_bits, data_bytes):
      $$\text{Sample}_2 = \text{Base} - (B \ \& \ 0\text{x}0\text{F}) \quad (\text{skipped if nibble is } 0\text{x}0\text{F} \text{ padding})$$
    - **Ceiling Bound**: Because nibbles are unsigned subtractions, $\text{Sample}_{\max} = \text{Base} - 0 = \text{Base}$. Samples can never exceed the baseline using deltas.
    - **Zero Delta**: $B = 0\text{x}00$ represents $\Delta = 0$ ($\text{Sample} = \text{Base}$). Zero bytes are valid data and must **not** be dropped.
+   - **Two raw samples become one physiological value**: `Sample_1` and `Sample_2` are genuinely
+     independent half-second readings, not a repeated/duplicated value -- the device takes two raw
+     measurements per second, and the firmware's record (and this decoder, matching it) averages them
+     into a single 1 Hz sample: `round((Sample_1 + Sample_2) / 2)`. This is confirmed physiology/firmware
+     behaviour (psytrap, 2026-10-15), not a decode approximation. It is why the session header's raw
+     sample count (field `0x0A..0x0D` in §3.2) is exactly double the real recording duration and the
+     real 1 Hz record count.
 4. **End-of-Data Sentinel**: A subframe with `mode = 0x00`, `seq = 0`, and masks containing `0x7F` indicates an uninitialized flash segment and signals immediate termination.
 
 ---
