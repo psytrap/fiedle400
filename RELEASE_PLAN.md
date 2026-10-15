@@ -171,6 +171,22 @@ read-only step. Requested by the cloud in `handoff/trace-response.md`.
 
 ---
 
+## 3e. TODO: recheck all tests for similar quirks (psytrap, 2026-10-15)
+
+Prompted by the `selftest` CI incident (`98a9b08` -> `64e1c65` -> `770daf0`):
+`command_selftest`'s Linux sysfs check called the real `find_pulsox_hid_devices()`
+unconditionally, which passed locally (real device attached) and failed on CI
+(no device) -- an environment assumption baked into a test, not caught until
+CI ran on different hardware than the one it was written against.
+
+Audit the rest of the suite for the same shape of mistake: any test that calls
+through to something environment-dependent (the real filesystem, real device
+enumeration, a real network call, wall-clock time) without mocking it, and
+that happens to pass only because of what this development machine has
+attached, installed, or happens to return right now. Not yet done.
+
+---
+
 ## 4. Rollout Rings
 
 ### Ring 0: Local Release Candidate
