@@ -86,7 +86,8 @@ po400-setup.exe     ← Inno Setup installer wrapping po400.exe
 
 - Produces a single `po400-setup.exe` (double-click, no admin rights for user-local install)
 - User-local install path: `%LOCALAPPDATA%\Programs\po400\po400.exe`
-- Adds install directory to user `PATH` (permanent, via registry `Environment` key)
+- Does **not** modify `PATH`; launch via the Start Menu entry or the Explorer context menu,
+  or call the full path `%LOCALAPPDATA%\Programs\po400\po400.exe`
 - Registers uninstaller in "Apps & Features"
 - Removes all installed files and registry entries on uninstall
 
@@ -124,7 +125,7 @@ HKCU\SOFTWARE\Classes\Directory\shell\po400\
 | Apps & Features | "PO-400 Oximeter" with Uninstall button |
 | Start Menu | PO-400 → PO-400 Oximeter + Uninstall |
 | Explorer right-click | "Open PO-400 Console here" |
-| PATH | `po400` callable from any terminal |
+| PATH | Not modified (deliberate) |
 | Admin rights required | No (user-local install) |
 
 ### HID Driver (Windows)
