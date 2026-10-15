@@ -104,6 +104,20 @@ cycle and goes through G1–G6 again on that cycle's RC. The device is still the
 
 ---
 
+## 3d. TODO: open findings (not release blockers until confirmed on hardware)
+
+Found while building the simulated-hardware tests (`tests/hwsim.py`, `tests/test_hwsim_linux.py`). Each is pinned by an `expectedFailure` test that starts passing, and is reported as an unexpected success, when the defect is fixed. All five were reproduced with the real code paths against replayed device bytes from `analysis/bum400_20260906_100516.pcap`. Whether they bite on a real download is unconfirmed; `fiedle400 download --dump` on the device would show it.
+
+| # | Finding | Evidence | Next step |
+|:--|:---|:---|:---|
+| **T1 Status flags read from the MSB mask byte** | `engine/detector.py` takes `flags = chunk[7]` of every 30-byte `0xED` frame, but PROTOCOL.md 3.5 defines byte 7 as the third MSB mask (`m2`), not a status field. Whenever a data byte in positions 22..28 has bit 7 set (every `0xF_` baseline escape does), `m2` is non-zero and the frame is reported as `searching`/`low-perfusion`. `engine/device.py` then stores those samples as `None`. | In the capture the last frame of each page (seq 5, `m2` = `0x60`) decodes as `searching,low-perfusion`; a download keeps 103 of 122 records and blanks the last 19. The other frames decode as `ok`. | Check a real download for `None` samples at page ends. If confirmed, stop deriving flags from byte 7 for `0xED` frames, or find where the device reports probe-out. Decide with psytrap before changing the decoder. |
+| **T2 Silent device counts as a successful download** | With every reply dropped, `download` prints "No active session table returned; defaulting to downloading Session #1", saves an empty file and exits 0. | `test_device_that_never_answers_is_not_reported_as_a_successful_download` | Exit non-zero (and write no file) when no session answered or zero records came back. |
+| **T3 Session length is shown about twice too long** | The header count (243) is raw 2 Hz values (`analysis/bum400_20260906_100516.md` section 5: 243 values = 122 s) and an independent decompression gives 243 values per series. `SessionInfo` treats it as seconds, so `sessions` shows 4m 03s for a 122 s recording and the engine never reaches its record target (it asks for page 1 and retries). PROTOCOL.md 3.2 and 1 also say "seconds". | `test_header_count_is_in_raw_2hz_samples_so_duration_is_about_two_minutes` | Treat the header value as 2 Hz samples (duration = count / 2), fix the two PROTOCOL.md lines. |
+| **T4 `info` prints made-up values** | When the device does not answer, `command_info` still prints firmware "v2.0", serial "50F", user "user" and geometry "112 Bytes Sub-chunk Payload" from hard-coded fallbacks, indistinguishable from real readings. | `test_info_does_not_print_made_up_values_when_the_device_is_silent` | Print "not reported" instead of the fallbacks. |
+| **T5 Storage-frame checksum is never verified** | Every real `0xED` frame in the capture carries a correct 7-bit checksum, but the detector decodes frames with a wrong one. A corrupted frame silently yields wrong samples. | `test_frame_with_a_bad_checksum_is_rejected` | Drop (and count) frames whose checksum fails. Safe on the capture: all 12 frames pass. |
+
+---
+
 ## 4. Rollout Rings
 
 ### Ring 0: Local Release Candidate

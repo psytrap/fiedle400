@@ -16,6 +16,11 @@ PRODUCT_ID_HEX = "028A"
 VENDOR_ID_INT = 0x28E9
 PRODUCT_ID_INT = 0x028A
 
+# Where the Linux kernel exposes hidraw nodes. Module constants (not literals in
+# the functions) so the test suite can point them at a simulated tree.
+SYSFS_HIDRAW_ROOT = "/sys/class/hidraw"
+DEV_ROOT = "/dev"
+
 
 def resolve_default_backend() -> str:
     """Returns the default backend based on the host operating system.
@@ -35,7 +40,7 @@ def find_pulsox_hid_devices() -> List[Tuple[str, str, bool]]:
         List of tuples: (dev_path, uevent_info, is_readable)
     """
     found_devices = []
-    sys_hidraw = "/sys/class/hidraw"
+    sys_hidraw = SYSFS_HIDRAW_ROOT
 
     if not os.path.exists(sys_hidraw):
         return found_devices
@@ -47,7 +52,7 @@ def find_pulsox_hid_devices() -> List[Tuple[str, str, bool]]:
                 with open(uevent_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
                     if VENDOR_ID_HEX in content.upper() and PRODUCT_ID_HEX in content.upper():
-                        dev_path = f"/dev/{node}"
+                        dev_path = os.path.join(DEV_ROOT, node)
                         is_readable = os.access(dev_path, os.R_OK | os.W_OK)
                         found_devices.append((dev_path, content.strip(), is_readable))
             except Exception:
@@ -63,7 +68,7 @@ def get_usb_sysfs_info(dev_path: str) -> Tuple[Optional[str], Optional[str], Opt
         tuple: (manufacturer_str, product_str, bus_id)
     """
     node_name = os.path.basename(dev_path)
-    sysfs_dev_dir = f"/sys/class/hidraw/{node_name}/device"
+    sysfs_dev_dir = os.path.join(SYSFS_HIDRAW_ROOT, node_name, "device")
     
     if not os.path.exists(sysfs_dev_dir):
         return None, None, None
@@ -174,7 +179,7 @@ class LinuxHidrawBackend:
         if self.dev_path and os.path.exists(self.dev_path):
             sysfs_mfg, sysfs_prod, sysfs_bus = get_usb_sysfs_info(self.dev_path)
             node_name = os.path.basename(self.dev_path)
-            uevent_file = f"/sys/class/hidraw/{node_name}/device/uevent"
+            uevent_file = os.path.join(SYSFS_HIDRAW_ROOT, node_name, "device", "uevent")
             if os.path.exists(uevent_file):
                 try:
                     with open(uevent_file, "r", encoding="utf-8", errors="ignore") as f:

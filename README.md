@@ -183,6 +183,19 @@ With `FIEDLE400_LIVE=1` and no reachable device, the suite fails instead of skip
 Concurrent live runs are serialised through a lock file (`fiedle400-live-tests.lock` in the
 temp directory), because two processes opening the oximeter at once collide.
 
+### Simulated hardware (Linux)
+
+`tests/test_hwsim_linux.py` runs the real hidraw backend, sysfs scan, engine, detector, export and
+CLI against a simulated PO-400 (`tests/hwsim.py`) that replays device bytes recorded in
+`analysis/bum400_20260906_100516.pcap`. It needs no device and runs in the normal suite. Commands
+the recording does not cover get no reply, and destructive commands are refused and logged. To
+extend the recording with the CLI's own traffic from a real device (read-only; it contains the
+recorded measurements, so review it before sharing):
+```bash
+python3 tests/capture_tools/record_exchange.py -o cli-exchange.trace.json          # info, sessions, download
+python3 tests/capture_tools/record_exchange.py --no-download -o info.trace.json    # no measurements
+```
+
 ---
 
 ## Documentation & Protocol References

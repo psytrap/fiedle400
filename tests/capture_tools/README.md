@@ -9,3 +9,6 @@ kept here so the regression tests run on a fresh clone and in CI.
 - `decode_spo2.py`: reference `.SpO2` reader (used by `test_export_spo2.py` for round-trip checks).
 
 Both still run as standalone scripts, e.g. `python3 tests/capture_tools/decode_pcap.py analysis/bum400_20260906_100516.pcap`.
+
+`record_exchange.py` is different: it talks to a real device (read-only, destructive commands are refused)
+and writes the CLI's command/reply traffic as a trace that `tests/hwsim.py` can replay.
