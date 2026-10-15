@@ -22,7 +22,7 @@ try:
 except ImportError:
     pass
 
-from po400 import __version__, export, protocol, serial_engine
+from po400 import __version__, config, export, protocol, serial_engine
 from po400.protocol import Commands, Parsers
 from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 
@@ -90,6 +90,30 @@ def clean_input(prompt: str = "") -> str:
     cleaned = ANSI_ESCAPE_RE.sub("", raw)
     cleaned = "".join(ch for ch in cleaned if ch.isprintable() or ch in " \t")
     return cleaned.strip()
+
+
+def command_config(args) -> int:
+    """Handler for 'config': show or change stored settings."""
+    if args.workdir:
+        chosen = config.ensure_usable_dir(args.workdir)
+        if not chosen:
+            print(f"❌ Cannot create or write to: {args.workdir}")
+            return 1
+        saved = config.set_workdir(chosen)
+        if not saved:
+            print(f"❌ Could not write the settings file at {config.config_path()}")
+            return 1
+        print(f"✅ Working directory set to: {chosen}")
+        print(f"   Saved in {saved}")
+        return 0
+
+    print(f"Settings file : {config.config_path()}")
+    current = config.get_workdir()
+    if current:
+        print(f"Working dir   : {current}")
+    else:
+        print(f"Working dir   : (not set; would offer {config.default_workdir()})")
+    return 0
 
 
 def command_plot(args) -> int:
@@ -180,9 +204,16 @@ def _download_single_session(dev, sess_info: protocol.SessionInfo, timeout_limit
 
 
 
-def _export_records_to_file(records: List[dict], output_filename: Optional[str] = None, fmt: str = "spo2") -> str:
+def _export_records_to_file(
+    records: List[dict],
+    output_filename: Optional[str] = None,
+    fmt: str = "spo2",
+    output_dir: Optional[str] = None,
+) -> str:
     """Helper to save extracted records into .SpO2, CSV, or JSON format."""
-    return export.export_records(records, output_filename=output_filename, fmt=fmt)
+    return export.export_records(
+        records, output_filename=output_filename, fmt=fmt, output_dir=output_dir
+    )
 
 
 def command_download(args):
@@ -223,7 +254,14 @@ def command_download(args):
         dev.close()
 
     print(f"\nDownload complete. Total records collected across all sessions: {len(total_records)}")
-    saved_path = _export_records_to_file(total_records, args.output, args.format.lower())
+    # An explicit -o wins outright; otherwise fall back to the configured
+    # working directory (prompting once on a first interactive run).
+    # TODO: add a --workdir flag and a PO400_WORKDIR env var so non-interactive
+    # callers can choose a location without writing the settings file.
+    target_dir = None if args.output else config.resolve_workdir()
+    saved_path = _export_records_to_file(
+        total_records, args.output, args.format.lower(), output_dir=target_dir
+    )
     print(f"✅ Saved all session recordings to: {saved_path}")
     if dump_path:
         print(f"🔍 Saved diagnostic raw HID frame dump to: {os.path.abspath(dump_path)}")
@@ -740,7 +778,7 @@ def main(argv: Optional[List[str]] = None):
     parser_dl.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
-    parser_dl.add_argument("-o", "--output", help="Output file path (default: output/po400_all_sessions_<timestamp>.spo2).")
+    parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.spo2 in the configured working directory).")
     parser_dl.add_argument("-f", "--format", choices=["spo2", "csv", "json"], default="spo2", help="Output format: 'spo2' (default), 'csv', or 'json'.")
     parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
     parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
@@ -770,10 +808,15 @@ def main(argv: Optional[List[str]] = None):
     parser_det.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_det.set_defaults(func=command_detect)
 
+    # Subcommand: config
+    parser_cfg = subparsers.add_parser("config", help="Show or change stored settings (e.g. where recordings are saved).")
+    parser_cfg.add_argument("--workdir", help="Set the directory new recordings are saved in.")
+    parser_cfg.set_defaults(func=command_config)
+
     # Subcommand: plot
     parser_plot = subparsers.add_parser("plot", help="Generate high-resolution PNG graph from .spo2, .csv, or .json recording files.")
-    parser_plot.add_argument("file", nargs="?", help="Path to recording file (.spo2, .csv, or .json). Defaults to latest in output/.")
-    parser_plot.add_argument("-o", "--output", help="Output PNG file path (default: output/<filename>.png).")
+    parser_plot.add_argument("file", nargs="?", help="Path to recording file (.spo2, .csv, or .json). Defaults to the latest in the current directory.")
+    parser_plot.add_argument("-o", "--output", help="Output PNG file path (default: <filename>.png next to the recording).")
     parser_plot.add_argument("--dpi", type=int, default=150, help="Resolution in DPI (default: 150).")
     parser_plot.set_defaults(func=command_plot)
 

@@ -104,6 +104,7 @@ def export_records(
     records: List[Dict[str, Any]],
     output_filename: Optional[str] = None,
     fmt: str = "spo2",
+    output_dir: Optional[str] = None,
 ) -> str:
     """Save extracted records into the requested file format (.spo2, .csv, or .json).
 
@@ -111,6 +112,8 @@ def export_records(
         records: List of record dictionaries.
         output_filename: Target path or filename. If omitted, a timestamped name is generated.
         fmt: Target format ('spo2', 'csv', or 'json'). Ignored if output_filename has a recognized extension.
+        output_dir: Directory for the generated name. Ignored when output_filename is given;
+            omitted means the current directory, preserving the plain-CLI behaviour.
 
     Returns:
         str: Absolute path of the saved output file.
@@ -127,6 +130,8 @@ def export_records(
     if not output_filename:
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_filename = f"po400_all_sessions_{timestamp_str}.{clean_fmt}"
+        if output_dir:
+            output_filename = os.path.join(output_dir, output_filename)
 
     output_path = os.path.abspath(output_filename)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
