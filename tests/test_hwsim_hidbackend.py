@@ -31,7 +31,7 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import hwsim  # noqa: E402
-from hwsim import FakeOximeter, VirtualClock, command_key, make_fake_hid_module  # noqa: E402
+from hwsim import FakeOximeter, Trace, VirtualClock, command_key, make_fake_hid_module  # noqa: E402
 import test_hwsim_realtrace as rt  # noqa: E402  (module import only: its test classes are not collected here)
 
 from fiedle400 import cli  # noqa: E402
@@ -145,6 +145,38 @@ class TestInfo(FlowCase):
     def test_the_model_descriptor_is_shown_as_such(self):
         rc, out, err = self.run_info()
         self.assertRegex(out, r"Device Model Descriptor\s*: 50F")
+
+
+class TestSelftest(FlowCase):
+    """`fiedle400 selftest`: a read-only check with no FIEDLE400_LIVE needed.
+
+    The second test guards a real defect found on real hardware (RELEASE_PLAN.md):
+    a backend can ACK the unlock handshake but never answer anything past it (seen
+    on this project's Linux hid/libusb install) without raising -- read_device_info
+    and read_rtc_time both return falsy. selftest must treat that as a failure, not
+    as "no exception means pass".
+    """
+
+    def run_selftest(self):
+        return run_cli(["--backend", "hid", "selftest"], self.fake_module)
+
+    def test_all_checks_pass_against_a_fully_answering_device(self):
+        # Non-strict: selftest's several engine calls may touch a command more
+        # times than the recording has copies of; strict mode is for pinning
+        # exact command counts (test_hwsim_realtrace.py), not for this check.
+        fake_module = make_fake_hid_module(FakeOximeter(rt.real_trace()))
+        rc, out, err = run_cli(["--backend", "hid", "selftest"], fake_module)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("All checks passed", out)
+        self.assertNotIn("❌", out)  # no failure marker anywhere
+
+    def test_a_device_that_only_acks_and_never_answers_is_reported_as_failed(self):
+        unresponsive = FakeOximeter(Trace())  # no recordings at all: ACKs unlock, answers nothing else
+        fake_module = make_fake_hid_module(unresponsive)
+        rc, out, err = run_cli(["--backend", "hid", "selftest"], fake_module)
+        self.assertEqual(rc, 1, out + err)
+        self.assertIn("Some checks failed", out)
+        self.assertIn("no data returned", out)
 
 
 # --------------------------------------------------------------------------

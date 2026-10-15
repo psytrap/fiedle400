@@ -25,7 +25,7 @@ except ImportError:
 
 from fiedle400 import __version__, config, console, export, protocol, serial_engine
 from fiedle400.protocol import Commands, Parsers
-from fiedle400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
+from fiedle400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info, resolve_default_backend
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
@@ -423,6 +423,81 @@ def command_set_time(args):
     print(f"✅ Successfully set PO-400 device clock to: {ts_str}")
     print(f"   Command format: python3 -m fiedle400.cli set-time \"{ts_str}\"")
     return 0
+
+
+def command_selftest(args) -> int:
+    """Handler for 'selftest': a quick, read-only hardware check with no env var needed.
+
+    Running this subcommand IS the explicit signal that a hardware check is wanted --
+    unlike the FIEDLE400_LIVE-gated unittest suite (tests/test_device_live.py), which
+    must stay silent by default so `python -m unittest discover` is deterministic
+    whether or not a device happens to be plugged in. This command exists so a
+    deliberate, one-off real-hardware check does not need that incantation.
+
+    Strictly read-only: detection, connect, handshake, RTC read, session listing.
+    No data is written to the device and no session is downloaded.
+    """
+    backend = getattr(args, "backend", None) or resolve_default_backend()
+    checks = []  # (label, ok, detail)
+
+    def check(label, fn):
+        # A falsy/None result is treated as a failure, not just an exception:
+        # a backend that silently gets a bare ACK instead of real data (seen on
+        # this Linux machine's libusb-backed 'hid' install -- RELEASE_PLAN.md
+        # notes) raises nothing, so "no exception" alone would wrongly show a
+        # green check for data that never actually arrived.
+        try:
+            detail = fn()
+        except Exception as e:
+            checks.append((label, False, str(e)))
+            return None
+        if not detail:
+            checks.append((label, False, "no data returned (device gave no usable reply)"))
+            return None
+        checks.append((label, True, detail))
+        return detail
+
+    print(f"Running selftest on backend '{backend}'...\n")
+
+    if sys.platform.startswith("linux"):
+        def _detect():
+            from fiedle400.hid_driver import find_pulsox_hid_devices
+            devices = find_pulsox_hid_devices()
+            if not devices:
+                raise RuntimeError("no device found via sysfs")
+            dev_path, _, is_readable = devices[0]
+            if not is_readable:
+                raise RuntimeError(f"{dev_path} found but not readable/writable")
+            return dev_path
+        check("Device detected (sysfs)", _detect)
+
+    dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=backend)
+    node_path = check("Connect", lambda: dev.connect())
+    if node_path is None:
+        _print_selftest_results(checks)
+        return 1
+
+    engine = serial_engine.SerialDeviceEngine(dev)
+    try:
+        check("Handshake + device info", lambda: engine.read_device_info(debug=0)["device_info"].hardware_id)
+        check("RTC read", lambda: engine.read_rtc_time(debug=0))
+        check("Session index", lambda: f"{len(engine.list_sessions(debug=0))} session(s)")
+    finally:
+        dev.close()
+
+    ok = _print_selftest_results(checks)
+    return 0 if ok else 1
+
+
+def _print_selftest_results(checks) -> bool:
+    all_ok = True
+    for label, ok, detail in checks:
+        mark = "✅" if ok else "❌"
+        print(f"  {mark} {label:<28} {detail}")
+        all_ok = all_ok and ok
+    print()
+    print("✅ All checks passed." if all_ok else "❌ Some checks failed -- see above.")
+    return all_ok
 
 
 def command_info(args):
@@ -831,6 +906,11 @@ def main(argv: Optional[List[str]] = None):
     parser_det = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")
     parser_det.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_det.set_defaults(func=command_detect)
+
+    # Subcommand: selftest
+    parser_selftest = subparsers.add_parser("selftest", help="Read-only hardware check: detection, connect, handshake, RTC, sessions. No FIEDLE400_LIVE needed -- running this command is the explicit signal.")
+    parser_selftest.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser_selftest.set_defaults(func=command_selftest)
 
     # Subcommand: config
     parser_cfg = subparsers.add_parser("config", help="Show or change stored settings (e.g. where recordings are saved).")

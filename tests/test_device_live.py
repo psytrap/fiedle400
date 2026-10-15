@@ -232,7 +232,13 @@ class TestLiveDevice(unittest.TestCase):
 
             info = res["device_info"]
             self.assertEqual(res["active_user_id"], 1, f"read_device_info result: {res!r}")
-            self.assertEqual(info.flash_geometry, "112 Bytes Sub-chunk Payload", f"device_info: {info!r}")
+            # This device never answers the firmware/geometry queries (0xAD, 9E 40 04
+            # give a bare ACK) -- T4/T7 (RELEASE_PLAN.md 3d) made that honest instead of
+            # printing a hard-coded fallback, so flash_geometry is correctly None here,
+            # not the string an unpatched decoder used to invent. hardware_id ('50F') and
+            # user_profile ARE genuinely reported and should stay populated.
+            self.assertIsNone(info.flash_geometry, f"device_info: {info!r}")
+            self.assertEqual(info.hardware_id, "50F", f"device_info: {info!r}")
             self.assertEqual(info.user_profile, "user", f"device_info: {info!r}")
             self.assertNotEqual(res["rtc_time_str"], "N/A", f"read_device_info result: {res!r}")
         finally:
