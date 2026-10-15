@@ -216,6 +216,21 @@ class LinuxHidrawBackend:
             self._fd = None
 
 
+def _no_device_message(enumerate_error: Optional[BaseException] = None) -> str:
+    """Message for an empty enumeration, distinguishing a broken hidapi from an absent device."""
+    if enumerate_error is not None:
+        return (
+            "The 'hid' library failed while scanning for devices: "
+            f"{type(enumerate_error).__name__}: {enumerate_error}\n"
+            "This is an installation problem, not a missing device -- hidapi "
+            "could not load its native library."
+        )
+    return (
+        "No Pulsox PO-400 device found via 'hid'! "
+        "Ensure USB cable is plugged in and device is powered ON."
+    )
+
+
 class HidBackend:
     """Cross-platform driver backend using the `import hid` library."""
 
@@ -242,12 +257,17 @@ class HidBackend:
         try:
             connected_path = self.dev_path
             matched_list = []
+            enumerate_error = None
             try:
                 matched_list = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
                 if matched_list:
                     self._enum_info = matched_list[0]
-            except Exception:
-                pass
+            except Exception as e:
+                # A hidapi that cannot load its native library fails here. Keep
+                # going (the explicit-path case below may still work) but hold
+                # the error: reporting it as "no device found" sends people
+                # hunting for a cable when the real fault is the install.
+                enumerate_error = e
 
             if hasattr(hid, "Device"):
                 # ctypes hid package (apmorton/pyhidapi)
@@ -256,9 +276,7 @@ class HidBackend:
                     dev_inst = hid.Device(path=path_bytes)
                 else:
                     if not matched_list:
-                        raise RuntimeError(
-                            "No Pulsox PO-400 device found via 'hid'! Ensure USB cable is plugged in and device is powered ON."
-                        )
+                        raise RuntimeError(_no_device_message(enumerate_error))
                     raw_path = matched_list[0].get("path")
                     if raw_path:
                         dev_inst = hid.Device(path=raw_path)
@@ -275,9 +293,7 @@ class HidBackend:
                     dev_inst.open_path(path_bytes)
                 else:
                     if not matched_list:
-                        raise RuntimeError(
-                            "No Pulsox PO-400 device found via 'hid'! Ensure USB cable is plugged in and device is powered ON."
-                        )
+                        raise RuntimeError(_no_device_message(enumerate_error))
                     raw_path = matched_list[0].get("path")
                     if raw_path:
                         dev_inst.open_path(raw_path)

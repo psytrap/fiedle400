@@ -1,13 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from PyInstaller.utils.hooks import collect_dynamic_libs
+
 block_cipher = None
+
+# `import hid` lives inside a function (hid_driver._get_hid_module), and the
+# package ships a compiled extension plus its hidapi DLL. Name it explicitly and
+# collect its binaries, or the frozen build imports the module but cannot call
+# into it -- which surfaces as "no device found" on a machine where the device
+# is plainly attached.
+hid_binaries = collect_dynamic_libs('hid')
 
 a = Analysis(
     ['po400/cli.py'],
     pathex=[],
-    binaries=[],
+    binaries=hid_binaries,
     datas=[],
-    hiddenimports=['po400', 'po400.protocol', 'po400.engine', 'po400.serial_engine', 'po400.hid_driver', 'po400.export'],
+    hiddenimports=['po400', 'po400.protocol', 'po400.engine', 'po400.serial_engine', 'po400.hid_driver', 'po400.export', 'hid'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

@@ -73,6 +73,43 @@ Each blocker is a small, separate commit, landed **before** the patch bump.
 
 ---
 
+## 3b. TODO: rename the whole app to `fiedle400`
+
+Decided by psytrap (2026-10-15). The GitHub repository is already
+`psytrap/fiedle400`; the code, package and artifacts still say `po400`.
+
+**Do this as its own change, not mixed into other work** -- it touches nearly
+every file, so a rename commit interleaved with behaviour changes is unreviewable
+and will conflict with any patch written against the old paths.
+
+Surface area, so nothing is missed:
+
+| Area | What changes |
+|:---|:---|
+| Package | `po400/` directory, and every `from po400 import ...` / `import po400` |
+| Entry point | `[project.scripts]` in `pyproject.toml`, `prog="po400"` in `cli.py` |
+| Version | `po400/__init__.py` `__version__`, `scripts/bump_version.py` manifest paths, `tests/test_version.py` |
+| Tests | imports in every `tests/*.py`, plus `tests/capture_tools/` |
+| Packaging | `po400.spec` (script path, `hiddenimports`, binary `name=`), `packaging/windows/po400.iss` (AppName, DefaultDirName, shortcut, context-menu keys, `OutputBaseFilename`) |
+| CI | asset names and paths in `.github/workflows/build-release.yml` |
+| Settings | `po400/config.py` `APP_NAME` -- note this moves the settings directory, so an existing `workdir` setting is silently abandoned unless migrated |
+| Env vars | `PO400_LIVE`, `PO400_DEBUG`, and the planned `PO400_WORKDIR` |
+| Docs | `README.md`, `DESIGN.md`, `PROTOCOL.md`, `PACKAGING.md`, `SPO2_FORMAT.md`, `AGENTS.md`, this file |
+| Device rules | udev rule filenames `99-pulsox*.rules` (cosmetic; the VID/PID match is unaffected) |
+
+Open questions to settle before starting:
+
+- **Installed-name collision.** A user who installed `po400-setup.exe` keeps that
+  install; `fiedle400-setup.exe` has a different `AppId` and installs alongside
+  it. Decide whether the installer should detect and remove the old one.
+- **Settings migration.** Either migrate `%APPDATA%\po400\config.json` to the new
+  directory on first run, or accept that the prompt reappears once.
+- **Timing vs the release.** Renaming after tagging `v0.1.1` keeps the first
+  release coherent; renaming before it means the RC that was hardware-tested is
+  not the one that ships.
+
+---
+
 ## 4. Rollout Rings
 
 ### Ring 0: Local Release Candidate
