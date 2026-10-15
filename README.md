@@ -22,18 +22,49 @@ For detailed hardware & protocol specifications, see [DESIGN.md](file:///home/mi
 
 ## Running on Linux
 
-### 1. Permissions Setup (udev rule)
+### 1. Permissions Setup (udev rules)
 On Linux, raw USB HID devices require read/write access. Grant access permanently by adding a udev rule:
 
 ```bash
-echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="28e9", ATTRS{idProduct}=="028a", MODE="0666"' | sudo tee /etc/udev/rules.d/99-pulsox.rules
+echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="28e9", ATTRS{idProduct}=="028a", MODE="0666", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/99-pulsox.rules
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
+
+That covers the default `hidraw` backend, which is all the CLI needs.
 
 Alternatively, grant temporary access:
 ```bash
 sudo chmod 666 /dev/hidraw*
 ```
+
+#### Extra rule for the `hid` (libusb) backend
+
+The cross-platform `hid` backend (`--backend hid`) is only needed if you are
+not on Linux or are working on the driver itself. When the installed `hid`
+module is built against **libusb** rather than hidraw, it opens the raw USB
+node (`/dev/bus/usb/...`) instead of `/dev/hidraw*`, which the rule above does
+not cover. Without this second rule it fails with `OSError: open failed`:
+
+```bash
+echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="28e9", ATTR{idProduct}=="028a", MODE="0666", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/99-pulsox-usb.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+Note `ATTR` here, not `ATTRS` as in the hidraw rule: the match is on the USB
+device itself rather than on a parent.
+
+To check which backend your `hid` module uses, look at the path it reports --
+`/dev/hidraw*` means hidraw, a bus path like `1-7.4.4:1.0` means libusb:
+
+```bash
+python3 -c "import hid; print(hid.enumerate(0x28E9, 0x028A)[0]['path'])"
+```
+
+Be aware that the libusb backend **detaches the kernel `usbhid` driver** while
+it holds the device, so `/dev/hidraw*` disappears for the duration and takes a
+few tens of milliseconds to reappear after close. Code that switches from the
+`hid` backend to the `hidraw` backend must wait for the node to return; see
+`wait_for_hidraw_reattach()` in `tests/test_device_live.py`.
 
 ### 2. Run Directly (Zero Dependencies)
 No external libraries or `pip install` required:

@@ -21,3 +21,6 @@ exe/
 archive/
 .venv/
 venv/
+
+# Patch files
+*.patch
