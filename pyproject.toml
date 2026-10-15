@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fiedle400"
-version = "0.2.3"
+version = "0.2.4"
 description = "CLI tool to read live data and extract recordings from Pulsox PO-400 USB HID pulse oximeter"
 readme = "README.md"
 authors = [
     { name = "Developer" }
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 dependencies = [
     "hid; sys_platform == 'win32' or sys_platform == 'darwin'",
 ]

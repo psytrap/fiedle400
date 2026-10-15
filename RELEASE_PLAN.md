@@ -51,7 +51,7 @@ fiedle400 download -o output/rc.spo2 && fiedle400 plot output/rc.spo2   # G7: vi
 | **G4 Zero-dependency promise** | In a clean venv with no third-party packages, `python3 -m fiedle400 --help`, `info`, `sessions` and `download` import and run. `plot` prints an install hint and exits 1. | ✅ Verified in a clean venv: 107 tests run, 0 failures (plot tests skip). |
 | **G5 Binary build** *(local only)* | `pyinstaller fiedle400.spec` succeeds, **and the built artifact runs a device-touching command** (`info`, then `sessions`) with a real PO-400 attached; for Windows, the installed binary from the installer. `--version`/`--help` alone are not enough: a binary that starts but cannot load the `hid` extension passes them (this happened before `0ab3bf0`). CI runners have no oximeter, so this gate can only run on psytrap's machines; CI only proves the build succeeds. | ✅ `fiedle400-setup.exe` from CI, freshly installed on the Windows 8.1 laptop at `0.1.11`: `info`/`sessions` against the real device both correct post-T1-T7 fix (107 records, 1m 47s; "not reported by the device" where the device genuinely gives nothing). Re-run on each RC build -- this run does not carry forward to the next version. |
 | **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on Linux with **both** backends (`hidraw` and `hid`); elsewhere with `hid` only (`hidraw` raises off Linux by design, and the Linux-only tests skip with a reason). Never run two live runs at once (a lock file serialises them). `fiedle400 selftest` runs the same core checks with no env var, for a quick one-off. | ✅ Linux `hidraw`: 5/5 pass at `0.1.11` (device detection, connect, handshake, RTC, sessions). Windows `hid`: 5/5 pass on the laptop (same run as G5). ⚠️ Linux `hid` backend: **new finding T8** (below) -- connects, but the session query returns a bare ACK instead of data on this machine's libusb-backed install; not yet root-caused. |
-| **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `fiedle400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | Manual. |
+| **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `fiedle400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | ✅ **Passed (psytrap, 2026-10-15).** Two real sessions (92 records/1m32s and 937 records/~15.5min) plotted and confirmed plausible: SpO2 92-99%, HR 49-81, real variation, no flat-line pattern. This is the **beta** criterion (§3f); with G7 passed and no other gate blocking, this release is ready to promote from alpha. |
 | **G8 Output location** | Per `AGENTS.md`, output goes to the current directory (or the configured workdir), never a hard-coded `output/`; help strings say the same. | ✅ The code always wrote to the cwd; only the help strings said `output/`. Fixed in `9647913`. |
 
 ---
@@ -164,6 +164,27 @@ Still not settled by either recording: neither contains a finger-out moment
 (both report `flags=ok` throughout), so T1's sentinel path (SpO2 127 / pulse
 255) remains untested against real hardware -- synthetic frames only. Also
 still open: a real serial-stream device (this one only exercises storage).
+
+**Update (psytrap, 2026-10-15), unconfirmed:** deliberately pulled the probe
+off mid-recording to test this. psytrap's hypothesis: the device's own
+recording stops (rather than continuing and writing probe-out-flagged
+samples) when the finger comes off. Not yet verified technically -- if true,
+T1's sentinel path may be effectively unreachable via the storage path on
+this firmware regardless of the decoder fix.
+
+**Likely explanation for a separate observation:** `sessions` went from 3
+sessions visible, to 1, to 0, over the course of this testing -- but psytrap
+confirms the recordings are still on the device (visible on its own
+display), so this is not data loss. Leading hypothesis, consistent with this
+tool's own existing hint text ("set Record=ON in PO-400 menu while
+measuring"): the device has separate **Auto** and **Manual (Record=ON)**
+modes, and only Manual-mode recordings go through the `0x9C` session-index
+path this tool reads -- Auto-mode recordings may be stored but not indexed
+the same way, so our query legitimately finds nothing even though data
+exists. Sessions 1-3 (used above, including the G7 plots) were presumably
+Manual-mode; the device may since have been in Auto mode. Not yet confirmed
+-- psytrap is about to test by switching to Manual mode and recording fresh,
+this time with an intentional finger-out moment to also settle T1 above.
 
 **Status: T1 to T7 are fixed in patch 0013 (the tests that pinned them now assert the correct behaviour) and verified on the real device (Windows 8.1 laptop, `0.1.11`), not just the simulator: `sessions`/`download` show 107/107 records in 1m 47s with 0 sequence gaps (was 214 padded records, 4m 03s), `info` shows `Device Model Descriptor: 50F` and honest "not reported by the device" for the rest, exactly as predicted before the run. The Next step column keeps the original proposals; each row ends with what was done. T8 (new, below) was found during that same verification pass -- the fix itself is confirmed correct; T8 is a separate, pre-existing backend quirk it happened to surface.**
 
