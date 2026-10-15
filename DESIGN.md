@@ -33,7 +33,7 @@ Unlike legacy UART models, this hardware variant utilizes a native **GigaDevice 
 
 ## 2. Hardware & USB Interface Architecture
 
-Hardware descriptors and USB HID report framing are specified in **[PROTOCOL.md](file:///home/mik/Documents/Bastel/2023-/po400/PROTOCOL.md#L7-L32)**.
+Hardware descriptors and USB HID report framing are specified in **[PROTOCOL.md](PROTOCOL.md#L7-L32)**.
 
 - **Descriptors**: Vendor ID `0x28E9`, Product ID `0x028A` (GigaDevice HID).
 - **Interface**: Native 64-byte USB HID report transfers via `/dev/hidraw*`.
@@ -45,7 +45,7 @@ Hardware descriptors and USB HID report framing are specified in **[PROTOCOL.md]
 
 ## 3. Wire Protocol Reference
 
-All low-level USB HID report formats, 64-byte Contec report framing (`0x7D 0x81`), full opcode registry tables, 6-byte `0xED` streaming sub-chunk bitmasks, and 64-byte `0xEC` session metadata payload specifications are documented in detail in the standalone **[PROTOCOL.md](file:///home/mik/Documents/Bastel/2023-/po400/PROTOCOL.md)** specification.
+All low-level USB HID report formats, 64-byte Contec report framing (`0x7D 0x81`), full opcode registry tables, 6-byte `0xED` streaming sub-chunk bitmasks, and 64-byte `0xEC` session metadata payload specifications are documented in detail in the standalone **[PROTOCOL.md](PROTOCOL.md)** specification.
 
 ### Summary of Wire Report Headers:
 - **`0x7D 0x81`**: Host outbound command framing.
@@ -220,11 +220,11 @@ The core protocol stack uses an internal **Serial Packet Engine** architecture f
 
 ### 8.1 Engine Architecture Specifications
 
-1. **`SerialByteStreamBuffer`** ([po400/serial_engine.py](file:///home/mik/Documents/Bastel/2023-/po400/po400/serial_engine.py)):
+1. **`SerialByteStreamBuffer`** ([po400/serial_engine.py](po400/serial_engine.py)):
    - **Role**: FIFO byte ring-buffer for continuous report ingestion.
    - **Stream Alignment**: Maintains sliding window offsets to realign misaligned report fragments and handle variable USB interrupt arrival rates.
 
-2. **`SerialPacketDetector`** ([po400/serial_engine.py](file:///home/mik/Documents/Bastel/2023-/po400/po400/serial_engine.py)):
+2. **`SerialPacketDetector`** ([po400/serial_engine.py](po400/serial_engine.py)):
    - **Role**: Signature detection engine scanning report buffers for known header opcodes:
      - `0xEC`: Session index metadata table reports
      - `0xED 0x04`: Stored flash download block sub-chunks (`[0xED, 0x04, idx, ..., flags, spo2, hr]`)
@@ -232,10 +232,10 @@ The core protocol stack uses an internal **Serial Packet Engine** architecture f
      - `0xF0 0x70`: Command ACK success responses
      - `0xF2`: Real-Time Clock (RTC) readback responses
 
-3. **`SerialPacketDecoder`** ([po400/serial_engine.py](file:///home/mik/Documents/Bastel/2023-/po400/po400/serial_engine.py)):
+3. **`SerialPacketDecoder`** ([po400/serial_engine.py](po400/serial_engine.py)):
    - **Role**: Converts matched report payloads into structured `DecodedPacket` event objects containing timestamps, SpO2 percentage, Heart Rate BPM, PPG waveform height, and decoded quality flags (`ok` vs `probe-out`).
 
-4. **`SerialDeviceEngine`** ([po400/serial_engine.py](file:///home/mik/Documents/Bastel/2023-/po400/po400/serial_engine.py)):
+4. **`SerialDeviceEngine`** ([po400/serial_engine.py](po400/serial_engine.py)):
    - **Role**: High-level manager coordinating connection, command writing (`write_command`), stream polling, packet detection, and event dispatch to CLI subcommands (`po400 download`, `po400 detect`, `po400 sessions`).
 
 

@@ -401,7 +401,7 @@ Used on serial-stream device models:
 
 The Windows Contec SpO2 Assistant software and PO-400 use the `.SpO2` binary format for storing 1 Hz recording sessions (also supported by OSCAR for CPAP oximetry imports).
 
-For the exhaustive specification, byte offsets, and reference code, see **[SPO2_FORMAT.md](file:///home/mik/Documents/Bastel/2023-/po400/SPO2_FORMAT.md)**.
+For the exhaustive specification, byte offsets, and reference code, see **[SPO2_FORMAT.md](SPO2_FORMAT.md)**.
 
 | Offset | Type | Description |
 | :--- | :--- | :--- |

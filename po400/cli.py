@@ -7,6 +7,7 @@ Commands:
 """
 
 import argparse
+import codecs
 import csv
 import json
 import os
@@ -26,6 +27,61 @@ from po400.protocol import Commands, Parsers
 from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+# ASCII stand-ins for the symbols this CLI prints, used only on consoles whose
+# encoding cannot represent them (see _configure_output_encoding).
+_ASCII_FALLBACKS = {
+    "❌": "[X]",    # cross mark
+    "✅": "[OK]",   # white heavy check mark
+    "⚠": "[!]",    # warning sign
+    "✓": "v",      # check mark
+    "✗": "x",      # ballot x
+    "\U0001f4ca": "*",  # bar chart
+    "\U0001f50d": "*",  # magnifying glass
+    "\U0001f552": "*",  # clock face
+    "└": "\\",     # box drawings up and right
+    "├": "+",      # box drawings vertical and right
+    "─": "-",      # box drawings horizontal
+    "│": "|",      # box drawings vertical
+    "—": "-",      # em dash
+    "️": "",       # variation selector-16, renders as nothing
+}
+
+_ENCODING_ERROR_HANDLER = "po400_ascii_fallback"
+
+
+def _ascii_fallback_error_handler(error):
+    """Codec error handler: substitute ASCII for characters the console cannot encode."""
+    if not isinstance(error, UnicodeEncodeError):
+        raise error
+    bad = error.object[error.start:error.end]
+    return ("".join(_ASCII_FALLBACKS.get(ch, "?") for ch in bad), error.end)
+
+
+def _configure_output_encoding() -> None:
+    """Keep output printable on consoles with a legacy codepage.
+
+    Windows consoles default to a single-byte codepage -- cp1252 or cp850 on a
+    German install -- which cannot encode the box-drawing characters and symbols
+    used throughout this CLI. Writing one raises UnicodeEncodeError and aborts
+    the command mid-output; it even kills run_guarded's own error message, whose
+    first character is one of them.
+
+    Rather than forcing UTF-8 (which would emit mojibake on exactly those
+    consoles) or deleting the symbols (which would degrade every terminal that
+    renders them correctly), install an error handler so each character survives
+    where the encoding supports it and falls back to ASCII only where it does not.
+    """
+    codecs.register_error(_ENCODING_ERROR_HANDLER, _ascii_fallback_error_handler)
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue  # Not a TextIOWrapper (redirected, wrapped, or Python < 3.7)
+        try:
+            reconfigure(errors=_ENCODING_ERROR_HANDLER)
+        except (ValueError, OSError, AttributeError):
+            pass  # Best effort: a stream we cannot reconfigure is left as it was
 
 
 def clean_input(prompt: str = "") -> str:
@@ -655,6 +711,7 @@ def run_interactive_wizard(args) -> int:
 
 
 def main(argv: Optional[List[str]] = None):
+    _configure_output_encoding()
     parser = argparse.ArgumentParser(
         prog="po400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
