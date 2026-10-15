@@ -4,6 +4,20 @@
 ; an Explorer context-menu entry, both under HKCU, so the installer needs no
 ; administrator rights (PACKAGING.md "Windows"). No PATH entry is written.
 ;
+; DESIGN DECISION (psytrap, 2026-10-15) -- do not "improve" this back:
+;   The Start Menu entry runs po400.exe DIRECTLY. Launched with no arguments the
+;   binary starts its interactive wizard (cli.py: `handler = args.func if
+;   args.command else run_interactive_wizard`), so clicking the icon just works.
+;
+;   Therefore this installer deliberately does NOT:
+;     * write a PATH entry (no registry Environment key, no session PATH),
+;     * ship a cmd/doskey launcher shim,
+;     * open a command prompt for the user to type into.
+;
+;   The user never needs a command line. Anyone tempted to add a PATH entry or a
+;   console shim "for convenience" should change the UX decision first, not the
+;   installer.
+;
 ; The version is passed in by CI so it cannot drift from the Python manifests:
 ;   ISCC /DAppVersion=0.1.1 packaging\windows\po400.iss
 ; The default below is only a fallback for a hand-run build.
@@ -47,11 +61,9 @@ Name: "{userdocs}\PO-400"; Flags: uninsneveruninstall
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "po400-shell.cmd"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\PO-400 Oximeter"; Filename: "{cmd}"; Parameters: "/k ""{app}\po400-shell.cmd"""; \
-    WorkingDir: "{userdocs}\PO-400"; IconFilename: "{app}\po400.exe"; IconIndex: 0
+Name: "{group}\PO-400 Oximeter"; Filename: "{app}\po400.exe"; WorkingDir: "{userdocs}\PO-400"
 Name: "{group}\Uninstall PO-400"; Filename: "{uninstallexe}"
 
 [Tasks]
@@ -60,15 +72,15 @@ Name: "contextmenu"; Description: "Add ""Open PO-400 Console here"" to the Explo
 [Registry]
 ; Explorer context menu, both on a folder and on the folder background.
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\po400"; ValueType: string; ValueName: ""; \
-    ValueData: "Open PO-400 Console here"; Flags: uninsdeletekey; Tasks: contextmenu
+    ValueData: "Open PO-400 here"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\po400"; ValueType: string; ValueName: "Icon"; \
     ValueData: "{app}\po400.exe,0"; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\po400\command"; ValueType: string; ValueName: ""; \
-    ValueData: "cmd.exe /k cd /d ""%V"" && ""{app}\po400-shell.cmd"""; Tasks: contextmenu
+    ValueData: """{app}\po400.exe"""; Tasks: contextmenu
 
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400"; ValueType: string; ValueName: ""; \
-    ValueData: "Open PO-400 Console here"; Flags: uninsdeletekey; Tasks: contextmenu
+    ValueData: "Open PO-400 here"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400"; ValueType: string; ValueName: "Icon"; \
     ValueData: "{app}\po400.exe,0"; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400\command"; ValueType: string; ValueName: ""; \
-    ValueData: "cmd.exe /k cd /d ""%V"" && ""{app}\po400-shell.cmd"""; Tasks: contextmenu
+    ValueData: """{app}\po400.exe"""; Tasks: contextmenu

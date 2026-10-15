@@ -86,8 +86,12 @@ po400-setup.exe     ← Inno Setup installer wrapping po400.exe
 
 - Produces a single `po400-setup.exe` (double-click, no admin rights for user-local install)
 - User-local install path: `%LOCALAPPDATA%\Programs\po400\po400.exe`
-- Does **not** modify `PATH`; launch via the Start Menu entry or the Explorer context menu,
-  or call the full path `%LOCALAPPDATA%\Programs\po400\po400.exe`
+- **No command line required.** The Start Menu entry runs `po400.exe` directly; with no
+  arguments the binary starts its interactive wizard, so clicking the icon just works.
+- Does **not** modify `PATH`, and ships no `cmd`/`doskey` launcher shim. This is a
+  deliberate UX decision (psytrap, 2026-10-15), pinned in a comment at the top of
+  `packaging/windows/po400.iss`. Adding a PATH entry or a console shim "for
+  convenience" means changing the UX decision first, not just the installer.
 - Registers uninstaller in "Apps & Features"
 - Removes all installed files and registry entries on uninstall
 
@@ -106,10 +110,11 @@ Registered under `HKCU` (current user — no UAC required):
 
 | Context | Menu Entry |
 |---------|------------|
-| Right-click inside a folder (background) | "Open PO-400 Console here" |
-| Right-click on a folder | "Open PO-400 Console here" |
+| Right-click inside a folder (background) | "Open PO-400 here" |
+| Right-click on a folder | "Open PO-400 here" |
 
-Both entries open `cmd /k po400.exe` in the relevant directory.
+Both entries launch `po400.exe` (the interactive wizard) for the relevant directory.
+No console window is opened for the user to type into.
 The entry icon uses the embedded `po400.exe` icon resource (index 0).
 
 Registry keys written by Inno Setup (auto-removed on uninstall):
@@ -124,8 +129,8 @@ HKCU\SOFTWARE\Classes\Directory\shell\po400\
 |---------|--------|
 | Apps & Features | "PO-400 Oximeter" with Uninstall button |
 | Start Menu | PO-400 → PO-400 Oximeter + Uninstall |
-| Explorer right-click | "Open PO-400 Console here" |
-| PATH | Not modified (deliberate) |
+| Explorer right-click | "Open PO-400 here" |
+| PATH | Not modified (deliberate -- no command line needed) |
 | Admin rights required | No (user-local install) |
 
 ### HID Driver (Windows)
