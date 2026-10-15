@@ -14,7 +14,7 @@ For detailed hardware & protocol specifications, see [DESIGN.md](DESIGN.md).
   - **Windows & macOS Default (`hid`)**: Cross-platform driver via `import hid` library (automatically included as a dependency when installing on Windows or macOS).
   - **Switchable**: Pass `--backend hid` on Linux to develop and test cross-platform logic locally.
 - **Interactive Wizard (`fiedle400`)**: Running without arguments opens a guided menu to inspect device status, download session recordings, and manage device memory.
-- **Device Info Reader (`fiedle400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries hardware model, raw sysfs parameters, firmware version, serial number (`50F`), user profile string (`user`), and storage geometry (`112B Sub-chunk Payload, 4KB Address Block`).
+- **Device Info Reader (`fiedle400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries the hardware model descriptor (e.g. `50F`), firmware version, serial number, user profile string, and storage geometry -- printing "not reported by the device" rather than a guess for whatever the device does not actually answer.
 - **Real-Time Clock Read & Write (`fiedle400 read-time` / `fiedle400 set-time`)**: Reads hardware RTC clock (`0x82`) and synchronizes device RTC clock (`0x83`) with PC system time.
 - **Session Index Lister (`fiedle400 sessions`)**: Queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
 - **Session Data Downloader (`fiedle400 download`)**: Extracts stored recordings from device memory into CSV or JSON format in a 100% non-destructive manner.
@@ -24,90 +24,94 @@ For detailed hardware & protocol specifications, see [DESIGN.md](DESIGN.md).
 
 ## Running on Linux
 
-### 1. Permissions Setup (udev rules)
-On Linux, raw USB HID devices require read/write access. Grant access permanently by adding a udev rule:
+### 1. Install the standalone binary
+
+Download `fiedle400-linux-x64.tar.gz` from the [GitHub Release](https://github.com/psytrap/fiedle400/releases), then:
 
 ```bash
-echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="28e9", ATTRS{idProduct}=="028a", MODE="0666", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/99-pulsox.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
+tar xzf fiedle400-linux-x64.tar.gz
+./install.sh            # installs to ~/.local/bin, no root needed
+sudo ./fiedle400_setup-udev.sh   # one-time device-access setup, needs root
+fiedle400 selftest      # verify: detection, connect, handshake, RTC, sessions
 ```
 
-That covers the default `hidraw` backend, which is all the CLI needs.
+`install.sh` never touches anything outside your home directory and never
+invokes `sudo` itself. `fiedle400_setup-udev.sh` is the opposite -- small,
+standalone, and dedicated only to writing the udev rules the PO-400 needs for
+non-root HID access, worth reading top to bottom before running it as root
+(see `packaging/linux/`). `fiedle400 selftest` likewise never invokes `sudo`;
+if it reports the device as "found but not readable/writable", it names that
+script as the fix rather than trying to elevate on its own.
 
-Alternatively, grant temporary access:
+Uninstall with `./install.sh --uninstall` (removes the binary; the udev rules
+stay, since removing those also needs root -- the script's own output tells
+you the two commands for that).
+
+#### Running from source instead
+
+No external libraries or `pip install` required for the default `hidraw`
+backend:
 ```bash
-sudo chmod 666 /dev/hidraw*
-```
-
-#### Extra rule for the `hid` (libusb) backend
-
-The cross-platform `hid` backend (`--backend hid`) is only needed if you are
-not on Linux or are working on the driver itself. When the installed `hid`
-module is built against **libusb** rather than hidraw, it opens the raw USB
-node (`/dev/bus/usb/...`) instead of `/dev/hidraw*`, which the rule above does
-not cover. Without this second rule it fails with `OSError: open failed`:
-
-```bash
-echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="28e9", ATTR{idProduct}=="028a", MODE="0666", TAG+="uaccess"' | sudo tee /etc/udev/rules.d/99-pulsox-usb.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
-
-Note `ATTR` here, not `ATTRS` as in the hidraw rule: the match is on the USB
-device itself rather than on a parent.
-
-To check which backend your `hid` module uses, look at the path it reports --
-`/dev/hidraw*` means hidraw, a bus path like `1-7.4.4:1.0` means libusb:
-
-```bash
-python3 -c "import hid; print(hid.enumerate(0x28E9, 0x028A)[0]['path'])"
-```
-
-Be aware that the libusb backend **detaches the kernel `usbhid` driver** while
-it holds the device, so `/dev/hidraw*` disappears for the duration and takes a
-few tens of milliseconds to reappear after close. Code that switches from the
-`hid` backend to the `hidraw` backend must wait for the node to return; see
-`wait_for_hidraw_reattach()` in `tests/test_device_live.py`.
-
-### 2. Run Directly (Zero Dependencies)
-No external libraries or `pip install` required:
-```bash
-# Launch interactive wizard:
-python3 -m fiedle400
-
-# Or execute subcommands:
+python3 -m fiedle400            # interactive wizard
 python3 -m fiedle400 info
 python3 -m fiedle400 sessions
 python3 -m fiedle400 download -o recording.csv
+```
+Device access still needs the udev rules above -- run
+`packaging/linux/fiedle400_setup-udev.sh` from a checkout the same way.
+
+#### The `hid` (libusb) backend, for cross-platform testing on Linux
+
+`--backend hid` is only needed if you are developing the cross-platform driver
+itself; `hidraw` (the default) is what real Linux users should use.
+`fiedle400_setup-udev.sh` installs both rules, so nothing extra is needed to
+try it -- but be aware it is known to be unreliable on at least one Linux
+machine (RELEASE_PLAN.md, finding T8): it connects, but the unlock handshake
+and session query can get no useful reply where `hidraw` works perfectly
+against the same device. Confirmed not to be a timing issue (polled a full
+second with no change); root cause not yet found.
+
+If you do try it: the installed `hid` module's backend matters. When it is
+built against **libusb** rather than hidraw, it opens the raw USB node
+(`/dev/bus/usb/...`) instead of `/dev/hidraw*`, and it **detaches the kernel
+`usbhid` driver** while it holds the device, so `/dev/hidraw*` disappears for
+the duration and takes a few tens of milliseconds to reappear after close.
+Code that switches from `hid` to `hidraw` must wait for the node to return;
+see `wait_for_hidraw_reattach()` in `tests/test_device_live.py`. To check which
+backend your `hid` module uses, look at the path it reports -- `/dev/hidraw*`
+means hidraw, a bus path like `1-7.4.4:1.0` means libusb:
+```bash
+python3 -c "import hid; print(hid.enumerate(0x28E9, 0x028A)[0]['path'])"
 ```
 
 ---
 
 ## Running on Windows
 
-### 1. Requirements
-- Python 3.8+
-- `hid` library (automatically installed when installing via wheel or pip):
-  ```cmd
-  pip install hid
-  ```
+### 1. Install the standalone binary
 
-### 2. Execution Options
-From the project folder:
+Download `fiedle400-setup.exe` from the [GitHub Release](https://github.com/psytrap/fiedle400/releases) and run it --
+no admin rights needed, installs per-user to `%LOCALAPPDATA%\Programs\fiedle400`.
+Launch it from the Start Menu entry (opens the interactive wizard directly;
+there is no console to type into) or the Explorer right-click "Open fiedle400
+here" entry. Verified on Windows 8.1 and newer with a real device attached.
+
+Device access needs no setup on Windows: the PO-400 binds to the stock HID
+class driver automatically (no Zadig, no manual driver step).
+
+#### Running from source instead
+
+- Python 3.8+
+- `hid` library: `pip install hid`
+
 ```cmd
-REM Option A: Use the Windows batch wrapper
+REM Windows batch wrapper
 fiedle400.bat --help
 fiedle400.bat info
 
-REM Option B: Run via Python module
+REM Or via the Python module directly
 python -m fiedle400 --help
 python -m fiedle400 info
-
-REM Option C: Run standalone executable ZipApp
-python dist\fiedle400.pyz --help
-
-REM Option D: Install package via pip
-pip install dist\fiedle400-0.1.0-py3-none-any.whl
-fiedle400 --help
 ```
 
 ---

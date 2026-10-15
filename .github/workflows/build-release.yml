@@ -25,7 +25,7 @@ jobs:
           - os: linux
             runner: ubuntu-latest
             arch: x64
-            asset_name: fiedle400-linux-x64
+            asset_name: fiedle400-linux-x64.tar.gz
           - os: macos
             runner: macos-latest
             arch: arm64
@@ -52,12 +52,17 @@ jobs:
       - name: Rename Output Binary
         shell: bash
         run: |
+          # Fixed path regardless of OS/asset_name: the smoke test below always
+          # checks this raw, directly-executable binary. Packaging it into its
+          # final shipped shape (plain copy for Windows/macOS, a tarball with
+          # the install scripts for Linux) is a separate step further down, so
+          # a change there can never skip exercising the actual executable.
           mkdir -p release
           if [ "${{ matrix.os }}" = "windows" ]; then
-            cp dist/fiedle400.exe release/${{ matrix.asset_name }}
+            cp dist/fiedle400.exe release/bin.exe
           else
-            cp dist/fiedle400 release/${{ matrix.asset_name }}
-            chmod +x release/${{ matrix.asset_name }}
+            cp dist/fiedle400 release/bin
+            chmod +x release/bin
           fi
 
       - name: Smoke Test the Built Binary
@@ -66,7 +71,7 @@ jobs:
           # The binary is the artifact users actually get; building it proves
           # nothing about whether it starts. macOS has no other verification
           # (no hardware, nobody to test by hand), so this is its only gate.
-          BIN="release/${{ matrix.asset_name }}"
+          BIN="release/bin"; [ "${{ matrix.os }}" = "windows" ] && BIN="release/bin.exe"
           out=$("$BIN" --version)
           echo "built binary reports: $out"
           expected=$(python -c "import fiedle400; print(fiedle400.__version__)")
@@ -76,6 +81,33 @@ jobs:
           esac
           "$BIN" --help > /dev/null
           "$BIN" config > /dev/null
+
+      - name: Package Release Asset
+        shell: bash
+        run: |
+          case "${{ matrix.os }}" in
+            windows)
+              cp release/bin.exe "release/${{ matrix.asset_name }}"
+              ;;
+            macos)
+              cp release/bin "release/${{ matrix.asset_name }}"
+              chmod +x "release/${{ matrix.asset_name }}"
+              ;;
+            linux)
+              # One download gets the binary plus both install scripts: the
+              # user-local installer and the separate, explicitly root-only
+              # udev setup script (fiedle400 selftest never invokes sudo
+              # itself -- it only ever names this script).
+              stage="$(mktemp -d)"
+              cp release/bin "$stage/fiedle400"
+              cp packaging/linux/install.sh "$stage/install.sh"
+              cp packaging/linux/fiedle400_setup-udev.sh "$stage/fiedle400_setup-udev.sh"
+              chmod +x "$stage/fiedle400" "$stage/install.sh" "$stage/fiedle400_setup-udev.sh"
+              tar -C "$stage" -czf "release/${{ matrix.asset_name }}" \
+                fiedle400 install.sh fiedle400_setup-udev.sh
+              rm -rf "$stage"
+              ;;
+          esac
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -201,7 +233,9 @@ jobs:
             
             - **Windows (installer)**: Download `fiedle400-setup.exe` -- installs per-user, no admin rights needed.
             - **Windows (portable)**: Download `fiedle400-windows-x64.exe` (run directly from PowerShell or CMD).
-            - **Linux**: Download `fiedle400-linux-x64` (`chmod +x fiedle400-linux-x64 && ./fiedle400-linux-x64`).
+            - **Linux**: Download `fiedle400-linux-x64.tar.gz`, extract it, then `./install.sh`
+              (installs `fiedle400` to `~/.local/bin`). Device access needs a one-time root step:
+              `sudo ./fiedle400_setup-udev.sh`. Then verify with `fiedle400 selftest`.
             - **macOS**: Download `fiedle400-macos-arm64` (Apple Silicon M1/M2/M3/M4).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

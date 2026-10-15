@@ -467,7 +467,10 @@ def command_selftest(args) -> int:
                 raise RuntimeError("no device found via sysfs")
             dev_path, _, is_readable = devices[0]
             if not is_readable:
-                raise RuntimeError(f"{dev_path} found but not readable/writable")
+                raise RuntimeError(
+                    f"{dev_path} found but not readable/writable -- missing udev rule? "
+                    f"Run: sudo fiedle400_setup-udev.sh"
+                )
             return dev_path
         check("Device detected (sysfs)", _detect)
 

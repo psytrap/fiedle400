@@ -157,6 +157,16 @@ class TestSelftest(FlowCase):
     as "no exception means pass".
     """
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "the sysfs check only runs on Linux")
+    def test_unreadable_device_points_at_the_udev_setup_script(self):
+        """A found-but-unreadable device is a permissions/udev problem, not a missing
+        device -- selftest must say so and name the fix, not just "not readable"."""
+        with mock.patch("fiedle400.hid_driver.find_pulsox_hid_devices",
+                         return_value=[("/dev/hidraw0", "", False)]):
+            rc, out, err = run_cli(["--backend", "hid", "selftest"], self.fake_module)
+        self.assertEqual(rc, 1)
+        self.assertIn("fiedle400_setup-udev.sh", out)
+
     def test_all_checks_pass_against_a_fully_answering_device(self):
         # Deliberately decoupled from trace-replay fidelity/ordering (unlike the
         # failure-mode test below, which IS an integration test of that replay):
