@@ -515,46 +515,54 @@ die herstellereigenen Bezeichnungen für diesen Aufnahmemodus sind.
 `A3 7F` (SpO2) und `A2 7F` (Puls) signalisieren das reguläre Ende -- analog zu
 `0x9D 0x02` (`SEGMENT_ACK`) im Auto-Mode-Speicherpfad.
 
-#### E. Delta-Dekodierung -- **NUR TEILWEISE verifiziert**
+#### E. Delta-Dekodierung -- **GELÖST UND VERIFIZIERT**
 
-Aus der Disassembly: Byte `0x04` des 16-Byte-Datenbereichs ist der Basiswert;
-jedes folgende Byte kodiert zwei Messpunkte per Vorzeichen+Betrag (Bit 7/3 =
-Vorzeichen, Bits 4-6/0-2 = Betrag 0-7; Vorzeichen=1 und Betrag=7 ergibt den
-Sentinel-Wert `0x7F`).
+**Gelöst am 15.10.2026.** Alle 8 Daten-Subframes des Referenz-Mitschnitts
+dekodieren zu physiologisch plausiblen Werten -- ohne Offset, Skalierung
+oder Nachkorrektur.
 
-**Live getestet, Formel noch nicht korrekt:** Mit fixem Basiswert pro
-Subframe ergeben sich für SpO2 UND Puls überlappende, unplausible Werte
-(z.B. negative Zahlen, Werte über 127) -- physiologisch unmöglich für beide
-Größen. Ein wahrscheinlicher Kandidat, analog zur dynamischen Basiswert-
-Eskalation im Speicherpfad (oben): ein **laufender** Basiswert, der sich von
-Punkt zu Punkt aktualisiert, statt eines festen Werts pro Subframe -- noch
-nicht getestet. Bitte die Formel nicht ungeprüft implementieren, bevor sie an
-einem frischen Mitschnitt neu verifiziert wurde.
+Innerhalb eines 20-Byte-Subframes `[Opcode][seq][00][16 Datenbytes][Prüfsumme]`:
 
-> **Update, live getestet 2026-10-15:** Die laufende-Basiswert-Korrektur
-> (`S_n = S_{n-1} ± Betrag`) ist die richtige Grundform, aber noch nicht
-> vollständig korrekt. Mit einem **einzigen gemeinsamen Sentinel
-> `0x7F`/127 für beide Reihen** (nach exaktem Neu-Parsing der 20-Byte-
-> Subframes bestand kein Unterschied zwischen SpO2 und Puls -- eine frühere
-> Annahme getrennter Sentinel-Werte war ein Parsing-Fehler) und Hard-Stop
-> beim Terminator (Vorzeichen=1, Betrag=7) ergibt **Puls** für 2 von 7
-> Subframes physiologisch plausible Werte (Basis 96 → 103 bpm, Basis 112
-> → 119 bpm). **SpO2** bleibt als direkter Prozentwert falsch: dekodierte
-> Werte liegen über der 0-100%-Grenze (116 → 123, 120 → 127).
->
-> **Neue, noch nicht verifizierte Hypothese:** Zieht man von jedem
-> dekodierten SpO2-Wert einen konstanten Offset von **27-28** ab, landen alle
-> vier beobachteten Werte in einem plausiblen 88-100%-Band (116/123/120/127
-> → 88-89/95-96/92-93/99-100) -- passend dazu, dass `0x7F`/127
-> ausschließlich als Sentinel reserviert ist, knapp über der realistischen
-> Obergrenze statt mit ihr zusammenzufallen. Der genaue Offset ist mit nur 2
-> Subframes nicht sicher bestimmbar. Eine heuristische Instruktions-Suche
-> (`shr/sar reg,4` nahe `and reg,0x0F` und `and`/`test reg,0x07`/`0x08`
-> innerhalb von 64 Bytes) über den **gesamten** `.text`-Abschnitt von
-> `archive/bruteforce/SpO2.exe` fand **keine** Treffer -- untermauert
-> unabhängig von der bereits dokumentierten Adress-Diskrepanz, dass dieser
-> Build die Dekodierroutine schlicht nicht enthält. Bestätigung oder
-> Widerlegung des Offsets braucht einen frischen Live-Mitschnitt mit
-> paralleler Ground-Truth-Anzeige in SpO2 Assistant.
+| Offset | Feld | Bedeutung |
+| :--- | :--- | :--- |
+| `0x03..0x04` | Unbekannt | Für die Dekodierung nicht nötig |
+| `0x05` | **Basiswert** | Erster Messwert, direkt: SpO2 in %, Puls in bpm. `0x7F` = ganzer Subframe "kein Finger". |
+| `0x06..0x12` | Delta-Strom | 13 Bytes, 2 Messpunkte je Byte, **High-Nibble zuerst** |
+| `0x13` | Prüfsumme | `sum(Byte[0x00..0x12]) % 128` |
+
+Ein Subframe trägt also maximal **27 Messpunkte** (1 Basis + 13x2 Deltas).
+
+Jedes Nibble ist Vorzeichen+Betrag: **Bit 3 = Vorzeichen** (1 = negativ),
+**Bits 2..0 = Betrag** (0-7). Die Kette ist **laufend**:
+`S_n = S_(n-1) +/- Betrag`.
+
+Zwei Terminatoren, in dieser Reihenfolge geprüft:
+
+1. **Ganzes Byte `0x7F`** -- Padding, Subframe endet. Wird geprüft, *bevor*
+   in Nibbles zerlegt wird.
+2. **Nibble `0xF`** -- Endemarke bei ungerader Anzahl; Subframe endet an
+   diesem Halbbyte.
+
+Referenz-Implementierung siehe PROTOCOL.md §3.14.F.
+
+Dekodierter Referenz-Mitschnitt: SpO2 96-100 %, Puls 62-67 bpm, 59 Messpunkte
+mit Signal auf einer 140-Punkte-Zeitachse (~2m20s); Subframes 0, 2 und 5 sind
+"kein Finger".
+
+> **Warum die früheren Versuche falsch lagen:** Zwei Anläufe lasen den
+> Basiswert von Offset `0x03` statt `0x05`. Daraus folgten SpO2-Werte von
+> 116-127 (vermeintlich "über der 100%-Grenze"), negative Pulswerte und
+> daraufhin die beiden Fehlschlüsse "konstanter Offset 27-28" und
+> "Einschwing-Transiente in Subframe 1 und 3". Alles war nur der
+> Off-by-two. Die gemeldete Disassembly-Notiz "Byte `0x04` des
+> Datenbereichs ist der Basiswert" war **korrekt** -- zählt man den
+> Datenbereich ab dem `seq`-Byte (`rec[1]`), ist Index 4 genau `rec[5]`.
+
+> **Offene Punkte:** Offsets `0x03..0x04` sind weiterhin unbestimmt. Die
+> Reihenfolge High-Nibble-zuerst folgt der Disassembly-Beschreibung und
+> ergibt die glattere Kurve, ist aus diesem Mitschnitt allein aber nicht
+> gegen Low-Nibble-zuerst abgrenzbar. Das Dauer-Feld im Header (41 s)
+> widerspricht den ~140 dekodierten Messpunkten -- Datum und Uhrzeit
+> stimmen, also ist speziell das Dauer-Feld verdächtig.
 
 ---

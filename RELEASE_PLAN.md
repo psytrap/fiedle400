@@ -280,55 +280,47 @@ took priority; the USBPcap/Wireshark capture tooling installed for this
 (`enable_testsigning`, TESTSIGNING now on) remains unused for that specific
 question and sits on the laptop for whenever it is revisited.
 
-**Update: the running-baseline fix mostly works for Pulse, not yet for
-SpO2 (psytrap, live-tested 2026-10-15).** Re-decoded the captured subframes
-as a running chain (`S_n = S_{n-1} +/- delta`, not a fixed per-subframe base)
-with a single shared sentinel `0x7F` for both series (a careful byte-exact
-re-split into 20-byte checksummed records showed the earlier claim of a
-separate `0xFF` sentinel for Pulse was a parsing mistake, not a real
-distinction) and a hard stop on the sign=1/delta=7 terminator rather than
-treating it as a per-point gap. Two Pulse subframes landed in genuinely
-plausible heart-rate ranges (base 96 -> 103 bpm; base 112 -> 119 bpm). SpO2
-subframes still run over the 0-100% ceiling as a direct percentage
-(116 -> 123; 120 -> 127). **New, untested hypothesis:** subtracting a
-constant offset of 27-28 from every decoded SpO2 value puts all four
-observed points into a plausible 88-100% band (116/123/120/127 ->
-88-89/95-96/92-93/99-100), consistent with `0x7F`/127 being reserved purely
-as the sentinel just above the realistic ceiling rather than colliding with
-it -- but 2 subframes isn't enough to pin the exact constant. A heuristic
-instruction-level scan (`shr/sar reg,4` near `and reg,0x0F` and
-`and`/`test reg,0x07`/`0x08` within 64 bytes) across the *entire* `.text`
-section of `archive/bruteforce/SpO2.exe` found zero matches -- reinforcing,
-independently of the address mismatch below, that this build does not
-contain the decode routine at all, so static analysis of this local binary
-is not expected to resolve the offset. Confirming or refuting it needs a
-fresh live capture logged alongside SpO2 Assistant's own displayed reading
-as ground truth. Do not wire either formula into any automatic decoder
-until SpO2 converges into valid range and is cross-checked against ground
-truth.
+**RESOLVED: the Manual-mode delta decode is solved and verified (psytrap,
+2026-10-15).** The base value sits at record offset `0x05`, not `0x03`. Two
+earlier attempts read it from `0x03`, which inflated SpO2 to 116-127 and
+produced negative Pulse values; that single off-by-two is what generated
+both the bogus "subtract a constant 27-28" hypothesis and the bogus
+"ramp-up transient" reading of subframes 1 and 3. Neither was real. With the
+base at `0x05`, a running chain `S_n = S_(n-1) +/- magnitude` over
+high-nibble-first sign/magnitude deltas from `0x06`, a shared `0x7F`
+sentinel, byte-level `0x7F` padding and a nibble-level `0xF` end marker, all
+8 data subframes decode to textbook values with no correction of any kind:
+SpO2 96-100%, Pulse 62-67 bpm, 59 samples with signal over a ~140-sample
+timeline, three no-finger gaps. Full spec and reference implementation in
+PROTOCOL.md §3.14.F; German mirror in `analysis/po400_bytemap_reference.md`.
+Notably the relayed disassembly note ("byte `0x04` of the data region is the
+base") was **correct all along** -- counting the data region from the `seq`
+byte, index 4 is `rec[5]`. The error was local, not in the relayed findings.
 
-**Static cross-check of the relayed disassembly addresses: inconclusive, not
-a contradiction.** Two cited addresses (the delta-decode loop, the `0xD8`
-handler) were disassembled directly from this project's own
-`archive/bruteforce/SpO2.exe` (build timestamp 2025-03-13) and neither
-matches the relayed instructions at all -- almost certainly because that
-disassembly was done against a different SpO2.exe build, not because the
-relayed findings are wrong. Confirmed (psytrap, 2026-10-15): that build is
-**not** the `SpO2 Assistant V3.0.5` installed on the Windows laptop either
--- it is a third, so-far-unidentified build. So there are now at least
-three distinct SpO2.exe builds in play (this local archive copy, the
-laptop's installed V3.0.5, and whatever was actually disassembled for the
-relayed findings), and the mismatch says nothing about which one, if any,
-is wrong. A
-heuristic instruction-level scan (via `capstone`, searching `cmp` immediates
-rather than raw bytes -- precise where the earlier whole-binary byte-pattern
-scan was too noisy) found a genuine command-whitelist routine in *this*
-build recognizing `0xA2/0xA3/0xA4/0xA5/0xA6` together, corroborating that
-A2/A3 are real opcodes here too, and surfacing a **new, previously
-undocumented opcode `0xA4`** grouped alongside them -- not yet investigated.
-Did not reach the actual decode arithmetic; tracing further into a
-confirmed-mismatched binary was judged lower-value than continuing
-empirically on real hardware.
+**Static disassembly of the local `SpO2.exe` is a confirmed dead end -- stop
+trying.** Three methodologically independent scans agree this build does not
+contain the Manual-mode decoder: alignment-independent raw byte-pattern
+cluster search (shift-by-4 near a `0x0F`/`0x07` mask near a sign test, zero
+hits), signed 4-bit lookup-table search across `.text`/`.rdata`/`.data`
+(zero hits), and inspection of all 22 `[reg+5]`/`[reg+6]` load pairs (the
+only promising one is DES in a crypto library at `0x42e2xx`). psytrap
+confirmed the relayed disassembly came from a third installation, different
+from both this archived copy and the laptop's V3.0.5. An earlier linear
+capstone sweep that "found" clusters was desynced and its results are
+void -- it reported 5 `and reg,7` in 1.7 MB where a raw scan finds 29. The
+method notes, section table, useful byte encodings and known decoys are now
+written up in PROTOCOL.md §3.15 so this is not re-attempted from scratch.
+One real artifact survives from that work: a previously undocumented opcode
+`0xA4`, seen grouped with `0xA2/0xA3/0xA5/0xA6` in a command-whitelist
+routine -- still uninvestigated.
+
+**Still open on Manual mode:** record offsets `0x03..0x04` are unidentified;
+high- vs low-nibble-first ordering is not separable from this one capture;
+and the header's 41 s duration field contradicts the ~140 decoded samples
+(header date and time decode correctly, so the duration field specifically
+is suspect). Implementing the decoder in `fiedle400` is cloud's side of the
+split -- the protocol side is documented and ready.
+
 
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
 (`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other

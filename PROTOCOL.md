@@ -519,72 +519,172 @@ vendor's own names for this recording mode and its storage path.
 download to the device -- the same role `0x9D 0x02` (`SEGMENT_ACK`, §3.5)
 plays for the Auto-mode storage path.
 
-#### F. Delta-Nibble Decompression (`0xD3` / `0xD2` payload) -- PARTIALLY confirmed
+#### F. Delta-Nibble Decompression (`0xD3` / `0xD2` payload) -- CONFIRMED
 
-From the `SpO2.exe` disassembly (`0x004c4875`):
+**Solved and live-verified 2026-10-15.** Every one of the 8 data subframes in
+the reference capture decodes to physiologically valid values with no
+offset, scaling or post-correction.
 
-- Byte `0x04` of the 16-byte data span: the base value for this subframe.
-- Bytes `0x05..0x12` (14 bytes): each byte packs **two** measurement points,
-  sign-and-magnitude rather than the pure-subtraction scheme in §3.5.3:
-  - Point 1: bit 7 = sign (`0` = `+`, `1` = `-`), bits 4-6 = magnitude (0-7).
-  - Point 2: bit 3 = sign, bits 0-2 = magnitude (0-7).
-  - **Sentinel:** sign bit `1` with magnitude `7` means the point is invalid
-    (`0x7F` -- no finger / signal loss / end of data), the same `0x7F` value
-    the storage path uses for SpO2 out-of-range (§3.5.3), reached here by a
-    different bit pattern rather than by the arithmetic going out of range.
+Within a 20-byte subframe `[opcode][seq][00][16 data bytes][checksum]`:
 
-> [!WARNING]
-> **Confirmed on real hardware (2026-10-15): the framing above, not the
-> value formula.** Captured a real `0xD3`/`0xD2` exchange end to end -- 3
-> reports each, 7 subframes each, **every subframe's checksum validates**
-> (`sum(bytes[0:19]) % 128 == bytes[19]`), and whole-subframe `0x7F` bytes
-> (meaning no finger/no signal) line up at the **same** subframe positions in
-> both streams (seq 0, 2 and 5), consistent with SpO2 and pulse being
-> measured together, second by second.
->
-> Decoding non-sentinel bytes with the formula above (`value = base ± magnitude`,
-> fixed per-subframe base) does **not** yet produce physiologically plausible
-> numbers: both streams land in overlapping ranges well above 100 and include
-> negative values, impossible for either SpO2 % or BPM. Something about the
-> base/delta relationship is still wrong -- a strong candidate, by analogy
-> with the storage path's own dynamic-baseline escape (§3.5.3), is a
-> **running** baseline that updates point to point rather than one fixed
-> value per subframe, but this is not yet tested. Do not implement a decoder
-> against the formula above without re-deriving it against a fresh capture.
+| Record offset | Field | Meaning |
+| :--- | :--- | :--- |
+| `0x03..0x04` | Unknown | Not needed for decoding; see note below |
+| `0x05` | **Base value** | First sample, as a direct value: SpO2 in %, Pulse in bpm. `0x7F` here means the whole subframe is "no finger / no signal". |
+| `0x06..0x12` | Delta stream | 13 bytes, 2 samples per byte, high nibble first |
+| `0x13` | Checksum | `sum(bytes[0x00..0x12]) % 128` |
+
+So one subframe carries at most **27 samples** (1 base + 13x2 deltas).
+
+Each nibble is sign-and-magnitude: **bit 3 = sign** (1 = negative),
+**bits 2..0 = magnitude** (0-7). The value chain is running, not
+fixed-base: `S_n = S_(n-1) +/- magnitude`.
+
+Two distinct terminators, checked in this order:
+
+1. **Whole byte `0x7F`** -- padding, the subframe ends here. Checked
+   *before* splitting into nibbles.
+2. **Nibble `0xF`** -- end marker for an odd sample count; the subframe
+   ends at that half-byte.
+
+Reference implementation:
+
+```python
+SENTINEL = 0x7F
+
+def decode_subframe(rec):            # rec = the 20 bytes
+    base = rec[5]
+    if base == SENTINEL:
+        return None                  # no finger for this whole subframe
+    values, cur = [base], base
+    for byte in rec[6:19]:
+        if byte == SENTINEL:         # byte-level padding -> end
+            break
+        for shift in (4, 0):         # high nibble first
+            nib = (byte >> shift) & 0xF
+            if nib == 0xF:           # odd-count end marker
+                return values
+            cur += -(nib & 7) if (nib & 8) else (nib & 7)
+            values.append(cur)
+    return values
+```
+
+Decoded reference capture (2026-10-15, 7 subframes per series):
+
+| seq | SpO2 | Pulse |
+| :--- | :--- | :--- |
+| 0 | no finger | no finger |
+| 1 | 96 flat (16 samples) | 66-67 (16) |
+| 2 | no finger | no finger |
+| 3 | 97 -> 98 (27) | 62 -> 65 (27) |
+| 4 | 96 -> 100 (9) | 65, ending 64 (9) |
+| 5 | no finger | no finger |
+| 6 | 98 -> 99 (7) | 63 -> 64 (7) |
+
+Totals: SpO2 96-100%, Pulse 62-67 bpm, 59 samples with signal across a
+140-sample (~2m20s) timeline.
 
 > [!NOTE]
-> **Update, live-tested 2026-10-15:** the running-chain correction is
-> confirmed to be the right shape, but is not fully correct yet. Re-decoding
-> with `S_n = S_{n-1} ± magnitude` (sign/magnitude nibble, running from
-> the first byte of each subframe rather than a fixed base), with a
-> **single shared sentinel `0x7F`/127 for both series** (re-checked against
-> a careful byte-exact re-split of the capture into 20-byte checksummed
-> records -- the earlier claim of a separate `0xFF`/255 sentinel for Pulse
-> was a parsing mistake, not a real distinction) and a hard stop on the
-> terminator (sign=1, magnitude=7, ends the subframe rather than skipping
-> one point), makes **Pulse** land in a physiologically plausible range for
-> 2 of 7 captured subframes (base 96 → 103 bpm, base 112 → 119 bpm).
-> **SpO2** is still wrong as a direct percentage: decoded values run over
-> the 0-100% ceiling (116 → 123, 120 → 127).
->
-> **New hypothesis, untested against ground truth:** subtracting a constant
-> offset of **27-28** from every decoded SpO2 value lands all four observed
-> points in a plausible 88-100% band (116/123/120/127 → 88-89/95-96/92-93/
-> 99-100), consistent with the raw byte being `actual% + offset` and
-> `0x7F`/127 being reserved purely as the sentinel, sitting just above the
-> realistic ceiling rather than colliding with it. The exact offset isn't
-> pinned down by 2 subframes of data. A static scan of the *entire* `.text`
-> section of `archive/bruteforce/SpO2.exe` for the sign/magnitude
-> nibble-decode idiom (`shr/sar reg,4` near `and reg,0x0F` and
-> `and`/`test reg,0x07`/`0x08` within 64 bytes) found zero matches anywhere
-> in the binary -- reinforcing, independently of the address mismatch
-> already noted in RELEASE_PLAN.md, that this build genuinely does not
-> contain the routine, so static analysis of this local binary is not
-> expected to resolve the offset. Confirming or refuting the offset needs a
-> fresh live capture logged side by side with SpO2 Assistant's own displayed
-> reading as ground truth. Do not treat either formula as final for SpO2.
+> **How the earlier wrong decode went wrong.** Two prior attempts read the
+> base from record offset `0x03` instead of `0x05`. That inflated SpO2 to
+> 116-127 (apparently "over the 100% ceiling") and produced negative Pulse
+> values, which in turn motivated a bogus "subtract a constant 27-28"
+> hypothesis and a bogus "ramp-up transient" reading of subframes 1 and 3.
+> All of that was the off-by-two, nothing else. The relayed disassembly note
+> "byte `0x04` of the data region is the base value" was **correct** --
+> counting the data region from the `seq` byte (`rec[1]`), index 4 is exactly
+> `rec[5]`. Read field indices against a stated origin before trusting them.
 
----
+> [!NOTE]
+> **Open points.** (a) Record offsets `0x03..0x04` are still unidentified.
+> They are `0x7F 0x7F` in no-finger subframes and otherwise look uncorrelated
+> with the base; signal quality / perfusion index is a guess, not a finding.
+> (b) High-nibble-first ordering follows the relayed disassembly's bit
+> description and yields the smoother curve, but low-nibble-first produces
+> the same value set shifted one position and cannot be excluded from this
+> capture alone. (c) The header's duration field reads 41 s (section A)
+> while the decoded stream spans ~140 samples; one of the two is
+> misinterpreted. Date and time in the header do decode correctly, so the
+> header origin is right and the duration field specifically is suspect.
+> (d) `0x7F` as padding is ambiguous with a legitimate `+7, -7` delta pair;
+> the device appears to reserve it, but a capture with large swings would
+> confirm.
+
+
+### 3.15 Reverse-engineering `SpO2.exe` -- what works, what does not
+
+Notes from the Manual-mode investigation, so the next person does not repeat
+the dead ends. The local reference copy is `archive/bruteforce/SpO2.exe`
+(gitignored): PE32, build timestamp 2025-03-13, 3301376 bytes, md5
+`83d0b266626c1d7fa17a7a90c8ca13d9`.
+
+**Check the build first.** There are at least three SpO2.exe builds in
+circulation: this archived copy, the `SpO2 Assistant V3.0.5` installed on the
+Windows laptop, and whichever build produced the relayed disassembly (user
+confirmed 2026-10-15 that it is a different installation again). Addresses
+quoted from one build mean nothing in another. Before chasing a cited
+address, compare build timestamp and md5.
+
+**Section table (this build), for VMA -> file offset:**
+
+| Section | VMA | File offset | Size |
+| :--- | :--- | :--- | :--- |
+| `.text` | `0x401000` | `0x1000` | `0x1a98db` |
+| `.rdata` | `0x5ab000` | `0x1ab000` | |
+| `.data` | `0x5d7000` | `0x1d7000` | |
+| `.rsrc` | `0x9aa000` | `0x22e000` | |
+
+File offset = VMA - section VMA + section file offset. Get the table with
+`objdump -h`, and disassemble with Python `capstone` in
+`CS_ARCH_X86` / `CS_MODE_32`.
+
+**Do not trust a linear capstone sweep of `.text`.** Starting one disassembly
+at the section base and running to the end desyncs on the first data-in-code
+or padding run and silently produces garbage for everything after it. A sweep
+of this binary reported only 5 `and reg,7` instructions in 1.7 MB, which is
+absurd for an MFC binary of this size; a raw byte scan found 29. Anything
+concluded from a desynced sweep is worthless.
+
+**Scan raw bytes instead -- it is alignment independent.** Search `.text` for
+instruction encodings directly, then disassemble only the neighbourhoods that
+hit. Useful encodings:
+
+| Pattern | Encoding |
+| :--- | :--- |
+| `shr r32, 4` / `sar r32, 4` | `C1 /5 04` / `C1 /7 04` |
+| `shr r8, 4` / `sar r8, 4` | `C0 /5 04` / `C0 /7 04` |
+| `and al, imm8` | `24 ib` |
+| `and r32, imm8` | `83 /4 ib` |
+| `and r8, imm8` | `80 /4 ib` |
+| `test al, imm8` | `A8 ib` |
+| `cmp al, imm8` | `3C ib` |
+| `mov r8, [reg+disp8]` | `8A /r disp8` |
+
+**Verify every byte-pattern hit by disassembling around it.** Short patterns
+match inside longer instructions constantly. All three `3C 7F`
+("`cmp al, 0x7F`") hits in this binary are false positives sitting mid
+instruction.
+
+**Known decoy: DES at `0x42e2xx`.** A `[reg+5]` / `[reg+6]` byte-load pair
+next to `shr` looks exactly like a record parser, but the surrounding
+`0x0f0f0f0f` and `0x10101010` XOR/shift masks are the DES initial
+permutation. The whole `0x42exxx`-`0x42fxxx` range is a crypto library.
+
+**Scans that found nothing in this build** (all negative, all correctly
+executed -- do not redo them): nibble-decode clusters pairing a shift-by-4
+with a `0x0F`/`0x07` mask and a sign test within 64 bytes; signed 4-bit delta
+lookup tables (`00 01 .. 07 00 FF FE ..` and variants) anywhere in `.text`,
+`.rdata` or `.data`; all 22 `[reg+5]`/`[reg+6]` load pairs. This build does
+not contain the Manual-mode delta decoder.
+
+**What did work: deriving the format from the wire data.** The decode in
+§3.14.F was solved empirically, not from the binary -- by tabulating each
+candidate byte offset across all subframes and asking which column holds
+physiologically possible values. Offset `0x05` holds 96/97/96/98 for SpO2 and
+66/62/65/63 for Pulse; no other offset is close. With real hardware
+available, this is faster and more reliable than disassembling a binary whose
+build you cannot match.
+
 
 ## 4. Proprietary `.SpO2` Binary File Format
 
