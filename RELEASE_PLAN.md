@@ -297,9 +297,14 @@ a contradiction.** Two cited addresses (the delta-decode loop, the `0xD8`
 handler) were disassembled directly from this project's own
 `archive/bruteforce/SpO2.exe` (build timestamp 2025-03-13) and neither
 matches the relayed instructions at all -- almost certainly because that
-disassembly was done against a different SpO2.exe build (plausibly the
-`SpO2 Assistant V3.0.5` actually installed on the Windows laptop, not this
-local archive copy), not because the relayed findings are wrong. A
+disassembly was done against a different SpO2.exe build, not because the
+relayed findings are wrong. Confirmed (psytrap, 2026-10-15): that build is
+**not** the `SpO2 Assistant V3.0.5` installed on the Windows laptop either
+-- it is a third, so-far-unidentified build. So there are now at least
+three distinct SpO2.exe builds in play (this local archive copy, the
+laptop's installed V3.0.5, and whatever was actually disassembled for the
+relayed findings), and the mismatch says nothing about which one, if any,
+is wrong. A
 heuristic instruction-level scan (via `capstone`, searching `cmp` immediates
 rather than raw bytes -- precise where the earlier whole-binary byte-pattern
 scan was too noisy) found a genuine command-whitelist routine in *this*
