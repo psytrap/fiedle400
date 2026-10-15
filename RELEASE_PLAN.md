@@ -175,11 +175,12 @@ this firmware regardless of the decoder fix.
 **Separate observation, corrected (psytrap, 2026-10-15):** `sessions` went
 from 3 visible, to 1, to 0, over the course of this testing. The first
 hypothesis here was that this was only a query/indexing mismatch -- Auto vs
-Manual recording mode -- with the data still intact on the device. **That is
-now contradicted:** after an explicit Record on-then-off cycle, psytrap
-confirms the device's **own display** also shows zero stored sessions, not
-just this tool's query. So nothing was actually committed to storage this
-time, for a reason neither side has pinned down yet -- not an indexing gap.
+Manual recording mode -- with the data still intact on the device. **Status
+uncertain, not contradicted:** after an explicit Record on-then-off cycle,
+the device's own display shows **no session-count indicator at all** --
+not an explicit "0". Ambiguous: this could mean zero sessions (some UIs
+only show a count when there is something to count), or that psytrap was
+not on the screen that would show one. Not yet resolved either way.
 
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
 (`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other
