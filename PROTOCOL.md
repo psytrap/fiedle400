@@ -206,8 +206,8 @@ Packed consecutively in 64-byte HID input reports:
 | `0x02` | Data Type | `0x01` / `0x02` / `0x7F` | `0x01` = SpO2 series, `0x02` = Pulse Rate, `0x7F` = Init / ACK |
 | `0x03` | User ID | `0x01` / `0x7F` | User slot ID (`0x7F` for Init / ACK) |
 | `0x04` | Segment ID | `0x01` / `0x7F` | Session segment ID (`0x7F` for Init / ACK) |
-| `0x05` | Offset Low | `0x00..0x7F` | Block offset address (bits 0..6) |
-| `0x06` | Offset High | `0x00..0x7F` | Block offset address (bits 7..13) |
+| `0x05` | Offset Low | `0x00..0x7F` | Sample offset (bits 0..6) -- **not** a block/page index, see note below |
+| `0x06` | Offset High | `0x00..0x7F` | Sample offset (bits 7..13) |
 | `0x07` | Reserved | `0x00` | Fixed zero |
 | `0x08` | Checksum | `0..127` | `sum(bytes[0..7]) % 128` |
 | `0x09..0x3F` | Padding | `0x00...` | Reserved zero padding |
@@ -219,6 +219,17 @@ Packed consecutively in 64-byte HID input reports:
 | `READ_SPO2_BLOCK` | `0x04` | `0x01` | `0x01` | `0x01` | `0x00 0x00` | `0x24` | Reads SpO2 flash series |
 | `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | `0x00 0x00` | `0x25` | Reads Pulse Rate flash series |
 | `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` | Acknowledges session retrieval |
+
+> [!IMPORTANT]
+> **The offset is a raw-sample sliding window, not a page index** (confirmed: psytrap, 2026-10-15,
+> by exact byte comparison against a real device). Requesting offset `k` returns the session's data
+> starting `k` *raw 2 Hz samples* in, not the k-th block of fresh data: `window(k)[i] == window(0)[i+k]`
+> for every `i`, on both series. A client that requests offsets `0, 1, 2, ...` and concatenates the
+> replies as if they were successive pages receives overlapping, re-shifted data, not new samples --
+> this is exactly how `fiedle400`'s own download logic padded a 107-second (214-raw-sample, see §3.2)
+> session out to 214 "records" before the bug was found (RELEASE_PLAN.md §3d, T6). The correct read is a
+> single request at offset 0 for the whole stored series; advancing the offset is for resuming a
+> partial read, not paging through additional data.
 
 #### Device Response: Stored Data Sub-Frame (`0xED`, 30 Bytes each)
 
@@ -284,6 +295,17 @@ for msb, byte in zip(msb_bits, data_bytes):
 4. **End-of-Data Sentinel**: A subframe with `mode = 0x00`, `seq = 0`, and masks containing `0x7F` indicates an uninitialized flash segment and signals immediate termination.
 
 ---
+
+> [!IMPORTANT]
+> **A query below can be answered with a bare `COMMAND_ACK` (`0xF0 0x70`, see §2.2) instead of its
+> documented response** (confirmed: psytrap, 2026-10-15, on a real device for the `0xAD` and `9E 40 04`
+> variants of these queries; RELEASE_PLAN.md §3d, T7). This is not a framing error -- it is a valid,
+> differently-shaped reply, and a client must check the response's own opcode byte before parsing it as
+> the expected structure. Code that assumes the documented opcode and blindly parses whatever arrives
+> will misread the ACK's status byte as field data, or pick up an unrelated response left over from a
+> different query (on the affected device, this is how the model string from §3.6 ended up printed as a
+> serial number, and the ACK's `0x70` status byte as a flash geometry value). The safe fallback when the
+> response opcode does not match is "not reported", never a value synthesised from the wrong bytes.
 
 ### 3.6 QUERY_DEVICE_INFO (`0x81` / `0xAD`)
 
