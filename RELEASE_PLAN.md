@@ -2,9 +2,9 @@
 
 > **Scope:** First tagged release of the `po400` CLI (GitHub Release with Linux, Windows and macOS binaries)
 > **Cadence:** Two-Phase Version Bump (Patch Pre-Flight • Minor Post-Shipment), adapted from the RefDiff rollout plan
-> **Baseline:** `0.1.0` (no git tags exist yet; `master` has 11 commits)
-> **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B6 are resolved: B1, B1b and B3 via patch 0001 (applied locally and tested on real hardware by psytrap, 2026-10-15), B2, B4, B5 and B6 via patch 0002. Nothing has been tagged or released.
-> **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap pulls them locally and runs the live gates (G5–G7).
+> **Baseline:** `0.1.1` (Phase 1 done; no git tags exist yet; `master` had 25 commits at `0ab3bf0`, before patches 0005+)
+> **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B7 are resolved: B1, B1b and B3 via patch 0001 (applied locally and tested on real hardware by psytrap, 2026-10-15), B2, B4, B5 and B6 via patch 0002, B7 locally. Binary and installer verified on a real Windows 8.1 machine with the device attached. Nothing has been tagged or released. The `fiedle400` rename (§3b) is pending.
+> **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap applies the patches locally, runs the live gates (G5–G7) and pushes to the private remote `github.com/psytrap/fiedle400`, where CI (`tests.yml`) runs on every push and PR.
 
 ---
 
@@ -35,23 +35,23 @@ All gates must pass on the patch-bumped RC before tagging.
 ```bash
 python3 scripts/bump_version.py patch                      # Phase 1: once per cycle
 git diff --stat && git diff                                # Diff audit: zero debris
-python3 -m unittest discover tests -v                      # G1/G2: full mock suite
+python3 -m unittest discover -s tests -t . -v             # G1/G2: full mock suite
 python3 -m po400 --version && python3 -m po400 --help      # G4: stdlib-only smoke test (no matplotlib)
-pyinstaller po400.spec && ./dist/po400 --version           # G5: local binary smoke test
+pyinstaller po400.spec && ./dist/po400 --version && ./dist/po400 info   # G5: built binary must reach the device (local only)
 PO400_LIVE=1 python3 -m unittest tests.test_device_live -v  # G6: live hardware, both backends (opt-in)
 po400 download -o output/rc.spo2 && po400 plot output/rc.spo2   # G7: visual acknowledgment
 ```
 
 | Gate | Check | Today |
 |:---|:---|:---|
-| **G1 Mock suite** | `python3 -m unittest discover tests`: 0 failures, 0 errors. The only skips allowed are the 6 opt-in live-device tests (plus the 5 plot tests when matplotlib is absent); the count must not vary with device state. | ✅ 102 pass / 6 skip (live device only) with matplotlib; also green on a simulated fresh clone without `archive/`. |
+| **G1 Mock suite** | `python3 -m unittest discover tests`: 0 failures, 0 errors. The only skips allowed are the 7 opt-in live-device tests (plus the plot tests when matplotlib is absent); the count must not vary with device state. | ✅ 157 run / 7 skip (live device only) with matplotlib, after patches 0005–0007. |
 | **G2 Capture regression** | `test_pcap_decoder` actually runs against `analysis/bum400_20260906_100516.pcap` (it must not skip). | ✅ Runs and passes (B2). |
 | **G3 Version sync** | `tests/test_version.py`: `po400.__version__` equals `pyproject.toml` version; `po400 --version` prints it; bump script cycle works. | ✅ Passing. |
 | **G4 Zero-dependency promise** | In a clean venv with no third-party packages, `python3 -m po400 --help`, `info`, `sessions` and `download` import and run. `plot` prints an install hint and exits 1. | ✅ Verified in a clean venv: 107 tests run, 0 failures (plot tests skip). |
-| **G5 Binary build** | `pyinstaller po400.spec` succeeds locally; `dist/po400 --version` and `--help` run. | Not yet verified. |
-| **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `PO400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on `--backend hidraw` **and** `--backend hid`. Never run two live runs at once (a lock file now serialises them). On Windows, `po400 info` runs on a real machine. | Patch 0001 tested on real hardware by psytrap (2026-10-15). Re-run on the RC for both backends. |
+| **G5 Binary build** *(local only)* | `pyinstaller po400.spec` succeeds, **and the built artifact runs a device-touching command** (`info`, then `sessions`) with a real PO-400 attached; for Windows, the installed binary from the installer. `--version`/`--help` alone are not enough: a binary that starts but cannot load the `hid` extension passes them (this happened before `0ab3bf0`). CI runners have no oximeter, so this gate can only run on psytrap's machines; CI only proves the build succeeds. | ✅ Binary and installer verified on Windows 8.1 (`info`, `sessions` on the live device). Re-run on each RC build. |
+| **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `PO400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on Linux with **both** backends (`hidraw` and `hid`); elsewhere with `hid` only (`hidraw` raises off Linux by design, and the Linux-only tests skip with a reason). Never run two live runs at once (a lock file serialises them). | ✅ Windows criterion passes (`po400 info` on a real 8.1 machine). Re-run the live suite on the RC: Linux both backends, Windows `hid` (needs patch 0006). |
 | **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `po400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | Manual. |
-| **G8 Output location** | Per `AGENTS.md`, the product defaults to the current directory, not `output/`. | `po400 plot` defaults to `output/` (cli.py plot help text). Fix or document an explicit exception. |
+| **G8 Output location** | Per `AGENTS.md`, output goes to the current directory (or the configured workdir), never a hard-coded `output/`; help strings say the same. | ✅ The code always wrote to the cwd; only the help strings said `output/`. Fixed in `9647913`. |
 
 ---
 
@@ -68,8 +68,9 @@ Each blocker is a small, separate commit, landed **before** the patch bump.
 | **B2c** ✅ | The test expects 2 sessions; the capture has 1 | After B2b: one `0xEC` frame, session 1, 243 records, 4m 03s. | The test was wrong: `analysis/bum400_20260906_100516.md` (frame 067) shows one `0xEC` header with 243 samples. The test now expects 1 session, id 1, 243 records. Open observation: the notes say 243 samples ≈ 122 s, while `duration_str` reports 4m 03s. |
 | **B3** ✅ | Version drift and no `--version` | See G3. | Done: `scripts/bump_version.py` (`show`, `set`, `patch`, `minor`, `major`; refuses to bump when manifests disagree), `po400 --version`, `tests/test_version.py`. |
 | **B4** ✅ | The release workflow doesn't test | `build-release.yml` builds on tag push with no test step. | Done: `test` job on ubuntu, windows and macos (Python 3.11) runs the suite stdlib-only (G4), then again with matplotlib (G1/G2); `build` has `needs: test`; on tag pushes the job fails unless `v<__version__>` equals the tag. |
-| **B5** ✅ | Stale build metadata | `po400.egg-info/SOURCES.txt` lacks `export.py`, `plot.py` and newer tests; `po400.spec` hidden imports omit `po400.export` and `po400.plot`. | Not an issue in git: `po400.egg-info/` is untracked (checked against the git index); it is only a stale local build leftover you can delete. Spec hidden imports: `po400.export` added in 0001. |
-| **B6** ✅ | Docs point at a local machine | README links use `file:///home/mik/...`. | Done: README links are relative. |
+| **B5** ✅ | Stale build metadata | `po400.spec` hidden imports omitted `po400.export`. | Spec hidden imports: `po400.export` added in 0001. (`po400.egg-info/` is untracked, so it was never an issue in git.) |
+| **B6** ✅ | Docs point at a local machine | README, DESIGN.md and PROTOCOL.md used `file:///home/mik/...` links. | Done: all links are relative (README in 0002, the other two locally). |
+| **B7** ✅ | Windows console encoding | Emoji and box characters raised `UnicodeEncodeError` on a legacy-codepage Windows console (cp850) (`handoff/windows-console-encoding.md`). | Fixed locally: output falls back to ASCII replacements instead of crashing. |
 
 ---
 
@@ -113,14 +114,14 @@ Open questions to settle before starting:
 ## 4. Rollout Rings
 
 ### Ring 0: Local Release Candidate
-1. Land B1–B6 as separate commits; G1–G4 pass locally.
+1. Land B1–B7 as separate commits; G1–G4 pass locally.
 2. **Phase 1:** `python3 scripts/bump_version.py patch` → `0.1.1`. Commit as `chore(release): v0.1.1`.
 3. Diff audit (§1), then G5–G7 on the user's machine.
 4. Tag: `git tag -a v0.1.1 -m "Release v0.1.1"`. The tag stays local until Ring 1.
 
 ### Ring 1: CI Build (dry run)
 1. Run `build-release.yml` via **workflow_dispatch** on `master` (no tag, so the release job is skipped).
-2. Download all three artifacts and smoke-test each on its own OS: `--version`, `--help`, `info` with the device attached. **This is the early-testing ring, the analogue of RefDiff's `common.js` harness.**
+2. Download all three artifacts and smoke-test each on its own OS: `--version`, `--help`, `info` with the device attached (`info` now also prints the tool version and build). **This is the early-testing ring, the analogue of RefDiff's `common.js` harness.**
 
 ### Ring 2: Tagged GitHub Release
 1. `git push origin v0.1.1`. The workflow builds and publishes the GitHub Release.
@@ -141,11 +142,11 @@ Open questions to settle before starting:
 
 ## 6. Runbook Checklist
 
-- [ ] B1–B6 landed as separate commits; G1–G4 green locally (0001: B1, B1b, B3 applied; 0002: B2, B4, B5, B6)
-- [ ] Phase 1: `bump_version.py patch`, run **once** → `0.1.1`
+- [x] B1–B7 landed as separate commits; G1–G4 green locally (0001: B1, B1b, B3; 0002: B2, B4, B5, B6; B7 local)
+- [x] Phase 1: `bump_version.py patch`, run **once** → `0.1.1`
 - [ ] Diff audit: `git diff --stat && git diff`, zero debris
-- [ ] G5: local PyInstaller binary runs `--version` / `--help`
-- [ ] G6: live device tests pass on `hidraw` and `hid`
+- [ ] G5: built binary runs `info` / `sessions` on the real device (local only; Windows 8.1 done once)
+- [ ] G6: live device tests pass (Linux: `hidraw` and `hid`; Windows: `hid`)
 - [ ] G7: real-finger session downloaded and plotted; user acknowledged the plot
 - [ ] Ring 0: annotated tag `v0.1.1` created locally
 - [ ] Ring 1: workflow_dispatch dry run; all 3 binaries smoke-tested on their OS
