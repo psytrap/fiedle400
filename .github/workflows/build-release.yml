@@ -127,6 +127,14 @@ jobs:
           $installed = "$env:LOCALAPPDATA\Programs\po400\po400.exe"
           if (-not (Test-Path $installed)) { throw "po400.exe was not installed to $installed" }
 
+          # The Start Menu shortcut launches through this; without it the entry is dead.
+          $shim = "$env:LOCALAPPDATA\Programs\po400\po400-shell.cmd"
+          if (-not (Test-Path $shim)) { throw "po400-shell.cmd was not installed to $shim" }
+
+          # The shortcut's WorkingDir must exist, or Explorer silently falls back.
+          $datadir = [Environment]::GetFolderPath("MyDocuments") + "\PO-400"
+          if (-not (Test-Path $datadir)) { throw "data folder was not created at $datadir" }
+
           # The installed binary must actually run, not merely exist.
           $out = & $installed --version
           Write-Host "installed binary reports: $out"

@@ -40,11 +40,18 @@ WizardStyle=modern
 Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
+[Dirs]
+; Default landing folder for the Start Menu shortcut. uninsneveruninstall keeps
+; the user's recordings when po400 is uninstalled.
+Name: "{userdocs}\PO-400"; Flags: uninsneveruninstall
+
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "po400-shell.cmd"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\PO-400 Oximeter"; Filename: "{cmd}"; Parameters: "/k ""{app}\po400.exe"" --help"; IconFilename: "{app}\po400.exe"; IconIndex: 0
+Name: "{group}\PO-400 Oximeter"; Filename: "{cmd}"; Parameters: "/k ""{app}\po400-shell.cmd"""; \
+    WorkingDir: "{userdocs}\PO-400"; IconFilename: "{app}\po400.exe"; IconIndex: 0
 Name: "{group}\Uninstall PO-400"; Filename: "{uninstallexe}"
 
 [Tasks]
@@ -57,11 +64,11 @@ Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\po400"; ValueType: string;
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\po400"; ValueType: string; ValueName: "Icon"; \
     ValueData: "{app}\po400.exe,0"; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\po400\command"; ValueType: string; ValueName: ""; \
-    ValueData: "cmd.exe /k cd /d ""%V"" && ""{app}\po400.exe"" --help"; Tasks: contextmenu
+    ValueData: "cmd.exe /k cd /d ""%V"" && ""{app}\po400-shell.cmd"""; Tasks: contextmenu
 
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400"; ValueType: string; ValueName: ""; \
     ValueData: "Open PO-400 Console here"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400"; ValueType: string; ValueName: "Icon"; \
     ValueData: "{app}\po400.exe,0"; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400\command"; ValueType: string; ValueName: ""; \
-    ValueData: "cmd.exe /k cd /d ""%V"" && ""{app}\po400.exe"" --help"; Tasks: contextmenu
+    ValueData: "cmd.exe /k cd /d ""%V"" && ""{app}\po400-shell.cmd"""; Tasks: contextmenu
