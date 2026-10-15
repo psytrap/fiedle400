@@ -439,6 +439,23 @@ assertions too weak to catch the regression they're named for, tests that
 pass for the wrong reason, dead/unreachable test code, overfit mocks that
 would still pass after the real implementation broke). Not yet done.
 
+**TODO (psytrap, 2026-10-15): broader clean-code / clean-docs / clean-test /
+clean-release audit.** A full pass across the project, not limited to
+`tests/`:
+- **Clean code:** dead code, unused imports/functions, duplicated logic that
+  should be a shared helper, leftover debug prints, inconsistent naming.
+- **Clean docs:** stale claims in `PROTOCOL.md`, `analysis/*.md`, `README.md`,
+  `PACKAGING.md` that no longer match the current code (the opposite
+  direction of the protocol-doc corrections already done this session --
+  code/doc drift, not just protocol-vs-hardware drift).
+- **Clean tests:** the code-smell item above, plus coverage gaps.
+- **Clean release:** workflow files, `RELEASE_PLAN.md` itself for stale
+  "today" status lines that no longer reflect reality, and repo settings
+  (the kind of thing the `default_workflow_permissions` fix this session
+  surfaced -- check for other drift between what's documented and what's
+  actually configured).
+Not yet done.
+
 ---
 
 ## 3f. Alpha vs. beta (psytrap, 2026-10-15)
