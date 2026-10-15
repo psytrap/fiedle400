@@ -20,7 +20,7 @@ The bump strategy is taken from the RefDiff plan and adapted to a Python package
 
 **Rules**
 - **Single source of truth.** The version lives in `pyproject.toml` (`[project].version`) and `fiedle400/__init__.py` (`__version__`). `bump_version.py` rewrites both, and a test asserts they match (§2, G3).
-- **One patch bump per cycle.** If pre-flight fails, fix forward on the same RC version. Don't bump again.
+- **Patch-bump freely (psytrap, 2026-10-15).** Bump the patch version at any point, as often as useful -- there is no one-bump-per-cycle limit. Every change that produces a different artifact should carry a different version, so a tested build and an untested one are never both called the same thing. Minor and major bumps keep their Phase 2 rules below.
 - **Small, focused diffs between bumps.** No monolithic changes; each blocker fix (§3) is its own commit.
 - **Diff audit before every tag:** `git diff --stat v<prev>..HEAD && git diff v<prev>..HEAD`, which should show zero debris: no `output/` files, `.dump` or `.spo2` captures, `egg-info`, or `fiedle400.zip`. For the first release, audit against the initial commit.
 

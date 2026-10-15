@@ -81,15 +81,15 @@ class TestCliInteractive(unittest.TestCase):
     def test_generate_iso_filename_single(self):
         fn = generate_iso_filename([self.s1])
         # s1: 10:00:00 + 100s = 10:01:40 (default ext is spo2)
-        self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T100140.spo2")
+        self.assertEqual(fn, "fiedle400_2026-09-06T100000_2026-09-06T100140.spo2")
         # test explicit csv extension
         fn_csv = generate_iso_filename([self.s1], ext="csv")
-        self.assertEqual(fn_csv, "po400_2026-09-06T100000_2026-09-06T100140.csv")
+        self.assertEqual(fn_csv, "fiedle400_2026-09-06T100000_2026-09-06T100140.csv")
 
     def test_generate_iso_filename_multiple(self):
         fn = generate_iso_filename([self.s1, self.s3])
         # s1 starts at 10:00:00; s3 ends at 12:00:00 + 300s = 12:05:00
-        self.assertEqual(fn, "po400_2026-09-06T100000_2026-09-06T120500.spo2")
+        self.assertEqual(fn, "fiedle400_2026-09-06T100000_2026-09-06T120500.spo2")
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")

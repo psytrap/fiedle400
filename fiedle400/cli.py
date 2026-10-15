@@ -240,7 +240,7 @@ def command_download(args):
     if getattr(args, "dump", None) is not None:
         if args.dump == "auto":
             ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            dump_path = f"po400_download_{ts_str}.dump"
+            dump_path = f"fiedle400_download_{ts_str}.dump"
         else:
             dump_path = args.dump
     
@@ -546,8 +546,8 @@ def parse_session_selection(selection_str: str, available_sessions: List[protoco
 def generate_iso_filename(selected_sessions: List[protocol.SessionInfo], ext: str = "spo2") -> str:
     """Generates a uniform filename with ISO start and end datetimes.
     
-    Format: po400_{start_iso}_{end_iso}.{ext}
-    e.g.: po400_2026-09-06T100516_2026-09-06T105028.spo2
+    Format: fiedle400_{start_iso}_{end_iso}.{ext}
+    e.g.: fiedle400_2026-09-06T100516_2026-09-06T105028.spo2
     """
     now = datetime.now()
     valid_starts = [s.timestamp for s in selected_sessions if s.timestamp]
@@ -566,7 +566,7 @@ def generate_iso_filename(selected_sessions: List[protocol.SessionInfo], ext: st
     start_iso = start_dt.strftime("%Y-%m-%dT%H%M%S")
     end_iso = end_dt.strftime("%Y-%m-%dT%H%M%S")
     clean_ext = ext.lower().lstrip(".")
-    return f"po400_{start_iso}_{end_iso}.{clean_ext}"
+    return f"fiedle400_{start_iso}_{end_iso}.{clean_ext}"
 
 
 def get_next_available_filename(filepath: str, max_attempts: int = 10000) -> str:
@@ -794,7 +794,7 @@ def main(argv: Optional[List[str]] = None):
     parser_dl.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
-    parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.spo2 in the configured working directory).")
+    parser_dl.add_argument("-o", "--output", help="Output file path (default: fiedle400_all_sessions_<timestamp>.spo2 in the configured working directory).")
     parser_dl.add_argument("--workdir", help="Directory for this download only (overrides FIEDLE400_WORKDIR and the stored setting; not saved). Ignored with -o.")
     parser_dl.add_argument("-f", "--format", choices=["spo2", "csv", "json"], default="spo2", help="Output format: 'spo2' (default), 'csv', or 'json'.")
     parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")

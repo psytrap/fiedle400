@@ -152,7 +152,7 @@ class TestExportSpO2(unittest.TestCase):
         saved_path = export_records(self.sample_records, output_filename=None, fmt="spo2")
         try:
             self.assertTrue(os.path.exists(saved_path))
-            self.assertTrue(os.path.basename(saved_path).startswith("po400_all_sessions_"))
+            self.assertTrue(os.path.basename(saved_path).startswith("fiedle400_all_sessions_"))
             self.assertTrue(saved_path.endswith(".spo2"))
         finally:
             if os.path.exists(saved_path):

@@ -129,7 +129,7 @@ def export_records(
 
     if not output_filename:
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"po400_all_sessions_{timestamp_str}.{clean_fmt}"
+        output_filename = f"fiedle400_all_sessions_{timestamp_str}.{clean_fmt}"
         if output_dir:
             output_filename = os.path.join(output_dir, output_filename)
 

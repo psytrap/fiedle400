@@ -8,6 +8,9 @@ build/
 
 # Downloaded Session Outputs & Temp Files
 output/
+fiedle400_all_sessions_*.csv
+fiedle400_all_sessions_*.spo2
+# Pre-rename leftovers from po400 runs
 po400_all_sessions_*.csv
 po400_all_sessions_*.spo2
 *.spo2
