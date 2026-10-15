@@ -162,8 +162,15 @@ shorter real session (92 records) recorded the same day.
 
 Still not settled by either recording: neither contains a finger-out moment
 (both report `flags=ok` throughout), so T1's sentinel path (SpO2 127 / pulse
-255) remains untested against real hardware -- synthetic frames only. Also
-still open: a real serial-stream device (this one only exercises storage).
+255) remains untested against real hardware -- synthetic frames only.
+
+**Serial-stream device support: deliberately deferred, not a gap
+(psytrap, 2026-10-15).** This hardware unit only exercises the
+flash/storage path (`0x9C`/`0x9D`); the serial-stream device family
+`PROTOCOL.md` documents (where `0xA5`/`0xA6` apply) is untested because no
+such device is available to test against, not because it was missed.
+Support for it will be added in the future, when that becomes relevant --
+not a current release blocker or open bug.
 
 **Update (psytrap, 2026-10-15), unconfirmed:** deliberately pulled the probe
 off mid-recording to test this. psytrap's hypothesis: the device's own
