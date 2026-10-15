@@ -92,6 +92,18 @@ cycle and goes through G1–G6 again on that cycle's RC. The device is still the
 
 ---
 
+## 3c. Decisions (psytrap, 2026-10-15)
+
+| # | Decision | Status |
+|:--|:---|:---|
+| **D1 Code signing** | **Won't fix.** Binaries ship unsigned. | Release notes tell users how to get past the SmartScreen warning and to verify the SHA-256. Revisit only if it blocks adoption. |
+| **D2 macOS** | **Keep it, verified by CI.** No Mac and no hardware to test on by hand. | The suite runs on `macos-latest`, and the build job now runs the built binary's `--version`, `--help` and `config` on every OS. That is macOS's only gate, so it must stay green. |
+| **D3 Python floor** | **Open.** `requires-python = ">=3.8"` while CI tests only 3.11. | Either add 3.8 to the matrix or raise the floor to what is actually tested. |
+| **D4 Minimum Windows** | **Windows 8.1.** Verified with the installer on 6.3.9600 x64 against a real device. | Stated in the release notes. |
+| **D5 Upgrade path** | **Won't test (psytrap).** The installer keeps the old AppId so it upgrades a po400 install, and `config.py` migrates the settings file. | Written and committed, deliberately not exercised on a machine with po400 installed. Both degrade safely: a failed migration just re-asks for the working directory. |
+
+---
+
 ## 4. Rollout Rings
 
 ### Ring 0: Local Release Candidate

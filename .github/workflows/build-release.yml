@@ -60,6 +60,23 @@ jobs:
             chmod +x release/${{ matrix.asset_name }}
           fi
 
+      - name: Smoke Test the Built Binary
+        shell: bash
+        run: |
+          # The binary is the artifact users actually get; building it proves
+          # nothing about whether it starts. macOS has no other verification
+          # (no hardware, nobody to test by hand), so this is its only gate.
+          BIN="release/${{ matrix.asset_name }}"
+          out=$("$BIN" --version)
+          echo "built binary reports: $out"
+          expected=$(python -c "import fiedle400; print(fiedle400.__version__)")
+          case "$out" in
+            *"$expected"*) ;;
+            *) echo "version mismatch: expected $expected, got '$out'" >&2; exit 1 ;;
+          esac
+          "$BIN" --help > /dev/null
+          "$BIN" config > /dev/null
+
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -171,6 +188,16 @@ jobs:
           prerelease: false
           body: |
             ### Pulsox PO-400 Standalone Executables & Installers
+
+            **Windows SmartScreen:** these binaries are not code-signed, so Windows
+            will show a "Windows protected your PC" warning. Choose *More info* →
+            *Run anyway*. Verify the SHA-256 against the CI artifacts if in doubt.
+
+            **Minimum Windows:** verified on Windows 8.1 (6.3.9600, x64) with a real
+            PO-400 attached. Newer versions work; older ones are untested.
+
+            **Device clock:** the PO-400 reads 2002-07-01 and cannot be set from this
+            tool. Stored sessions keep their correct timestamps regardless.
             
             - **Windows (installer)**: Download `fiedle400-setup.exe` -- installs per-user, no admin rights needed.
             - **Windows (portable)**: Download `fiedle400-windows-x64.exe` (run directly from PowerShell or CMD).
