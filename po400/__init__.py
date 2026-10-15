@@ -1,6 +1,6 @@
 """Pulsox PO-400 USB HID Pulse Oximeter Package"""
 
-__version__ = "2.0.0"
+__version__ = "0.1.0"
 
 from .engine import (
     SerialByteStreamBuffer,
@@ -12,7 +12,14 @@ from .export import (
     export_records,
     build_spo2_binary,
 )
-from .plot import plot_session
+
+
+def __getattr__(name):
+    # plot needs matplotlib (optional extra), so import it only on first use.
+    if name == "plot_session":
+        from .plot import plot_session
+        return plot_session
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "SerialByteStreamBuffer",

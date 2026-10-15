@@ -19,6 +19,9 @@ dependencies = [
 dev = [
     "hid",
 ]
+plot = [
+    "matplotlib",
+]
 
 [project.scripts]
 po400 = "po400.cli:main"

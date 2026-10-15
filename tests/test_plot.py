@@ -6,13 +6,19 @@ import unittest
 from datetime import datetime
 
 from po400.export import build_spo2_binary
-from po400.plot import (
-    load_session_file,
-    plot_session,
-    find_latest_session_file,
-)
+
+try:
+    from po400.plot import (
+        load_session_file,
+        plot_session,
+        find_latest_session_file,
+    )
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
 
 
+@unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
 class TestPlot(unittest.TestCase):
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()

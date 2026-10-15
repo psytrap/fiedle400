@@ -21,7 +21,7 @@ try:
 except ImportError:
     pass
 
-from po400 import export, protocol, serial_engine
+from po400 import __version__, export, protocol, serial_engine
 from po400.protocol import Commands, Parsers
 from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 
@@ -40,6 +40,13 @@ def command_plot(args) -> int:
     """Handler for 'plot' subcommand to generate PNG graph from recording file."""
     try:
         from po400 import plot
+    except ImportError as e:
+        if getattr(e, "name", None) != "matplotlib":
+            raise
+        print("❌ Plotting needs matplotlib, which is not installed.")
+        print("   Install it with: pip install matplotlib   (or: pip install po400[plot])")
+        return 1
+    try:
         saved_path = plot.plot_session(filepath=args.file, output_png=args.output, dpi=args.dpi)
         print(f"📊 Successfully generated session plot: {saved_path}")
         return 0
@@ -647,11 +654,12 @@ def run_interactive_wizard(args) -> int:
             dev.close()
 
 
-def main():
+def main(argv: Optional[List[str]] = None):
     parser = argparse.ArgumentParser(
         prog="po400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=None, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
@@ -715,12 +723,27 @@ def main():
     for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det]:
         p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=argparse.SUPPRESS, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    handler = args.func if args.command else run_interactive_wizard
+    sys.exit(run_guarded(handler, args))
 
-    if not args.command:
-        sys.exit(run_interactive_wizard(args))
 
-    sys.exit(args.func(args))
+def run_guarded(handler, args) -> int:
+    """Run a command handler, turning unexpected errors into a short message and exit code.
+
+    Set PO400_DEBUG=1 to get the full traceback instead.
+    """
+    try:
+        return handler(args)
+    except KeyboardInterrupt:
+        print("\nAborted.", file=sys.stderr)
+        return 130
+    except Exception as e:
+        if os.environ.get("PO400_DEBUG"):
+            raise
+        print(f"❌ po400 {__version__}: unexpected error: {type(e).__name__}: {e}", file=sys.stderr)
+        print("   Re-run with PO400_DEBUG=1 for the full traceback.", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
