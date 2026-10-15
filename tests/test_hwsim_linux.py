@@ -150,6 +150,17 @@ class TestFakeOximeter(unittest.TestCase):
         self.assertIsNone(fake.poll())
         self.assertEqual(len(fake.destructive), 1)
 
+    def test_strict_fake_does_not_repeat_the_last_recording(self):
+        t = Trace()
+        q = Commands.query_sessions()
+        t.add(q, [b"\xec" + bytes([1]) + bytes(62)])
+        fake = FakeOximeter(t, strict=True)
+        fake.handle_out(q)
+        self.assertEqual(fake.poll()[1], 1)
+        fake.handle_out(q)
+        self.assertIsNone(fake.poll())
+        self.assertEqual(len(fake.unmatched), 1)
+
     def test_nth_repeat_gets_nth_recording_and_the_last_repeats(self):
         t = Trace()
         q = Commands.query_sessions()
@@ -304,8 +315,11 @@ class TestHidrawBackendIO(unittest.TestCase):
 # --------------------------------------------------------------------------
 @unittest.skipUnless(LINUX, "LinuxHidrawBackend is Linux-only")
 class FlowCase(unittest.TestCase):
+    def make_fake(self) -> FakeOximeter:
+        return fresh_fake()
+
     def setUp(self):
-        self.fake = fresh_fake()
+        self.fake = self.make_fake()
         self.clock = VirtualClock()
         self.sim = HidrawSim(self.fake)
         self.sim.__enter__()

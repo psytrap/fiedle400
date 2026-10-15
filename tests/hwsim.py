@@ -24,6 +24,13 @@ Where the recordings come from (``Trace``):
   user name and the live stream.
 * ``Trace.from_json()`` -- a recording of the CLI's own traffic made on a real
   device with ``tests/capture_tools/record_exchange.py`` (read-only commands).
+  ``tests/fixtures/cli-exchange.trace.json`` is such a recording (18 exchanges, a
+  214-sample session); with it every command the CLI sends has a recorded answer.
+
+``FakeOximeter(strict=True)`` makes "the last recording repeats" stop: a command asked
+more often than it was recorded is logged as unmatched and gets no answer. Use it with a
+complete recording, so a request the device never answered on the wire cannot be answered
+with another request's data.
 
 Commands are matched on their meaning, not their framing: a leading ``7D 81``
 channel prefix, trailing padding (``0x80`` from the CLI, ``0x00`` from the vendor
@@ -155,8 +162,10 @@ class Trace:
 class FakeOximeter:
     """Protocol-aware fake: replays recorded replies, logs everything, invents nothing."""
 
-    def __init__(self, trace: Trace, fault: Optional[Callable[[Tuple, int, bytes], Optional[bytes]]] = None):
+    def __init__(self, trace: Trace, fault: Optional[Callable[[Tuple, int, bytes], Optional[bytes]]] = None,
+                 strict: bool = False):
         self.trace = trace
+        self.strict = strict            # True: a command asked more often than it was recorded is unanswered
         self.fault = fault              # (key, index in reply, report) -> replacement report, or None to drop it
         self.sent: List[bytes] = []     # every report the host wrote, unmodified
         self.unmatched: List[bytes] = []
@@ -178,6 +187,9 @@ class FakeOximeter:
             return
         # The k-th time the same command is sent, answer with the k-th recording
         # (the last one repeats), so repeated queries behave as they did on the wire.
+        if self.strict and self._seen[key] >= len(groups):
+            self.unmatched.append(report)   # e.g. a page that was never recorded: do not invent it from the last one
+            return
         group = groups[min(self._seen[key], len(groups) - 1)]
         self._seen[key] += 1
         for i, rep in enumerate(group):

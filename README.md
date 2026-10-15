@@ -188,12 +188,17 @@ temp directory), because two processes opening the oximeter at once collide.
 `tests/test_hwsim_linux.py` runs the real hidraw backend, sysfs scan, engine, detector, export and
 CLI against a simulated PO-400 (`tests/hwsim.py`) that replays device bytes recorded in
 `analysis/bum400_20260906_100516.pcap`. It needs no device and runs in the normal suite. Commands
-the recording does not cover get no reply, and destructive commands are refused and logged. To
+the recording does not cover get no reply, and destructive commands are refused and logged.
+`tests/test_hwsim_realtrace.py` does the same with a recording of the CLI's own traffic on a real
+device (`tests/fixtures/cli-exchange.trace.json`), where every command the CLI sends has a recorded
+answer. To
 extend the recording with the CLI's own traffic from a real device (read-only; it contains the
 recorded measurements, so review it before sharing):
 ```bash
 python3 tests/capture_tools/record_exchange.py -o cli-exchange.trace.json          # info, sessions, download
 python3 tests/capture_tools/record_exchange.py --no-download -o info.trace.json    # no measurements
+# open questions (read-only): firmware query 80 00, and SpO2 reads at other sample offsets
+python3 tests/capture_tools/record_exchange.py --no-download --probe-firmware --probe-offsets 0,1,2,50,107,214,215,300 -o probe.trace.json
 ```
 
 ---
