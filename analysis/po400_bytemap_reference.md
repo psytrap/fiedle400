@@ -558,11 +558,43 @@ mit Signal auf einer 140-Punkte-Zeitachse (~2m20s); Subframes 0, 2 und 5 sind
 > Datenbereichs ist der Basiswert" war **korrekt** -- zählt man den
 > Datenbereich ab dem `seq`-Byte (`rec[1]`), ist Index 4 genau `rec[5]`.
 
-> **Offene Punkte:** Offsets `0x03..0x04` sind weiterhin unbestimmt. Die
-> Reihenfolge High-Nibble-zuerst folgt der Disassembly-Beschreibung und
-> ergibt die glattere Kurve, ist aus diesem Mitschnitt allein aber nicht
-> gegen Low-Nibble-zuerst abgrenzbar. Das Dauer-Feld im Header (41 s)
-> widerspricht den ~140 dekodierten Messpunkten -- Datum und Uhrzeit
-> stimmen, also ist speziell das Dauer-Feld verdächtig.
+> **Offene Punkte, aktualisiert am 15.10.2026 nach einem zweiten
+> Live-Pull (bytidentisch zum ersten Mitschnitt -- deterministisch, kein
+> Transkriptionsfehler) und einem zweiten relayten Disassembly-Durchgang:**
+>
+> (a) **Offset `0x04` ist KEINE Kanal-ID.** Eine relayte Disassembly
+> behauptete, dieses Byte sei ein konstantes Hardware-Kanal-Flag (`0x08`
+> für SpO2, `0x04` für Puls). Direkt am Live-Mitschnitt geprüft: nicht
+> konstant. SpO2 zeigt `0x7C, 0x00, 0x7F, 0x7F`, Puls `0x7D, 0x00, 0x7F,
+> 0x7F` über die vier echten Subframes. Ein Negativ-Befund aus der
+> Disassembly ergänzt das: Der Host (`SpO2.exe`) liest dieses Byte an
+> keiner Stelle des Dekodierpfads -- er liest Byte 0/1/2 und springt dann
+> direkt zu Byte 4 (Basiswert). Das erklärt, warum die PC-Software trotz
+> der wechselnden Werte funktioniert (sie ignoriert das Feld schlicht), sagt
+> aber nichts darüber, was die **Firmware** dort tatsächlich codiert --
+> ein Kandidat (unbestätigt): Hardware-Statusbits oder Signalgüte der MCU.
+> Bleibt offiziell unidentifiziert.
+>
+> (b) **High-Nibble-zuerst jetzt zweifach abgesichert.** Der empirische
+> Glattheitstest auf diesem Mitschnitt war nahezu unentschieden (23 zu 24
+> von 189 Punkten). Eine zweite, unabhängig relayte Beschreibung der
+> Dekodierschleife stimmt exakt mit der hier verwendeten Nibble-Arithmetik
+> überein (Vorzeichen Bit 7 des Bytes / Bit 3 des Nibbles, Betrag in den
+> restlichen 3 Bits, High-Nibble zuerst) -- Bestätigung, nicht Herkunft,
+> der bereits dokumentierten Formel. Als geklärt zu behandeln, sofern ein
+> Mitschnitt mit scharfen Übergängen nicht widerspricht.
+>
+> (c) **Dauer-Feld vs. Stream-Länge: plausibler Mechanismus angeboten,
+> nicht unabhängig bestätigt.** Dieselbe relayte Quelle behauptet, der
+> Host-Reader breche die Sample-Zählung exakt beim Header-Dauerwert ab
+> (`cmp edx, [this+0x120]`) und behandle alles danach -- selbst Deltas, die
+> wie echte konstante Messwerte aussehen -- als verwerfbares Padding. Das
+> würde 41s echte Daten mit einem 59-Punkte-Decode vereinbaren, ist aber aus
+> den Rohbytes allein nicht prüfbar: `0x00`-Deltas sind von echten
+> "keine Änderung"-Messwerten nicht unterscheidbar -- genau das war die
+> ursprüngliche Ambiguität. Eine präzise zeitgestoppte frische
+> Aufnahme (am Gerät selbst gestartet/gestoppt) ist weiterhin der einzige
+> Weg, das direkt zu klären.
 
+---
 ---

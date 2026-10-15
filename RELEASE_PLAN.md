@@ -310,16 +310,79 @@ capstone sweep that "found" clusters was desynced and its results are
 void -- it reported 5 `and reg,7` in 1.7 MB where a raw scan finds 29. The
 method notes, section table, useful byte encodings and known decoys are now
 written up in PROTOCOL.md §3.15 so this is not re-attempted from scratch.
-One real artifact survives from that work: a previously undocumented opcode
-`0xA4`, seen grouped with `0xA2/0xA3/0xA5/0xA6` in a command-whitelist
-routine -- still uninvestigated.
+**RESOLVED: opcode `0xA4` is not a Manual-mode mystery -- it's an existing
+Auto-mode opcode (live-checked against source, 2026-10-15).**
+`fiedle400/protocol/models.py` already defines `0xA5` ("select active
+session index slot") and `0xA6` ("initiate session download handshake") in
+the same family as `0xA2` (`STORAGE_NEGOTIATION`), all part of the
+already-implemented Auto-mode storage protocol. The disassembly whitelist
+cluster that grouped `0xA2/0xA3/0xA4/0xA5/0xA6` together is that same
+Auto-mode session-selection family, not a Manual-only opcode. A second
+relayed disassembly pass (2026-10-15) gives it a specific role, not yet
+re-verified against this project's own binary: `SEGMENT_QUERY` /
+`SEGMENT_PREPARE`, sent once per stored segment in a loop
+(`for i in 0..TotalSegments-1`) immediately before `0xA5`
+(`SESSION_SELECT`) -- i.e. it walks the device's segment list to position
+the read pointer before a specific session is selected. Plausible and
+consistent with the A2/A5/A6 family it was already placed in; not pinned
+down by direct testing here.
 
-**Still open on Manual mode:** record offsets `0x03..0x04` are unidentified;
-high- vs low-nibble-first ordering is not separable from this one capture;
-and the header's 41 s duration field contradicts the ~140 decoded samples
-(header date and time decode correctly, so the duration field specifically
-is suspect). Implementing the decoder in `fiedle400` is cloud's side of the
-split -- the protocol side is documented and ready.
+**Partially resolved: the duration-field discrepancy is real and
+reproducible, not a one-off.** Re-pulled the exact same stored recording
+live from the device (2026-10-15): byte-identical to the earlier capture,
+confirming it is deterministic, not a transcription artifact. Header still
+says 41 s. Subframe `seq=3` alone decodes to 27 samples with **no
+terminator at all** -- it simply runs out of its 13 delta bytes without
+ever hitting a `0x7F` byte or `0xF` nibble -- and the four non-"no-finger"
+subframes total 59 real samples by themselves, already past 41. If each of
+the 7 subframes instead represents a fixed ~5.86 s reporting window
+(41 / 7) regardless of how many internal delta-samples it carries, the
+totals reconcile, implying the device samples faster than 1 Hz internally
+and the per-nibble index is not directly seconds. A second relayed
+disassembly pass (2026-10-15) offers a specific mechanism for this: the
+device's own reader (claimed at `0x00479fc5`, unverified build) allegedly
+stops consuming samples once a running count reaches the header's duration
+value, treating everything past that point -- even same-value deltas
+indistinguishable from genuine flat readings -- as discardable block
+padding. Credible, not independently checkable from raw bytes (that is
+exactly the `0x00`-delta-vs-padding ambiguity already on this list).
+Resolving it for real still needs a **precisely timed** fresh Manual
+recording (e.g. exactly 20 s by stopwatch, started and stopped on the
+device itself) compared against the resulting header duration and
+decoded sample count -- a physical button-press on the device, not
+something done from here.
+
+**RESOLVED (two independent methods agree): high-nibble-first.** The
+empirical smoothness check on this capture was a near-exact tie (23 vs 24
+out of 189 points) and could not settle it alone. A second, independently
+relayed disassembly description of the decode loop matches this project's
+nibble math exactly (sign at bit 7 of the byte, magnitude in bits 6-4 for
+the first sample; sign at bit 3, magnitude in bits 2-0 for the second) --
+corroboration, not the origin, of what PROTOCOL.md §3.14.F already
+specifies. Treat as settled unless a sharp-transition capture disagrees.
+
+**Found and flagged, not resolved: the relayed claim about offsets
+`0x03/0x04` does not match the live data.** The same disassembly pass
+claimed `rec[0x04]` in this document's indexing (its own indexing counts
+from the `seq` byte) is a constant hardware channel-ID byte, `0x08` for
+SpO2 and `0x04` for Pulse. Checked directly against the live capture: it
+is not constant -- `0x7C, 0x00, 0x7F, 0x7F` across SpO2's four real
+subframes, `0x7D, 0x00, 0x7F, 0x7F` across Pulse's. Still unidentified;
+specifically not a fixed per-series tag as claimed. A relayed claim that
+contradicts a direct live measurement loses to the measurement.
+
+**Also found and worth fixing in PROTOCOL.md's prose (not yet done):**
+`build_hid_command` in `fiedle400/protocol/commands.py` pads unused report
+bytes with `0x80`, not `0x00` -- a raw test write using `0x00` padding got
+no response from the real device at all. And `UNLOCK_HANDSHAKE` + the
+`0xA2` negotiation half are sent as **one** concatenated 64-byte write
+(`build_unlock_negotiate_handshake`), not two separate 64-byte writes --
+§3.1's two-table layout reads as if they are separate transmissions. Live
+reproduced: the correct combined/padded framing works immediately; the
+naive two-writes/0x00-padding framing gets silence.
+
+Implementing the decoder in `fiedle400` is cloud's side of the split -- the
+protocol side is documented and ready.
 
 
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`

@@ -73,25 +73,30 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 
 ### 3.1 UNLOCK_HANDSHAKE (`0xA7` + `0xA2`)
 
-#### Phase 1 Request (`0xA7`)
+> [!NOTE]
+> **Corrected 2026-10-15 against `fiedle400/protocol/commands.py`
+> (`build_unlock_negotiate_handshake`) and verified live.** This is **one**
+> 64-byte write, not two separate requests, and the unused tail is padded
+> with `0x80`, not `0x00` -- a raw test using `0x00` padding and two
+> separate writes got no response at all from the real device; this framing
+> worked immediately. There is also no dedicated checksum byte for this
+> command -- that is a correction to the earlier draft below, which stated
+> checksums (`0x20`, `0x1B`) that do not match `sum(bytes[0..8]) % 128` for
+> the literal key bytes shown (off by a consistent `+5`, i.e. internally
+> inconsistent with its own stated formula) and do not appear in the real
+> implementation at all.
+
+#### Combined Request (one 64-byte write)
 | Offset | Field | Value | Notes |
 | :--- | :--- | :--- | :--- |
 | `0x00` | Sync Prefix | `0x7D` | Protocol 0 sync marker |
 | `0x01` | Channel ID | `0x81` | Target channel ID |
 | `0x02` | Opcode | `0xA7` | Unlock Phase 1 |
 | `0x03..0x08` | Key / Padding | `0x80` × 6 | Unlock key bytes |
-| `0x09` | Checksum | `0x20` | `sum(bytes[0..8]) % 128` |
-| `0x0A..0x3F` | Padding | `0x00` × 54 | Report padding |
-
-#### Phase 2 Request (`0xA2`)
-| Offset | Field | Value | Notes |
-| :--- | :--- | :--- | :--- |
-| `0x00` | Sync Prefix | `0x7D` | Protocol 0 sync marker |
-| `0x01` | Channel ID | `0x81` | Target channel ID |
-| `0x02` | Opcode | `0xA2` | Unlock Phase 2 |
-| `0x03..0x08` | Key / Padding | `0x80` × 6 | Unlock key bytes |
-| `0x09` | Checksum | `0x1B` | `sum(bytes[0..8]) % 128` |
-| `0x0A..0x3F` | Padding | `0x00` × 54 | Report padding |
+| `0x09` | Sync Prefix | `0x7D` | Phase 2 begins immediately, no padding or checksum between phases |
+| `0x0A` | Channel ID | `0x81` | |
+| `0x0B` | Opcode | `0xA2` | Unlock Phase 2 / storage negotiation |
+| `0x0C..0x3F` | Padding | `0x80` × 52 | Report padding |
 
 #### Device Response: ACK (`0xF0`)
 | Offset | Field | Value | Notes |
@@ -99,6 +104,10 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 | `0x00` | Opcode | `0xF0` | Acknowledge |
 | `0x01` | Status | `0x70` | `0x70` = Success / MCU unlocked |
 | `0x02..0x3F` | Padding | `0x00...` | Zero padding |
+
+Not re-verified byte-for-byte live in this pass (the subsequent `0xA0`
+request succeeded without one being read back, so the handshake works
+functionally either way); carried over from the earlier draft.
 
 ---
 
@@ -519,6 +528,21 @@ vendor's own names for this recording mode and its storage path.
 download to the device -- the same role `0x9D 0x02` (`SEGMENT_ACK`, §3.5)
 plays for the Auto-mode storage path.
 
+**Typical exchange, in plain terms** (relayed description, not re-verified
+line by line, but consistent with everything confirmed above):
+
+1. **Query the header.** Host: "Do you have a manually saved single
+   recording in storage?" Device: "Yes -- a recording from the stated date
+   and time, N seconds long."
+2. **Fetch SpO2.** Host: "Send me the oxygen values for that recording."
+   Device streams the `0xD3` subframes (base value plus compressed
+   follow-on deltas). Host ACKs each block; device confirms SpO2 transfer
+   complete.
+3. **Fetch Pulse.** Same exchange with `0xD2`.
+4. **End download, resume live mode.** Host: "I have everything, end the
+   download." Device resumes its normal continuous live stream (pulse,
+   SpO2, waveform) for the on-device display.
+
 #### F. Delta-Nibble Decompression (`0xD3` / `0xD2` payload) -- CONFIRMED
 
 **Solved and live-verified 2026-10-15.** Every one of the 8 data subframes in
@@ -596,16 +620,51 @@ Totals: SpO2 96-100%, Pulse 62-67 bpm, 59 samples with signal across a
 > `rec[5]`. Read field indices against a stated origin before trusting them.
 
 > [!NOTE]
-> **Open points.** (a) Record offsets `0x03..0x04` are still unidentified.
-> They are `0x7F 0x7F` in no-finger subframes and otherwise look uncorrelated
-> with the base; signal quality / perfusion index is a guess, not a finding.
-> (b) High-nibble-first ordering follows the relayed disassembly's bit
-> description and yields the smoother curve, but low-nibble-first produces
-> the same value set shifted one position and cannot be excluded from this
-> capture alone. (c) The header's duration field reads 41 s (section A)
-> while the decoded stream spans ~140 samples; one of the two is
-> misinterpreted. Date and time in the header do decode correctly, so the
-> header origin is right and the duration field specifically is suspect.
+> **Updated 2026-10-15 against a second relayed disassembly pass and a
+> fresh live re-pull of the same stored recording (byte-identical to the
+> earlier capture, confirming it is deterministic).**
+>
+> (a) **Record offset `0x04` is not a channel ID.** A relayed disassembly
+> claimed `rec[0x03]` (its own indexing counts from the `seq` byte, so this
+> is `rec[4]` in this document's indexing) is a constant hardware channel
+> marker, `0x08` for SpO2 / `0x04` for Pulse. Checked directly against the
+> live capture: it is not constant. Across the four real SpO2 subframes it
+> reads `0x7C, 0x00, 0x7F, 0x7F`; across Pulse, `0x7D, 0x00, 0x7F, 0x7F`.
+> Still unidentified, and definitely not a fixed per-series tag.
+>
+> A follow-up disassembly pass adds a negative finding rather than a
+> positive one: the host (`SpO2.exe`) decode path never reads this byte at
+> all anywhere in the loop -- it reads bytes 0/1/2 (opcode/seq/reserved)
+> and then jumps straight to byte 4 for the base value. That is consistent
+> with, not a resolution of, the open question: the *host* ignores it, but
+> what the *firmware* actually writes there -- a leading candidate guess is
+> per-sample status/quality bits from the MCU, unconfirmed -- is still
+> unidentified. Documenting it as unidentified rather than guessing is the
+> correct state here, not a gap to be filled in by assertion.
+>
+> (b) **High-nibble-first is now corroborated two ways.** The empirical
+> smoothness check in this capture was a near-exact tie (23 vs 24) and could
+> not settle it alone. A second, independently relayed disassembly
+> description of the decode loop matches this document's nibble math
+> exactly (sign at bit 7 of the byte / bit 3 of the low nibble, magnitude in
+> the remaining 3 bits, high nibble consumed first) -- consistent with, not
+> derived from, the empirical tie-break already in place. Treat as settled
+> unless a sharp-transition capture disagrees.
+>
+> (c) **Duration vs. sample count: a credible mechanism was offered, not
+> independently confirmed.** The same relayed source claims the device's
+> own reader stops consuming samples once a running count reaches the
+> header's duration value, and that everything past that point -- even
+> same-value deltas that look like genuine flat readings -- is block
+> padding the reader is instructed to discard. That would reconcile 41 s of
+> real data with a 59-sample decoded stream without requiring a
+> terminator at the cutoff. It cannot be checked from the raw bytes alone:
+> `0x00` deltas are indistinguishable from genuine "no change" samples by
+> design, which is exactly why this was ambiguous to begin with. A
+> precisely timed fresh recording (exact duration by stopwatch, compared
+> against the resulting header value and decoded sample count) is still
+> the only way to settle this directly.
+>
 > (d) `0x7F` as padding is ambiguous with a legitimate `+7, -7` delta pair;
 > the device appears to reserve it, but a capture with large swings would
 > confirm.
