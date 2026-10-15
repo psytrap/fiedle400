@@ -172,19 +172,25 @@ samples) when the finger comes off. Not yet verified technically -- if true,
 T1's sentinel path may be effectively unreachable via the storage path on
 this firmware regardless of the decoder fix.
 
-**Likely explanation for a separate observation:** `sessions` went from 3
-sessions visible, to 1, to 0, over the course of this testing -- but psytrap
-confirms the recordings are still on the device (visible on its own
-display), so this is not data loss. Leading hypothesis, consistent with this
-tool's own existing hint text ("set Record=ON in PO-400 menu while
-measuring"): the device has separate **Auto** and **Manual (Record=ON)**
-modes, and only Manual-mode recordings go through the `0x9C` session-index
-path this tool reads -- Auto-mode recordings may be stored but not indexed
-the same way, so our query legitimately finds nothing even though data
-exists. Sessions 1-3 (used above, including the G7 plots) were presumably
-Manual-mode; the device may since have been in Auto mode. Not yet confirmed
--- psytrap is about to test by switching to Manual mode and recording fresh,
-this time with an intentional finger-out moment to also settle T1 above.
+**Separate observation, corrected (psytrap, 2026-10-15):** `sessions` went
+from 3 visible, to 1, to 0, over the course of this testing. The first
+hypothesis here was that this was only a query/indexing mismatch -- Auto vs
+Manual recording mode -- with the data still intact on the device. **That is
+now contradicted:** after an explicit Record on-then-off cycle, psytrap
+confirms the device's **own display** also shows zero stored sessions, not
+just this tool's query. So nothing was actually committed to storage this
+time, for a reason neither side has pinned down yet -- not an indexing gap.
+
+Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
+(`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other
+queries, now also seen on the session-index query itself. psytrap: "storage
+concept must be different" -- i.e. our model of how this firmware creates
+and retains a session (PROTOCOL.md's `MAX_SESSION_SLOTS` picture) may not
+match how sessions 1-3 actually got created. Next step: establish exactly
+what sequence produced sessions 1-3 in the first place, and try to reproduce
+it -- guessing at menu modes without that is not converging. Still blocks:
+T1's real finger-out test, and the Auto/Manual question itself (open again,
+not resolved either way).
 
 **Status: T1 to T7 are fixed in patch 0013 (the tests that pinned them now assert the correct behaviour) and verified on the real device (Windows 8.1 laptop, `0.1.11`), not just the simulator: `sessions`/`download` show 107/107 records in 1m 47s with 0 sequence gaps (was 214 padded records, 4m 03s), `info` shows `Device Model Descriptor: 50F` and honest "not reported by the device" for the rest, exactly as predicted before the run. The Next step column keeps the original proposals; each row ends with what was done. T8 (new, below) was found during that same verification pass -- the fix itself is confirmed correct; T8 is a separate, pre-existing backend quirk it happened to surface.**
 
