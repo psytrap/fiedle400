@@ -202,6 +202,41 @@ session at all, for a reason not yet found (missing a save/confirm step on
 the device? a minimum-duration threshold?) -- not a protocol addressing gap
 in this tool. Still needs confirming directly on the device's own UI.
 
+**Independent confirmation found in the vendor's own software (psytrap, found
+via static analysis of `archive/bruteforce/SpO2.exe`, not git-tracked --
+`.gitignore`d, a pre-existing local artifact from the original protocol
+reverse-engineering, same method `PROTOCOL.md`'s own header credits):** its
+UTF-16LE strings include the literal confirmation-dialog text *"Changing the
+storage mode will erase the stored data in the device. Are you sure you want
+to do this?"*, plus internal names `STR_StorageAuto`, `STR_StorageManual`,
+`STR_ChangeStorageModelNote`, `bAutoDeleteSegmentSaveData`,
+`bManualDeleteSegmentSaveData`. "Storage Model" (Auto/Manual) is a real,
+named, vendor-acknowledged concept with its own erase warning -- independent
+confirmation of the mode-switch-erase finding above, not a misreading on our
+side.
+
+**`SESSION_SELECT`/`SESSION_DOWNLOAD` (`0xA5`/`0xA6`) hypothesis, tested and
+ruled out on real hardware:** `PROTOCOL.md` 3.12 already flags these as "used
+on serial-stream device models" (this one is flash/storage-based, via
+`0x9C`/`0x9D`), raising the question of whether Manual-mode sessions route
+through that other addressing scheme instead. Tested directly: unlock,
+flush, `reset_session_index`, flush, then `SESSION_SELECT`+`SESSION_DOWNLOAD`
+for session IDs 1-3, each read immediately after. All six writes got **no
+reply at all** -- not even a bare ACK. Sanity-checked on the same connection
+immediately after: a raw `READ_RTC` (`0x82`) built the identical way got a
+correct, well-formed reply, confirming the test method itself was sound. This
+firmware does not answer `0xA5`/`0xA6`; ruled out, not a dead end from a
+bug in the test.
+
+A heuristic static scan of the vendor exe for undocumented command templates
+(byte sequences matching this project's own `sum(bytes) % 128` checksum
+convention) was tried and abandoned: a 3.3MB binary has enough coincidental
+matches that it did not discriminate real command tables from random data
+without much tighter constraints than attempted. Not pursued further -- the
+remaining open question (how, or whether, a Manual-mode session can be read
+via USB at all) is better answered by the device's own UI than more blind
+byte-pattern guessing against an unfamiliar binary.
+
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
 (`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other
 queries, now also seen on the session-index query itself. psytrap: "storage
