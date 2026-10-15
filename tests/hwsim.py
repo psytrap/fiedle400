@@ -355,3 +355,101 @@ class HidrawSim:
             os.unlink(self.dev_path)
         except OSError:
             pass
+
+
+# --------------------------------------------------------------------------
+# A fake `hid` module, for HidBackend (Windows and macOS's real code path)
+# --------------------------------------------------------------------------
+#
+# HidBackend never touches a kernel node directly -- it only ever calls plain
+# Python methods on whatever `import hid` gives it: `hid.enumerate(vid, pid)`,
+# then either `hid.Device(...)` (the ctypes-wrapper shape, apmorton/pyhidapi,
+# PyPI package `hid`) or `hid.device()` + `.open_path()` (the cython shape,
+# trezor/cython-hidapi, PyPI package `hidapi` -- what build-release.yml
+# installs and what the shipped binary actually uses). Faking it needs no
+# kernel/file-descriptor emulation at all, unlike HidrawSim above: it is
+# exactly the same FakeOximeter behind a different, much thinner adapter.
+
+
+class FakeHidDevice:
+    """Stands in for a connected `hid.Device` / `hid.device` instance.
+
+    Both object shapes converge on the same four calls once connected:
+    write(bytes) -> int, read(n) -> bytes-like, close(), and a `nonblocking`
+    attribute/method HidBackend sets but this fake does not need to act on
+    (FakeOximeter.poll() never blocks).
+    """
+
+    def __init__(self, fake: FakeOximeter):
+        self._fake = fake
+
+    # cython-style (`hid.device()` then connect): both accepted, both no-ops
+    # beyond recording that *a* path was used -- FakeOximeter does not care.
+    def open_path(self, path) -> None:
+        pass
+
+    def open(self, vid: int, pid: int) -> None:
+        pass
+
+    def set_nonblocking(self, flag) -> None:
+        pass
+
+    def write(self, payload: bytes) -> int:
+        payload = bytes(payload)
+        # HidBackend.write_report prepends a 0x00 HID report-ID byte to every
+        # unnumbered 64-byte report (PROTOCOL.md's reports carry no report ID
+        # of their own). On real Windows/macOS hidapi that byte is consumed by
+        # the HID transport before the data reaches the device's own report
+        # buffer -- the firmware never sees it -- so it is stripped here too.
+        # Getting the prepend condition wrong anywhere is not silently
+        # tolerated: a mis-framed report fails command_key() and surfaces as
+        # an entry in FakeOximeter.unmatched, exactly as an unanswered command
+        # would.
+        if len(payload) == 65 and payload[0] == 0x00:
+            payload = payload[1:]
+        self._fake.handle_out(payload)
+        return len(payload)
+
+    def read(self, max_bytes: int = 64):
+        rep = self._fake.poll()
+        return bytes(rep) if rep else b""
+
+    def close(self) -> None:
+        pass
+
+
+def make_fake_hid_module(fake: FakeOximeter, style: str = "cython", present: bool = True):
+    """A `types.SimpleNamespace` standing in for the whole `hid` module.
+
+    style:
+      "cython" -- exposes `hid.device` (what PyPI `hidapi` provides; the shape
+                  CI and the shipped binary actually use).
+      "ctypes" -- exposes `hid.Device` (what PyPI `hid` provides).
+    present: False makes `enumerate()` return [], as it would with no device
+             attached or the wrong VID/PID -- HidBackend should then raise
+             "no device found", not crash.
+
+    Use with `unittest.mock.patch.dict(sys.modules, {"hid": make_fake_hid_module(...)})`,
+    the same pattern tests/test_hid_driver.py already uses for its one-off mocks.
+    """
+    import types
+
+    def _enumerate(vid: int, pid: int):
+        if not present:
+            return []
+        return [{
+            "path": b"fake-hid-path",
+            "vendor_id": vid,
+            "product_id": pid,
+            "product_string": "Pulse Oximeter",
+            "manufacturer_string": "",
+        }]
+
+    ns = types.SimpleNamespace(enumerate=_enumerate)
+    if style == "ctypes":
+        ns.Device = lambda *a, **kw: FakeHidDevice(fake)
+    elif style == "cython":
+        ns.device = lambda: FakeHidDevice(fake)
+    else:
+        raise ValueError(f"unknown style: {style!r}")
+    return ns

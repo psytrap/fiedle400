@@ -32,7 +32,12 @@ Needs someone at the physical device for several minutes -- not a scriptable
 read-only step like the probes so far. Recorded in RELEASE_PLAN §3d; will
 follow up through `handoff/` when it exists.
 
-## Windows mock question
+## Windows mock question -- resolved, done locally
 
-Still open -- psytrap wants more detail before deciding; will follow up
-separately. Treat as theory-only for now, per your stated default.
+Not a handoff: psytrap had me implement it directly. `tests/hwsim.py` gained
+`FakeHidDevice`/`make_fake_hid_module`; `tests/test_hwsim_hidbackend.py` (new,
+platform-neutral) drives the real `HidBackend` through it the same way
+`HidrawSim` drives `LinuxHidrawBackend`. T1/T3/T4/T6 reproduce through this
+transport too. 251 tests total now (was 238). See RELEASE_PLAN.md §3c2 for
+the full writeup, including how it was verified by sabotage rather than
+trusted on sight.

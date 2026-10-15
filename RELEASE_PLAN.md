@@ -110,12 +110,26 @@ Two tiers, deliberately different cadence:
 
 - **Every push (CI, mock only).** GitHub runners have no oximeter, so this was
   already the only thing CI *could* do -- stating it here makes it a decision,
-  not an accident. Today this covers protocol/engine logic and `HidBackend`
-  at the wire level (`test_hid_driver.py`), but not the full command sequence
-  through `HidBackend` end to end -- `tests/hwsim.py` gave Linux that via
-  `HidrawSim`; Windows has no equivalent yet. See `handoff/ci-mock-hardware.md`
-  Windows section -- still open, a fake `hid` module driving `HidBackend` the
-  same way `HidrawSim` drives `LinuxHidrawBackend`.
+  not an accident. **Closed (psytrap, 2026-10-15), implemented locally, not a
+  handoff:** `tests/hwsim.py` gained `FakeHidDevice`/`make_fake_hid_module`, a
+  fake `hid` module driving the real `HidBackend` through its full command
+  sequence the same way `HidrawSim` drives `LinuxHidrawBackend` -- the fake
+  needs no OS/kernel emulation at all (`HidBackend` only ever calls plain
+  Python methods), so it is a fraction of `HidrawSim`'s size. `tests/
+  test_hwsim_hidbackend.py` is platform-neutral (no Linux gate) and mirrors
+  the real-trace flow tests: sessions, download, info, and the same T1/T3/T4/T6
+  findings reproduce through this transport too -- confirming they are
+  protocol-level bugs, not backend-specific ones. Primary coverage is the
+  `hidapi`/`hid.device` shape (what CI and the shipped binary install); the
+  `hid`/`hid.Device` shape gets a smoke test. Verified by sabotage: disabling
+  the fake's own report-ID stripping breaks 7 of 13 tests, and reintroducing
+  the exact pre-`0ab3bf0` enumerate-error bug flips the regression guard built
+  for it -- both confirm the suite catches real defects, not just passes by
+  construction. 251 tests total (was 238), runtime unchanged (~5-6s) once the
+  same `VirtualClock` speedup the Linux flows use was wired in (13s -> 0.3s for
+  this file alone). Does **not** and cannot prove the W1-W5 real-Windows-stack
+  hypotheses in `handoff/ci-mock-hardware-response.md` -- those need the
+  physical laptop regardless of how much mock coverage exists.
 - **Real hardware (G5/G6), at release candidates only.** Not on every patch.
   Requires the physical Windows 8.1 laptop and is run by psytrap before tagging,
   same as Linux. CI cannot do this regardless of cadence -- there is no device
