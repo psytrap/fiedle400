@@ -498,6 +498,21 @@ subframe layout to `0xD3` above, opcode `0xD2` in place of `0xD3`.
 | SpO2 | `A7 01 28` | `D8 01 00 59` |
 | Pulse | `A7 00 27` | `D8 00 00 58` |
 
+**`0xD8` response fields** (from the `SpO2.exe` disassembly @ `0x004c55ba`):
+
+| Offset | Field | Notes |
+| :--- | :--- | :--- |
+| `0x00` | Opcode | `0xD8` |
+| `0x01` | Block type | `0x01` = SpO2, `0x00` = Pulse |
+| `0x02` | Status | `0x00` = success (code checks `== 0`, sets an internal ACK flag) |
+| `0x03` | Checksum | `0x59` (SpO2) / `0x58` (Pulse) |
+
+**Internal module identification** (string cross-references in the same
+disassembly): MFC name `STR_StorageManual` / "Single Spo2"; database table
+`Spo2Single` (`.?AVCDbSpo2SingleInfo@@`); export path
+`%s\50KReview\Spo2Single\*.csv`. Confirms "Manual" and "Single SpO2" are the
+vendor's own names for this recording mode and its storage path.
+
 #### E. End of Manual Download
 
 `A3 7F` (SpO2) and `A2 7F` (Pulse) signal the regular end of the manual

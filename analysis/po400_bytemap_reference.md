@@ -495,6 +495,21 @@ offenbar zeitgleich, Sekunde für Sekunde, gemessen.
 | SpO2 | `A7 01 28` | `D8 01 00 59` |
 | Puls | `A7 00 27` | `D8 00 00 58` |
 
+**Felder der `0xD8`-Antwort** (aus der Disassembly @ `0x004c55ba`):
+
+| Offset | Feld | Hinweis |
+| :--- | :--- | :--- |
+| `0x00` | Opcode | `0xD8` |
+| `0x01` | Block-Typ | `0x01` = SpO2, `0x00` = Puls |
+| `0x02` | Status | `0x00` = Erfolg (Code prüft `== 0`, setzt internes ACK-Flag) |
+| `0x03` | Checksum | `0x59` (SpO2) / `0x58` (Puls) |
+
+**Modul-Zuordnung** (String-Referenzen in der gleichen Disassembly): MFC-Name
+`STR_StorageManual` / "Single Spo2"; Datenbanktabelle `Spo2Single`
+(`.?AVCDbSpo2SingleInfo@@`); Speicherort exportierter Dateien
+`%s\50KReview\Spo2Single\*.csv`. Bestätigt, dass "Manual" und "Single SpO2"
+die herstellereigenen Bezeichnungen für diesen Aufnahmemodus sind.
+
 #### D. Ende des manuellen Downloads
 
 `A3 7F` (SpO2) und `A2 7F` (Puls) signalisieren das reguläre Ende -- analog zu
