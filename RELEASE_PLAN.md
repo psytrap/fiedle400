@@ -104,6 +104,28 @@ cycle and goes through G1–G6 again on that cycle's RC. The device is still the
 
 ---
 
+## 3c2. Windows test cadence (psytrap, 2026-10-15)
+
+Two tiers, deliberately different cadence:
+
+- **Every push (CI, mock only).** GitHub runners have no oximeter, so this was
+  already the only thing CI *could* do -- stating it here makes it a decision,
+  not an accident. Today this covers protocol/engine logic and `HidBackend`
+  at the wire level (`test_hid_driver.py`), but not the full command sequence
+  through `HidBackend` end to end -- `tests/hwsim.py` gave Linux that via
+  `HidrawSim`; Windows has no equivalent yet. See `handoff/ci-mock-hardware.md`
+  Windows section -- still open, a fake `hid` module driving `HidBackend` the
+  same way `HidrawSim` drives `LinuxHidrawBackend`.
+- **Real hardware (G5/G6), at release candidates only.** Not on every patch.
+  Requires the physical Windows 8.1 laptop and is run by psytrap before tagging,
+  same as Linux. CI cannot do this regardless of cadence -- there is no device
+  on a GitHub runner -- so this is a statement of intent, not a workaround.
+
+The W1-W5 Windows HID-stack hypotheses in `handoff/ci-mock-hardware-response.md`
+are a third thing: one-time environmental questions, not per-release checks.
+Settle each once on the laptop, record the answer here, and only revisit if
+`HidBackend` changes substantially.
+
 ## 3d. TODO: open findings (not release blockers until confirmed on hardware)
 
 Found while building the simulated-hardware tests (`tests/hwsim.py`, `tests/test_hwsim_linux.py`). Each is pinned by an `expectedFailure` test that starts passing, and is reported as an unexpected success, when the defect is fixed. All five were reproduced with the real code paths against replayed device bytes from `analysis/bum400_20260906_100516.pcap`. Whether they bite on a real download is unconfirmed; `fiedle400 download --dump` on the device would show it.
