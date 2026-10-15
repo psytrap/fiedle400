@@ -43,7 +43,7 @@ jobs:
       - name: Install Dependencies & PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller hidapi
+          pip install pyinstaller hidapi matplotlib
 
       - name: Build Standalone Binary with PyInstaller
         run: |
@@ -217,9 +217,19 @@ jobs:
         with:
           files: release-assets/*/*
           draft: false
-          prerelease: false
+          # Alpha (RELEASE_PLAN.md 3f): G7 (a real finger-on-probe session,
+          # plot confirmed physiologically plausible) is not done yet. Flip to
+          # false to promote to beta once it is -- no version bump needed for
+          # that promotion by itself.
+          prerelease: true
           body: |
             ### Pulsox PO-400 Standalone Executables & Installers
+
+            **Alpha release.** All automated gates pass, but no real-world
+            finger-on-probe session has been recorded and visually confirmed
+            yet (RELEASE_PLAN.md gate G7) -- the protocol/decoder fixes are
+            verified against real hardware reads (session listing, downloads,
+            device info), just not yet against a live physiological signal.
 
             **Windows SmartScreen:** these binaries are not code-signed, so Windows
             will show a "Windows protected your PC" warning. Choose *More info* →

@@ -63,7 +63,7 @@ Each blocker is a small, separate commit, landed **before** the patch bump.
 | ID | Problem | Evidence | Fix |
 |:---|:---|:---|:---|
 | **B1** ✅ | matplotlib is a hidden hard dependency | `fiedle400/__init__.py:15` imports `plot` eagerly, so every `from fiedle400 import ...` (including `cli.py:24`) pulls in matplotlib. `cli.py:42` already imports `plot` lazily, so the eager import defeats that. | Done: `plot_session` is resolved lazily via `__getattr__`; `plot = ["matplotlib"]` extra added; `fiedle400 plot` prints an install hint when matplotlib is missing. |
-| **B1b** ✅ | The release binary would crash on start | `.github/workflows/build-release.yml` installs only `pyinstaller hidapi`. Because of B1, the frozen binary would raise `ImportError` on every command (inferred, not yet built). | Fixed by B1. **Decision (psytrap): plot is not shipped in the binary.** `fiedle400.spec` excludes matplotlib. **Graceful failure (psytrap):** every command now runs through `cli.run_guarded`, which turns unexpected errors into a one-line message and exit code 1 (Ctrl+C → 130); `FIEDLE400_DEBUG=1` shows the full traceback. |
+| **B1b** ✅ | The release binary would crash on start | `.github/workflows/build-release.yml` installs only `pyinstaller hidapi`. Because of B1, the frozen binary would raise `ImportError` on every command (inferred, not yet built). | Fixed by B1. **Decision superseded (psytrap, 2026-10-15): matplotlib IS now bundled.** The original call was "plot is not shipped in the binary" (`fiedle400.spec` excluded it); reversed after measuring the real cost -- same build environment, same version: 8.8 MB without matplotlib, 44.0 MB with it, **+35.2 MB (~5x)**, confirmed working (`--version`, `plot --help`) before accepting it. `excludes=[]` now; `build-release.yml` installs `matplotlib` alongside `pyinstaller hidapi` for all three OS legs. G4 (clean-venv, stdlib-only) is unaffected -- that gate is about running from source, not the frozen binary, and still requires `plot` to print its install hint there. **Graceful failure (psytrap):** every command now runs through `cli.run_guarded`, which turns unexpected errors into a one-line message and exit code 1 (Ctrl+C → 130); `FIEDLE400_DEBUG=1` shows the full traceback. |
 | **B2** ✅ | The pcap regression test never runs | `tests/test_pcap_decoder.py` imports `capture.decode_pcap`, but the module is at `archive/capture/` (and `archive/` is git-ignored). | Done: decoders copied to `tests/capture_tools/` (tracked); the pcap fixture in `analysis/` was already tracked. This also fixes `test_export_spo2.py`, which imported `decode_spo2` from the git-ignored `archive/` and would have failed on a fresh clone or in CI. |
 | **B2b** ✅ | The pcap decoder reads byte order backwards | `archive/capture/decode_pcap.py:73` treats a file starting with `d4 c3 b2 a1` as big-endian. It is little-endian, so 0 reports are parsed. | Done in `tests/capture_tools/decode_pcap.py` (274 reports, 244 samples); a test pins the little-endian case. |
 | **B2c** ✅ | The test expects 2 sessions; the capture has 1 | After B2b: one `0xEC` frame, session 1, 243 records, 4m 03s. | The test was wrong: `analysis/bum400_20260906_100516.md` (frame 067) shows one `0xEC` header with 243 samples. The test now expects 1 session, id 1, 243 records. Open observation: the notes say 243 samples ≈ 122 s, while `duration_str` reports 4m 03s. |
@@ -184,6 +184,21 @@ through to something environment-dependent (the real filesystem, real device
 enumeration, a real network call, wall-clock time) without mocking it, and
 that happens to pass only because of what this development machine has
 attached, installed, or happens to return right now. Not yet done.
+
+---
+
+## 3f. Alpha vs. beta (psytrap, 2026-10-15)
+
+**Alpha** ships without G7: all other gates (G1-G6) pass, but nobody has yet
+recorded a real session with a finger on the probe and confirmed the plot
+looks physiologically plausible. The tag/version stay plain semver
+(`bump_version.py` only accepts `X.Y.Z`); alpha status is signalled by marking
+the GitHub Release itself as a **pre-release**, not by a version suffix.
+
+**Beta** means G7 is done -- real-world tests completed, not just the
+simulator or a scripted hardware check. Promote by re-running the release
+flow with `prerelease: false` once G7 passes; no version bump is required
+just for that promotion.
 
 ---
 
