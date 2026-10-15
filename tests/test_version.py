@@ -33,6 +33,26 @@ class TestVersionSync(unittest.TestCase):
         self.assertEqual(out.getvalue().strip(), f"po400 {po400.__version__}")
 
 
+class TestVersionInOutput(unittest.TestCase):
+    """The tool version appears in the report headers, so pasted output identifies the build."""
+
+    def test_tool_version_line(self):
+        line = cli.tool_version_line()
+        self.assertTrue(line.startswith(po400.__version__ + " ("), line)
+
+    def test_wizard_header_shows_version(self):
+        out = io.StringIO()
+        with mock.patch.object(cli, "PulsoxHidDevice") as dev_cls, redirect_stdout(out):
+            dev_cls.return_value.connect.side_effect = RuntimeError("no device")
+            rc = cli.run_interactive_wizard(mock.Mock(device=None, backend=None, verbose=0))
+        self.assertEqual(rc, 1)
+        self.assertIn(f"po400 v{po400.__version__}", out.getvalue())
+
+    def test_no_stale_hardcoded_version_in_cli(self):
+        with open(os.path.join(ROOT, "po400", "cli.py"), encoding="utf-8") as f:
+            self.assertNotIn("v2.0.0", f.read())
+
+
 class TestBumpVersion(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

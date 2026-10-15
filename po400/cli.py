@@ -2,7 +2,7 @@
 
 Commands:
   info     - Read hardware model, firmware version, and USB descriptors.
-  sessions - List all stored recording sessions on device (v2.0.0).
+  sessions - List all stored recording sessions on device.
   download - Extract recorded sessions from device and save to CSV or JSON.
 """
 
@@ -11,6 +11,7 @@ import codecs
 import csv
 import json
 import os
+import platform
 import re
 import sys
 import time
@@ -22,7 +23,7 @@ try:
 except ImportError:
     pass
 
-from po400 import __version__, config, export, protocol, serial_engine
+from po400 import __version__, config, console, export, protocol, serial_engine
 from po400.protocol import Commands, Parsers
 from po400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info
 
@@ -82,6 +83,12 @@ def _configure_output_encoding() -> None:
             reconfigure(errors=_ENCODING_ERROR_HANDLER)
         except (ValueError, OSError, AttributeError):
             pass  # Best effort: a stream we cannot reconfigure is left as it was
+
+
+def tool_version_line() -> str:
+    """Tool version plus the runtime it runs on, for reports users paste into bug reports."""
+    build = "standalone binary" if getattr(sys, "frozen", False) else f"Python {platform.python_version()}"
+    return f"{__version__} ({build}, {platform.system()} {platform.release()}, {platform.machine()})"
 
 
 def clean_input(prompt: str = "") -> str:
@@ -146,7 +153,7 @@ def command_detect(args) -> int:
 
     engine = serial_engine.SerialDeviceEngine(dev)
     print("==================================================")
-    print("  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE")
+    print(f"  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE  (po400 v{__version__})")
     print("==================================================")
     print(f"Connected to {node_path}...")
     print("Listening for HID report packets... (Press Ctrl+C to stop)\n")
@@ -293,7 +300,7 @@ def command_sessions(args):
 
 
     print(f"\n==================================================")
-    print(f"  PULSOX PO-400 STORED RECORDING SESSIONS (v2.0.0)")
+    print(f"  PULSOX PO-400 STORED RECORDING SESSIONS  (po400 v{__version__})")
     print(f"==================================================")
 
     if not sessions:
@@ -451,6 +458,7 @@ def command_info(args):
     print(f"\n==================================================")
     print(f"  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
     print(f"==================================================")
+    print(f"  po400 Tool Version     : {tool_version_line()}")
     print(f"  Device Path / Node     : {node_path}")
     print(f"  Active HID Backend     : {backend_label}")
     print(f"  Hardware Model         : {decoded_model}")
@@ -586,6 +594,7 @@ def run_interactive_wizard(args) -> int:
     while True:
         print("\n============================================================")
         print("          PULOX PO-400 INTERACTIVE USER INTERFACE")
+        print(f"          po400 v{__version__}".rstrip())
         print("============================================================")
 
         print("\nConnecting to device...")
@@ -750,6 +759,7 @@ def run_interactive_wizard(args) -> int:
 
 def main(argv: Optional[List[str]] = None):
     _configure_output_encoding()
+    console.enlarge_owned_console()
     parser = argparse.ArgumentParser(
         prog="po400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
@@ -768,7 +778,7 @@ def main(argv: Optional[List[str]] = None):
     parser_info.set_defaults(func=command_info)
 
     # Subcommand: sessions
-    parser_sess = subparsers.add_parser("sessions", help="List all stored recording sessions on device (v2.0.0).")
+    parser_sess = subparsers.add_parser("sessions", help="List all stored recording sessions on device.")
     parser_sess.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_sess.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     parser_sess.set_defaults(func=command_sessions)
