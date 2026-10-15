@@ -8,6 +8,7 @@ the entire suite is automatically skipped to prevent test failures.
 """
 
 import sys
+import time
 import unittest
 from datetime import datetime
 
@@ -35,6 +36,29 @@ def is_device_connected() -> bool:
     except Exception:
         pass
 
+    return False
+
+
+def wait_for_hidraw_reattach(timeout: float = 5.0, interval: float = 0.02) -> bool:
+    """Waits for the kernel hidraw node to come back after a libusb-backed open.
+
+    The libusb build of the 'hid' module detaches the kernel usbhid driver while
+    it holds the device, which makes /dev/hidraw* vanish for the duration. The
+    node reappears a few tens of milliseconds after close, once udev has
+    re-applied its rules. Without this barrier a fast-following hidraw test sees
+    the missing node and fails with a misleading PermissionError.
+
+    Returns True once a readable node is back, False if the timeout elapsed.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            devs = find_pulsox_hid_devices()
+            if devs and devs[0][2]:  # dev_path, uevent, is_readable
+                return True
+        except Exception:
+            pass
+        time.sleep(interval)
     return False
 
 
@@ -88,6 +112,11 @@ class TestLiveDevice(unittest.TestCase):
             self.assertIn("import hid", meta["metadata_source"])
         finally:
             dev.close()
+            # Do not leak the detached-kernel-driver state into later hidraw tests.
+            self.assertTrue(
+                wait_for_hidraw_reattach(),
+                "Kernel hidraw node did not reappear after closing the libusb-backed handle.",
+            )
         self.assertFalse(dev.is_connected())
 
     def test_04_handshake_and_device_info(self):
