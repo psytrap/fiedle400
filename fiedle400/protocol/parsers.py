@@ -67,7 +67,7 @@ def parse_serial_response(report_bytes: bytes) -> Tuple[Optional[str], Optional[
 
 def parse_storage_architecture_response(report_bytes: bytes) -> Optional[str]:
     """Parses 0x9E / 0x9F Flash storage architecture report into payload and block size string."""
-    if len(report_bytes) >= 4 and report_bytes[0] in [0x9E, 0x9F, 0xF0]:
+    if len(report_bytes) >= 4 and report_bytes[0] in [0x9E, 0x9F]:   # not 0xF0: a bare ACK (f0 70) is no geometry
         chunk_size = report_bytes[1]
         block_factor = report_bytes[2]
         if chunk_size > 0:
@@ -115,15 +115,18 @@ def parse_session_index_table(report_bytes: bytes) -> List[SessionInfo]:
         user_id = report_bytes[2] if len(report_bytes) > 2 else 1
         sess_id = report_bytes[3] if len(report_bytes) > 3 else 1
         
-        # Bytes 10..13: 28-Bit Packed Little-Endian Integer (7-Bit Chunks): Duration in seconds
+        # Bytes 10..13: 28-Bit Packed Little-Endian Integer (7-Bit Chunks): raw 2 Hz sample count.
+        # The device takes two half-second readings per second and the records average them in
+        # pairs, so seconds = ceil(count / 2) (PROTOCOL.md 3.2; an odd count keeps its last reading).
         b0 = report_bytes[10] if len(report_bytes) > 10 else 0
         b1 = report_bytes[11] if len(report_bytes) > 11 else 0
         b2 = report_bytes[12] if len(report_bytes) > 12 else 0
         b3 = report_bytes[13] if len(report_bytes) > 13 else 0
-        duration_sec = (b0 & 0x7F) | ((b1 & 0x7F) << 7) | ((b2 & 0x7F) << 14) | ((b3 & 0x7F) << 21)
+        raw_samples = (b0 & 0x7F) | ((b1 & 0x7F) << 7) | ((b2 & 0x7F) << 14) | ((b3 & 0x7F) << 21)
+        duration_sec = (raw_samples + 1) // 2
         rec_cnt = duration_sec
 
-        if sess_id == 0 and duration_sec == 0 and rec_cnt == 0:
+        if sess_id == 0 and raw_samples == 0:
             return sessions
 
         dt = None
@@ -144,7 +147,8 @@ def parse_session_index_table(report_bytes: bytes) -> List[SessionInfo]:
             user_id=user_id if user_id > 0 else 1,
             record_count=rec_cnt,
             duration_sec=duration_sec,
-            timestamp=dt
+            timestamp=dt,
+            raw_samples=raw_samples,
         ))
         return sessions
 

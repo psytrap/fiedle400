@@ -146,6 +146,16 @@ class Trace:
             json.dump(doc, fh, indent=1)
             fh.write("\n")
 
+    def with_header_samples(self, raw_samples: int) -> "Trace":
+        """A copy whose 0xEC session headers announce ``raw_samples`` raw 2 Hz samples (to model a
+        longer session than the recording holds; the data replies are unchanged)."""
+        packed = bytes([raw_samples & 0x7F, (raw_samples >> 7) & 0x7F, (raw_samples >> 14) & 0x7F,
+                        (raw_samples >> 21) & 0x7F])
+        t = Trace(source=self.source + f" (header: {raw_samples} raw samples)")
+        for out, _, ins in self.groups:
+            t.add(out, [i[:10] + packed + i[14:] if i[:1] == b"\xec" else i for i in ins])
+        return t
+
     # -- lookup -----------------------------------------------------------
     def responses(self, key: Tuple) -> List[List[bytes]]:
         return [ins for _, k, ins in self.groups if k == key]

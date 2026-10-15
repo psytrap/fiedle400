@@ -93,7 +93,7 @@ class SerialPacketDetector:
                     chunk = stream_buf.consume(30)
                     block_id = chunk[2]
                     seq      = chunk[3]
-                    flags    = chunk[7]
+                    flags    = chunk[7]   # legacy single-sample frames only; for series frames byte 7 is mask m2
 
                     # Flash sentinel: block_id=0, seq=0, uninitialized flash bytes (0x7F)
                     if block_id == 0x00 and seq == 0x00 and chunk[5] == 0x7F and chunk[9] == 0x7F:
@@ -122,7 +122,6 @@ class SerialPacketDetector:
 
                     # 7-bit MSB unmasking of bytes 8..28 using mask bytes 5..7
                     unmasked = unmask_subframe_msb(chunk)
-                    status_str = decode_status_flags(flags)
 
                     is_spo2_block = (block_id in (1, 3, 5, 7) or block_id % 2 == 1)
                     if cls.last_block_type != is_spo2_block:
@@ -130,16 +129,39 @@ class SerialPacketDetector:
                         cls.pending_split = None
                         cls.last_block_type = is_spo2_block
 
-                    is_probe_out = bool(flags & 0x10) or (flags & 0x0F == 0x0F)
-
-                    # Check if unmasked bytes contain time-series data
+                    # A time-series frame carries delta-nibble data, or ends with the 0xFF 0xFF
+                    # terminator that pads the short final frame of a reply. Byte 7 is the third MSB
+                    # mask (PROTOCOL.md 3.5), not a status field, so it must not decide this.
                     has_series_payload = (
                         len(unmasked) > 0 and (unmasked[0] & 0xF0 == 0xF0)
                     ) or (
                         sum(1 for b in unmasked if (b & 0x7F) not in (0x00, 0x7F)) >= 4
-                    )
+                    ) or any(unmasked[i] == 0xFF and unmasked[i + 1] == 0xFF for i in range(len(unmasked) - 1))
 
-                    if has_series_payload and not is_probe_out:
+                    if has_series_payload and (sum(chunk[:29]) & 0x7F) != chunk[29]:
+                        # Every real stored frame ends with the 7-bit sum of its first 29 bytes
+                        # (PROTOCOL.md 3.5): a mismatch means bytes were corrupted, so none are trusted.
+                        events.append(DecodedPacket(
+                            packet_type="CORRUPT_FRAME",
+                            timestamp=base_timestamp,
+                            status_str="bad-checksum",
+                            raw_payload=bytes(chunk),
+                            block_id=block_id,
+                            seq=seq,
+                            sequence_gap=sequence_gap,
+                            expected_seq=expected_seq,
+                        ))
+                        continue
+
+                    if not has_series_payload:
+                        status_str = decode_status_flags(flags)
+                        is_probe_out = bool(flags & 0x10) or (flags & 0x0F == 0x0F)
+                    else:
+                        flags = 0
+                        status_str = "ok"
+                        is_probe_out = False
+
+                    if has_series_payload:
                         p_idx = 0
                         while p_idx < len(unmasked):
                             b = unmasked[p_idx]
@@ -174,11 +196,14 @@ class SerialPacketDetector:
 
                             spo2_val = None
                             hr_val = None
-                            if is_spo2_block:
-                                if 0 < v1 <= 100 and 0 < v2 <= 100:
+                            # Out-of-range readings are the stream's finger-out marker (SpO2 0x7F = 127,
+                            # pulse 0xFF = 255; analysis/bum400_20260906_100516.md section 4).
+                            limit = 100 if is_spo2_block else 254
+                            valid = 0 < v1 <= limit and 0 < v2 <= limit
+                            if valid:
+                                if is_spo2_block:
                                     spo2_val = round((v1 + v2) / 2.0)
-                            else:
-                                if 0 < v1 <= 254 and 0 < v2 <= 254:
+                                else:
                                     hr_val = round((v1 + v2) / 2.0)
 
                             events.append(DecodedPacket(
@@ -188,12 +213,13 @@ class SerialPacketDetector:
                                 heart_rate=hr_val,
                                 ppg_wave=0,
                                 status_flags=flags,
-                                status_str=status_str,
+                                status_str="ok" if valid else "probe-out",
                                 raw_payload=bytes(chunk),
                                 block_id=block_id,
                                 seq=seq,
                                 sequence_gap=sequence_gap,
                                 expected_seq=expected_seq,
+                                invalid_sample=not valid,
                             ))
                             p_idx += 1
                     else:

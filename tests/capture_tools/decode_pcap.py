@@ -108,6 +108,7 @@ def decode_pcap_reports(reports: List[Tuple[int, bytes]]) -> Tuple[List[Dict[str
                         "timestamp": s.timestamp.isoformat() if s.timestamp else None,
                         "duration_str": s.duration_str,
                         "record_count": s.record_count,
+                        "raw_samples": s.raw_samples,
                     })
                     if s.timestamp and current_timestamp is None:
                         current_timestamp = s.timestamp

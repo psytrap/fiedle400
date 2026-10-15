@@ -6,9 +6,8 @@ the detector and the CLI are the real code; only the kernel node and the device
 behind it are simulated. See tests/hwsim.py for what that does and does not cover.
 
 Tests marked ``expectedFailure`` pin known defects found while building the
-simulator (RELEASE_PLAN.md section 3d). They fail today by design; when the defect is fixed
-the test starts passing, the suite reports an "unexpected success", and the marker
-should be removed.
+simulator (RELEASE_PLAN.md section 3d); none are open at the moment. T1 to T7 were pinned this way
+and are fixed: their tests now assert the correct behaviour.
 """
 
 import contextlib
@@ -346,7 +345,7 @@ class TestSessionsFlow(FlowCase):
         sessions = self.engine.list_sessions()
         self.assertEqual(len(sessions), 1)
         s = sessions[0]
-        self.assertEqual((s.session_id, s.user_id, s.record_count), (1, 1, 243))
+        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 122, 243))
         self.assertEqual(s.timestamp.isoformat(), "2026-09-06T10:00:46")
 
     def test_sends_unlock_reset_then_query(self):
@@ -357,12 +356,12 @@ class TestSessionsFlow(FlowCase):
         self.engine.list_sessions()
         self.assertEqual(self.unmatched_keys(), {(0x9C, 0x80)})
 
-    @unittest.expectedFailure
     def test_header_count_is_in_raw_2hz_samples_so_duration_is_about_two_minutes(self):
-        """T3: the header says 243 and the capture notes say 243 raw values at 2 Hz = 122 s, but
-        SessionInfo treats the number as seconds, so `sessions` prints 4m 03s."""
+        """T3 (fixed): the header says 243 raw 2 Hz values = 122 s (an odd count keeps its last
+        reading), where SessionInfo used to read the number as seconds and print 4m 03s."""
         s = self.engine.list_sessions()[0]
         self.assertEqual(s.duration_seconds, 122)
+        self.assertEqual(s.duration_str, "2m 02s")
 
 
 class TestDownloadFlow(FlowCase):
@@ -372,7 +371,7 @@ class TestDownloadFlow(FlowCase):
             sent_names(self.fake),
             [UNLOCK, RESET_INDEX, QUERY_SESSIONS,                 # list
              UNLOCK, STORAGE_INIT, SPO2_PAGE0, PULSE_PAGE0,        # page 0 of both series
-             SPO2_PAGE1, PULSE_PAGE1,                              # page 1: unrecorded, so unanswered
+                                                                   # 122 records are reached: no further page
              SEGMENT_ACK],
         )
 
@@ -384,8 +383,11 @@ class TestDownloadFlow(FlowCase):
             self.assertEqual(len(found[0]), 64)
 
     def test_unanswered_page_is_retried_then_abandoned_cleanly(self):
+        """A session announcing more samples than the recording holds makes the engine ask for the next
+        window (offset 244 = after 122 records), which the recording does not contain."""
+        self.fake.trace = trace().with_header_samples(400)
         records = self.download()
-        retries = [r for r in self.fake.sent if r.hex().startswith(SPO2_PAGE1)]
+        retries = [r for r in self.fake.sent if r.hex().startswith(Commands.session_page(1, 1, 244, 1)[:9].hex())]
         self.assertEqual(len(retries), 3, "one request plus two retries")
         self.assertTrue(records)
 
@@ -409,23 +411,21 @@ class TestDownloadFlow(FlowCase):
         self.assertEqual(len(series[1]), 243)   # raw 2 Hz values
         self.assertEqual(len(records), 122)     # engine halves the rate: two raw values per record
         checked = 0
+        # Two raw values per record; an odd final value is a record of its own (243 = 121 pairs + 1).
+        def value(raw, i):
+            return raw[2 * i + 1] if 2 * i + 1 < len(raw) else raw[2 * i]
         for i, rec in enumerate(records):
-            if rec["spo2"] is None:
-                continue                         # see test_good_samples_are_not_blanked_at_page_end
-            self.assertEqual(rec["spo2"], round((series[1][2 * i] + series[1][2 * i + 1]) / 2.0), i)
-            self.assertEqual(rec["heart_rate"], round((series[2][2 * i] + series[2][2 * i + 1]) / 2.0), i)
-            checked += 1
-        self.assertGreaterEqual(checked, 103)   # 103 today; all 122 once T1 is fixed
+            self.assertEqual(rec["spo2"], round((series[1][2 * i] + value(series[1], i)) / 2.0), i)
+            self.assertEqual(rec["heart_rate"], round((series[2][2 * i] + value(series[2], i)) / 2.0), i)
 
     def test_timestamps_follow_the_session_start_at_one_per_second(self):
         records = self.download()
         self.assertEqual(records[0]["timestamp"], "2026-09-06T10:00:46")
         self.assertEqual(records[-1]["timestamp"], "2026-09-06T10:02:47")
 
-    @unittest.expectedFailure
     def test_good_samples_are_not_blanked_at_page_end(self):
-        """T1: the last frame of a page has a non-zero MSB mask in byte 7, which the detector reads as
-        status flags ("searching,low-perfusion"); the engine then stores those samples as None."""
+        """T1 (fixed): the last frame of a page has a non-zero MSB mask in byte 7, which the detector used
+        to read as status flags ("searching,low-perfusion"), so the engine stored those samples as None."""
         records = self.download()
         self.assertEqual([r for r in records if r["spo2"] is None], [])
 
@@ -484,7 +484,7 @@ class TestFaults(unittest.TestCase):
         self.assertEqual(rows, 122)
 
     def test_unplugged_mid_download_fails_with_one_clear_line_and_writes_nothing(self):
-        rc, out, err, written, rows, fake = self.run_download(unplug_after=8)
+        rc, out, err, written, rows, fake = self.run_download(unplug_after=7)
         self.assertEqual(rc, 1)
         self.assertFalse(written)
         self.assertIn("No such device", out + err)
@@ -504,26 +504,28 @@ class TestFaults(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertLess(rows, 122)
 
-    @unittest.expectedFailure
     def test_device_that_never_answers_is_not_reported_as_a_successful_download(self):
-        """T2: with every reply dropped, `download` invents "Session #1 / 60 records", finds nothing,
-        saves an empty file and exits 0. A dead or ignoring device should be an error."""
+        """T2 (fixed): with every reply dropped, `download` used to invent "Session #1 / 60 records",
+        find nothing, save an empty file and exit 0. A dead or ignoring device is an error."""
         rc, out, err, written, rows, fake = self.run_download(fault=lambda key, i, rep: None)
-        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, 1)
+        self.assertFalse(written)
+        self.assertIn("No recording data was received", out + err)
 
-    @unittest.expectedFailure
     def test_info_does_not_print_made_up_values_when_the_device_is_silent(self):
-        """T4: `info` falls back to hard-coded firmware "v2.0", serial "50F", user and geometry when the
-        device does not answer, so they look like device readings."""
+        """T4 (fixed): `info` used to fall back to hard-coded firmware "v2.0", serial "50F", user and
+        geometry when the device did not answer, so they looked like device readings."""
         fake = fresh_fake(fault=lambda key, i, rep: None)
         with HidrawSim(fake), VirtualClock().patch():
             rc, out, err = run_cli(["info", "--backend", "hidraw"])
         self.assertNotIn("v2.0", out)
         self.assertNotIn("50F", out)
+        self.assertNotIn("Sub-chunk", out)
+        for label in ("Firmware Version", "Serial Number", "User Profile String", "Storage Memory Geometry"):
+            self.assertRegex(out, rf"{label}\s*: not reported by the device")
 
-    def test_corrupted_frame_is_decoded_today(self):
-        """Characterisation for T5: a storage frame with a wrong checksum is accepted as-is.
-        Delete this test when T5 is fixed (it flips together with the expected failure below)."""
+    def test_frame_with_a_bad_checksum_is_rejected(self):
+        """T5 (fixed): the detector never verified the 7-bit checksum that every real frame carries."""
         stream = b"".join(trace().responses((0x9D, 0x04, 1, 1, 1, 0, 0))[0])
         frame = bytearray(stream[30:60])
         frame[10] ^= 0x01                       # flip a data bit, leave the checksum stale
@@ -531,18 +533,20 @@ class TestFaults(unittest.TestCase):
         buf = SerialByteStreamBuffer()
         buf.write(bytes(frame))
         events = SerialPacketDetector.detect_and_decode_stream(buf)
-        self.assertTrue([e for e in events if e.packet_type == "STORED_BLOCK"])
-
-    @unittest.expectedFailure
-    def test_frame_with_a_bad_checksum_is_rejected(self):
-        """T5: the detector never verifies the 7-bit checksum that every real frame carries."""
-        stream = b"".join(trace().responses((0x9D, 0x04, 1, 1, 1, 0, 0))[0])
-        frame = bytearray(stream[30:60])
-        frame[10] ^= 0x01
-        buf = SerialByteStreamBuffer()
-        buf.write(bytes(frame))
-        events = SerialPacketDetector.detect_and_decode_stream(buf)
         self.assertEqual([e for e in events if e.packet_type == "STORED_BLOCK"], [])
+        self.assertEqual([e.packet_type for e in events], ["CORRUPT_FRAME"])
+
+    def test_download_with_a_corrupted_frame_warns_and_still_finishes(self):
+        def corrupt(key, i, rep):
+            if key[:2] == (0x9D, 0x04) and key[2] == 1 and i == 0:
+                b = bytearray(rep)
+                b[40] ^= 0x01                   # inside the second frame's data
+                return bytes(b)
+            return rep
+        rc, out, err, written, rows, fake = self.run_download(fault=corrupt)
+        self.assertEqual(rc, 0)
+        self.assertIn("1 stored frame(s) failed their checksum", out)
+        self.assertIn("Download it again", out)
 
 
 # --------------------------------------------------------------------------

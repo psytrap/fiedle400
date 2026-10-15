@@ -63,6 +63,7 @@ class SessionInfo:
     record_count: int = 0
     duration_sec: int = 0
     timestamp: Optional[datetime] = None
+    raw_samples: int = 0   # raw 2 Hz readings stored (0xEC header); record_count and duration_sec are 1 Hz
 
     @property
     def duration_seconds(self) -> int:
@@ -117,3 +118,4 @@ class DecodedPacket:
     seq: Optional[int] = None
     sequence_gap: bool = False
     expected_seq: Optional[int] = None
+    invalid_sample: bool = False  # stored series pair outside the physiological range (finger out): value is None

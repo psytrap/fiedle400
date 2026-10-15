@@ -231,6 +231,18 @@ Packed consecutively in 64-byte HID input reports:
 > single request at offset 0 for the whole stored series; advancing the offset is for resuming a
 > partial read, not paging through additional data.
 
+> **Boundary probe (psytrap's laptop, 2026-10-15, `tests/fixtures/probe.trace.json`, one 214-sample session).**
+> SpO2 reads at offsets 0, 1, 2, 50, 107, 150, 213, 214, 215, 300 show that every reply runs from the offset
+> **to the end of the stored data** (214, 213, 212, 164, 107, 64 and 1 values; all equal to `window(0)[k:]`).
+> At offset == stored samples (214) the device sends one frame of `0xFF` filler (`ED 04 01 00 00 7B 7F 7F ...`,
+> which decodes to the `0xFF 0xFF` terminator, no samples); beyond it (215, 300) it sends **nothing**. How a
+> session longer than one reply (more than the 6 frames seen so far) is split is still unrecorded; until then
+> `fiedle400` continues at offset `2 * records_so_far`, so a split reply is read correctly, and stops on a
+> reply that adds no record (the end marker, or silence).
+> The short final frame of a reply has all three MSB masks set (`7F`), so mask byte `m2` is `0x7F` there;
+> it is *not* a status flag (RELEASE_PLAN.md §3d, T1). Finger-out shows up as out-of-range *values* (SpO2 127,
+> pulse 255), see `analysis/bum400_20260906_100516.md` §4.
+
 #### Device Response: Stored Data Sub-Frame (`0xED`, 30 Bytes each)
 
 | Offset | Field | Format | Description |

@@ -17,11 +17,12 @@ class TestPcapDecoder(unittest.TestCase):
         self.assertGreater(len(reports), 0)
 
         sessions, samples = decode_pcap_reports(reports)
-        # The capture holds a single 0xEC session header: session 1, 243 samples
-        # (see analysis/bum400_20260906_100516.md, frame 067).
+        # The capture holds a single 0xEC session header: session 1, 243 raw 2 Hz
+        # samples = 122 one-second records (see analysis/bum400_20260906_100516.md, frame 067).
         self.assertEqual(len(sessions), 1)
         self.assertEqual(sessions[0]["session_id"], 1)
-        self.assertEqual(sessions[0]["record_count"], 243)
+        self.assertEqual(sessions[0]["raw_samples"], 243)
+        self.assertEqual(sessions[0]["record_count"], 122)
         self.assertGreater(len(samples), 0)
 
         # Check that valid samples (status == ok) have physiological SpO2 (30..100) and HR (25..250)

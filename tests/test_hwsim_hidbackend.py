@@ -16,11 +16,10 @@ This proves the *code's* behaviour on the backend Windows/macOS use. It cannot p
 how the real Windows HID stack behaves -- the W1-W5 hypotheses in
 handoff/ci-mock-hardware-response.md need the physical laptop regardless.
 
-Findings marked ``expectedFailure`` are the same T1/T3/T4/T6 defects pinned in
-tests/test_hwsim_realtrace.py (RELEASE_PLAN.md section 3d): they are protocol-level bugs,
-not backend-specific ones, so they reproduce here too, through a completely different
-transport. That is itself useful confirmation -- a bug that only showed up on one backend
-would suggest the simulator was modelling the backend, not the device.
+The T1/T3/T4/T6/T7 defects first pinned as expected failures in tests/test_hwsim_realtrace.py
+(RELEASE_PLAN.md section 3d) are protocol-level, not backend-specific, so they reproduced here
+too, through a completely different transport. They are fixed; these tests now assert the correct
+behaviour on this backend as well.
 """
 
 import contextlib
@@ -95,7 +94,7 @@ class FlowCase(unittest.TestCase):
 class TestSessions(FlowCase):
     def test_lists_the_recorded_session(self):
         (s,) = self.engine.list_sessions()
-        self.assertEqual((s.session_id, s.user_id, s.record_count), (1, 1, 214))
+        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 107, 214))
         self.assertEqual(s.timestamp.isoformat(), "2026-09-30T19:54:53")
         self.assert_fully_answered()
 
@@ -103,9 +102,8 @@ class TestSessions(FlowCase):
         self.engine.list_sessions()
         self.assertEqual([command_key(r) for r in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
 
-    @unittest.expectedFailure
     def test_header_count_is_in_raw_2hz_samples_so_duration_is_107_seconds(self):
-        """T3, same as on Linux: 214 raw samples at 2 Hz are 107 s."""
+        """T3 (fixed), same as on Linux: 214 raw samples at 2 Hz are 107 s."""
         (s,) = self.engine.list_sessions()
         self.assertEqual(s.duration_seconds, 107)
 
@@ -117,21 +115,15 @@ class TestDownload(FlowCase):
 
     def test_no_retries_when_every_request_is_answered(self):
         self.download()
-        self.assertEqual(len(self.fake.sent), 12)
+        self.assertEqual(len(self.fake.sent), 8)
         self.assert_fully_answered()
 
-    @unittest.expectedFailure
     def test_download_returns_107_records_not_214(self):
-        """T6, same as on Linux: the sliding-window offset bug pads a 107-record session
-        out to 214 by re-reading overlapping data. Through HidBackend, not hidraw."""
+        """T6/T1 (fixed), same as on Linux: one window, each sample once, through HidBackend."""
         records = self.download()
         self.assertEqual(len(records), 107)
-
-    def test_download_today_returns_214_records_padded_by_the_sliding_window(self):
-        """Characterisation (not a defect test): proves HidBackend reproduces the same
-        padding as LinuxHidrawBackend, i.e. T6 is in the protocol layer, not the backend."""
-        records = self.download()
-        self.assertEqual(len(records), 214)
+        self.assertEqual([r["spo2"] for r in records], rt.pairs(rt.window(rt.SPO2, 0)))
+        self.assertEqual([r["flags"] for r in records], ["ok"] * 107)
 
 
 class TestInfo(FlowCase):
@@ -141,18 +133,18 @@ class TestInfo(FlowCase):
         self.assertEqual(res["device_info"].user_profile, "user")
         self.assert_fully_answered()
 
-    @unittest.expectedFailure
-    def test_firmware_line_is_not_a_hard_coded_fallback(self):
-        """T4/T7, same as on Linux."""
+    def test_firmware_serial_and_geometry_are_not_made_up(self):
+        """T4/T7 (fixed), same as on Linux."""
         rc, out, err = self.run_info()
         self.assertEqual(rc, 0)
         self.assertNotIn("v2.0 (CMS-60D/PO-400 v2)", out)
+        self.assertNotIn("112 Bytes Sub-chunk Payload", out)
+        for label in ("Firmware Version", "Serial Number", "Storage Memory Geometry"):
+            self.assertRegex(out, rf"{label}\s*: not reported by the device")
 
-    @unittest.expectedFailure
-    def test_model_descriptor_is_not_labelled_serial_number(self):
-        """T4/T7, same as on Linux."""
+    def test_the_model_descriptor_is_shown_as_such(self):
         rc, out, err = self.run_info()
-        self.assertNotRegex(out, r"Serial Number\s*:\s*50F")
+        self.assertRegex(out, r"Device Model Descriptor\s*: 50F")
 
 
 # --------------------------------------------------------------------------
@@ -199,7 +191,7 @@ class TestCtypesStyleBranch(unittest.TestCase):
                 self.assertEqual(dev.backend_name, "hid")
                 engine = SerialDeviceEngine(dev)
                 (s,) = engine.list_sessions()
-                self.assertEqual(s.record_count, 214)
+                self.assertEqual(s.record_count, 107)
             finally:
                 dev.close()
         self.assertEqual(fake.destructive, [])

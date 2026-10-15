@@ -269,6 +269,10 @@ def command_download(args):
         dev.close()
 
     print(f"\nDownload complete. Total records collected across all sessions: {len(total_records)}")
+    if not total_records:
+        print("❌ No recording data was received from the device, so nothing was saved. "
+              "Check that a recording is stored (fiedle400 sessions) and that the device is connected and awake.")
+        return 1
     # Precedence: -o, then --workdir, then FIEDLE400_WORKDIR, then the stored
     # setting (prompting once on a first interactive run), then the cwd.
     target_dir = None if args.output else (override_dir or config.resolve_workdir())
@@ -456,10 +460,12 @@ def command_info(args):
     pid_hex = meta.get("pid_hex", "028A")
     decoded_model, model_source = protocol.decode_usb_vid_pid(vid_hex, pid_hex)
 
-    fw_str = info.firmware_version if (info and info.firmware_version) else "v2.0 (CMS-60D/PO-400 v2)"
-    sn_str = info.serial_number if (info and info.serial_number) else "50F"
-    up_str = info.user_profile if (info and info.user_profile) else "user"
-    geom_str = info.flash_geometry if (info and info.flash_geometry) else "112 Bytes Sub-chunk Payload"
+    not_reported = "not reported by the device"
+    fw_str = (info.firmware_version if info else None) or not_reported
+    sn_str = (info.serial_number if info else None) or not_reported
+    up_str = (info.user_profile if info else None) or not_reported
+    geom_str = (info.flash_geometry if info else None) or not_reported
+    model_str = (info.hardware_id if info else None) or not_reported
 
     print(f"\n==================================================")
     print(f"  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
@@ -480,6 +486,7 @@ def command_info(args):
         print(f"  USB Bus / Topology     : {meta['bus_path']}")
     print(f"  Descriptor Data Source : {meta.get('metadata_source', 'N/A')}")
     print(f"  Read/Write Access      : Readable={readable}, Writable={writable}")
+    print(f"  Device Model Descriptor: {model_str}")
     print(f"  Firmware Version       : {fw_str}")
     print(f"  Serial Number          : {sn_str}")
     print(f"  User Profile String    : {up_str}")

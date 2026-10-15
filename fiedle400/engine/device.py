@@ -170,6 +170,7 @@ class SerialDeviceEngine:
         sess_records = []
         total_packets = 0
         total_sequence_gaps = 0
+        corrupt_frames = 0
         target_records = sess_info.record_count if sess_info.record_count > 0 else (duration_sec if duration_sec > 0 else 600)
 
         last_block_spo2: Optional[int] = None
@@ -219,9 +220,16 @@ class SerialDeviceEngine:
             block_spo2_pkts.clear()
             block_hr_pkts.clear()
 
-        for page_idx in range(256):
+        # The "page" argument of a 0x9D 0x04 read is the sample offset at which the reply starts
+        # (RELEASE_PLAN.md T6): each request continues where the records so far end. A record
+        # averages two raw 2 Hz samples, so the offset is 2 * records. A reply that adds no record
+        # (the end marker at offset == stored samples, or silence past it) ends the download.
+        for _window in range(4096):
             if len(sess_records) >= target_records:
                 break
+            page_idx = 2 * len(sess_records)
+            records_before = len(sess_records)
+            SerialPacketDetector.reset_decoder_state()
 
             page_received_packets = False
             flash_sentinel_hit = False
@@ -263,6 +271,10 @@ class SerialDeviceEngine:
                         if ev.packet_type == "FLASH_SENTINEL":
                             flash_sentinel_hit = True
                             break
+                        if ev.packet_type == "CORRUPT_FRAME":
+                            corrupt_frames += 1
+                            page_received_packets = True
+                            last_pkt_time = time.time()
                         if ev.packet_type == "STORED_BLOCK":
                             page_received_packets = True
                             last_pkt_time = time.time()
@@ -284,6 +296,8 @@ class SerialDeviceEngine:
                                 block_spo2_pkts.append(ev)
                             elif ev.heart_rate is not None:
                                 block_hr_pkts.append(ev)
+                            elif ev.invalid_sample:
+                                (block_spo2_pkts if ev.block_id % 2 == 1 else block_hr_pkts).append(ev)
                 if flash_sentinel_hit:
                     break
                 self._sleep(0.005)
@@ -331,6 +345,11 @@ class SerialDeviceEngine:
                             if ev.packet_type == "FLASH_SENTINEL":
                                 flash_sentinel_hit = True
                                 break
+                            if ev.packet_type == "CORRUPT_FRAME":
+                                corrupt_frames += 1
+                                pulse_received = True
+                                page_received_packets = True
+                                last_pkt_time = time.time()
                             if ev.packet_type == "STORED_BLOCK":
                                 pulse_received = True
                                 page_received_packets = True
@@ -353,6 +372,8 @@ class SerialDeviceEngine:
                                     block_hr_pkts.append(ev)
                                 elif ev.spo2 is not None:
                                     block_spo2_pkts.append(ev)
+                                elif ev.invalid_sample:
+                                    (block_spo2_pkts if ev.block_id % 2 == 1 else block_hr_pkts).append(ev)
                     if flash_sentinel_hit:
                         break
                     self._sleep(0.005)
@@ -363,6 +384,8 @@ class SerialDeviceEngine:
                 print(f"\r[Serial Engine] Downloaded {total_packets} pkts for Session #{sess_id} ({len(sess_records)}/{target_records} records)...", end="", flush=True)
 
             if flash_sentinel_hit or not page_received_packets or len(sess_records) >= target_records:
+                break
+            if len(sess_records) == records_before:
                 break
 
         flush_block_buffers()
@@ -375,6 +398,10 @@ class SerialDeviceEngine:
         self._sleep(0.05)
 
         print(f"\nSession #{sess_id} download complete ({len(sess_records)} records, {total_packets} packets, {total_sequence_gaps} sequence gaps).")
+        if corrupt_frames:
+            print(f"WARNING: {corrupt_frames} stored frame(s) failed their checksum and were dropped; "
+                  f"Session #{sess_id} is missing those samples and its SpO2 and pulse values may be misaligned "
+                  f"from that point on. Download it again.")
         return sess_records
 
     def read_device_info(self, debug: Union[bool, int] = 0) -> Dict[str, Any]:
@@ -417,6 +444,10 @@ class SerialDeviceEngine:
             fw_info = Parsers.parse_device_info(fw_report)
             if fw_info.firmware_version:
                 info.firmware_version = fw_info.firmware_version
+        elif fw_report and fw_report[0] == 0xF1:
+            # The real device answers 0x81 with the hardware model descriptor (e.g. "50F"), not a firmware version.
+            model = fw_report[1:10].decode("ascii", errors="ignore").strip()
+            info.hardware_id = "".join(c for c in model if c.isalnum() or c in "-_ ").strip() or None
 
         # Step 5: Query 0x8E (Serial Number / User Profile Query)
         self.dev.write_report(Commands.build_hid(0x8E, [0x03, 0x11]))
