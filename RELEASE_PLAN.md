@@ -182,6 +182,26 @@ not an explicit "0". Ambiguous: this could mean zero sessions (some UIs
 only show a count when there is something to count), or that psytrap was
 not on the screen that would show one. Not yet resolved either way.
 
+**Mechanism for sessions 1-3's disappearance, confirmed (psytrap):** switching
+the device from Auto to Manual recording mode erases its memory. That fully
+explains the 3 -> 1 -> 0 sequence; not a protocol or query bug.
+
+**User-slot hypothesis, tested and ruled out:** `PROTOCOL.md` 3.13 documents
+per-user erase for slots 1-6 (`0x91`..`0x96`), while the implemented
+`QUERY_SESSIONS`/`SESSION_RESET` commands (`commands.py`
+`build_session_index_query_command`/`build_reset_session_index_command`) take
+no user parameter at all -- hardcoded to slot 1. Tested directly on hardware
+whether byte `[1]` doubles as a user selector there too, mirroring the erase
+command's framing: queried slots 1 through 6 explicitly after a fresh Manual-
+mode recording. **All six returned the identical bare `COMMAND_ACK`, not
+`0xEC` data for any slot.** This rules out "stored under a different user
+slot, unreachable by our hardcoded query" -- if that were true, at least one
+slot should have answered with real data. The simpler explanation now looks
+more likely: the Manual on-then-off cycle did not actually commit an indexed
+session at all, for a reason not yet found (missing a save/confirm step on
+the device? a minimum-duration threshold?) -- not a protocol addressing gap
+in this tool. Still needs confirming directly on the device's own UI.
+
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
 (`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other
 queries, now also seen on the session-index query itself. psytrap: "storage
