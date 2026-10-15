@@ -1,11 +1,11 @@
-# Delegation brief: CI tests on Linux against mock hardware
+# Delegation brief: CI tests against mock hardware (Linux + Windows)
 
 Written by the local side for the cloud, 2026-10-15, against HEAD `f5b17e6`
 (version `0.1.4`). Task set by psytrap.
 
 ## Goal
 
-Exercise the device-dependent code paths in CI on Linux, using simulated
+Exercise the device-dependent code paths in CI across platforms, using simulated
 hardware, so the parts that today only run when a PO-400 is physically attached
 get covered on every push.
 
@@ -60,6 +60,40 @@ anything on it** -- if it does not work there, B is dead and A is the answer.
 
 A reasonable outcome is A now and B later, or A everywhere plus B as a
 Linux-only job allowed to be skipped when `/dev/uhid` is unavailable.
+
+## Windows needs this too (psytrap, 2026-10-15)
+
+Scope this for Windows as well, not Linux only. Two things already true, so
+they are not the gap:
+
+- The full mock suite (163 tests) already runs on `windows-latest` via
+  `tests.yml` -- nothing here is Linux-gated at the CI-matrix level.
+- `tests/test_hid_driver.py` already mocks `HidBackend` -- the class Windows
+  (and macOS) actually use -- at the wire level: `hid.enumerate()` parsing,
+  `hid.device`/`hid.Device` style construction, the `0x00` report-ID prepend
+  on writes, read/close. That is solid and does not need redoing.
+
+The actual gap on Windows is the same as on Linux, one layer up: nothing drives
+the *full protocol* (unlock handshake -> session index -> block download ->
+non-destructive ack -> export) through an actual backend instance. Today only
+`MockHidDevice` exercises that flow, and it bypasses `HidBackend` and
+`LinuxHidrawBackend` entirely -- the engine talks straight to a Python object
+with a canned response list, never through either backend's `write_report` /
+`read_report`.
+
+So whichever protocol-aware fake Approach A produces, it should be exercised
+through **both** backend classes, not just injected into the engine directly:
+a fake `hid` module (same `MagicMock`/`patch.dict(sys.modules, ...)` style
+already used in `test_hid_driver.py`) that speaks real protocol bytes back
+through `HidBackend`, and the existing hidraw-based approach (A or B) through
+`LinuxHidrawBackend` on Linux.
+
+**Approach B has no Windows equivalent.** `/dev/uhid` is a Linux kernel
+interface; there is nothing comparable on Windows without a kernel-mode driver
+or a signed virtual HID framework (e.g. HidGuardian or a custom KMDF driver),
+which is almost certainly not worth building for this project. For Windows,
+Approach A (a fake `hid` module speaking protocol) is the only realistic path
+-- there is no B to fall back to there.
 
 ## Constraints
 
