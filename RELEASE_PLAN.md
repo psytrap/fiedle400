@@ -432,6 +432,13 @@ enumeration, a real network call, wall-clock time) without mocking it, and
 that happens to pass only because of what this development machine has
 attached, installed, or happens to return right now. Not yet done.
 
+**TODO (psytrap, 2026-10-15): cross-check the test suite for code smell.**
+Broader than the environment-assumption audit above -- a pass over
+`tests/` for the usual smells (duplicated setup that should be a fixture,
+assertions too weak to catch the regression they're named for, tests that
+pass for the wrong reason, dead/unreachable test code, overfit mocks that
+would still pass after the real implementation broke). Not yet done.
+
 ---
 
 ## 3f. Alpha vs. beta (psytrap, 2026-10-15)
