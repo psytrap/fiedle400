@@ -438,6 +438,107 @@ Used on serial-stream device models:
 
 ---
 
+### 3.14 Manual Recording Protocol (`0xA0`/`0xD0`, `0xA2`/`0xD2`, `0xA3`/`0xD3`, `0xA7`/`0xD8`)
+
+> [!IMPORTANT]
+> **Documented, not yet implemented.** Found 2026-10-15 via a live USB capture
+> of the vendor's own SpO2 Assistant software reading a **Manual-mode**
+> recording, cross-referenced against its disassembly (`SpO2.exe` @
+> `0x004c4875` for the delta decoder). This is a **separate, parallel**
+> protocol from the `0x9C`/`0x9D` flash-index commands used everywhere else
+> in this document, which only ever read **Auto-mode** sessions -- that is
+> the root cause of the Manual-mode session visibility question in
+> `RELEASE_PLAN.md` §3d: Manual-mode data was never reachable via `0x9C`/
+> `0x9D` at all, by design, not by a bug or a missing argument. No code in
+> this project implements the commands below yet.
+>
+> **Opcode `0xA2` is reused.** §3.1's `UNLOCK_HANDSHAKE` already sends `0xA2`
+> as the second half of a combined `0xA7`-then-`0xA2` preamble. The request
+> below is a standalone, single-opcode `A2 00 00 00 22` with a completely
+> different meaning (pulse-rate data). Disambiguate by context -- whether it
+> immediately follows an `0xA7` phase-1 write, or stands alone -- not by the
+> opcode byte in isolation.
+
+#### A. Manual Recording Header (`0xA0` -> `0xD0`)
+
+Request: `A0 00 20` (sub-command `0x00`, checksum `0x20`).
+
+| Offset | Field | Format | Notes |
+| :--- | :--- | :--- | :--- |
+| `0x00` | Opcode | `0xD0` | Manual recording header response |
+| `0x01` | Unknown | `0x00` in every sample seen | Not yet identified -- always zero so far |
+| `0x02..0x04` | Date | `YY MM DD` | e.g. `1A 0A 0F` = 2026-10-15 (`0x1A` = 26 -> `2000+26`) |
+| `0x05..0x07` | Time | `HH MM SS` | e.g. `13 22 10` = 19:34:16 |
+| `0x08..0x0A` | Duration (s) | 3 bytes, direct (not the 28-bit packing used elsewhere) | e.g. `00 00 3B` = 59 s. **Confirmed live (2026-10-15) against the real device with the offsets above -- the original draft had these one byte too early, missing the unknown byte at `0x01`.** |
+
+#### B. SpO2 Data Block (`0xA3` -> `0xD3`)
+
+Request: `A3 00 00 00 23` (start at subframe 0; the last two bytes are a
+14-bit-packed subframe offset per §1.3, `00 00` = offset 0).
+
+Response: one 64-byte report holds **three** 20-byte subframes back to back,
+plus 4 bytes of trailing padding:
+
+| Byte range | Content |
+| :--- | :--- |
+| `0x00..0x13` | Subframe 0: `D3 00 00` + 16 data bytes + checksum |
+| `0x14..0x27` | Subframe 1: `D3 01 00` + 16 data bytes + checksum |
+| `0x28..0x3B` | Subframe 2: `D3 02 00` + 16 data bytes + checksum |
+| `0x3C..0x3F` | Padding, `00 00 00 00` |
+
+#### C. Pulse Data Block (`0xA2` -> `0xD2`)
+
+Request: `A2 00 00 00 22` (start at subframe 0). Identical 64-byte, three-
+subframe layout to `0xD3` above, opcode `0xD2` in place of `0xD3`.
+
+#### D. Block Acknowledgment (`0xA7` -> `0xD8`)
+
+| Series | Request | Response |
+| :--- | :--- | :--- |
+| SpO2 | `A7 01 28` | `D8 01 00 59` |
+| Pulse | `A7 00 27` | `D8 00 00 58` |
+
+#### E. End of Manual Download
+
+`A3 7F` (SpO2) and `A2 7F` (Pulse) signal the regular end of the manual
+download to the device -- the same role `0x9D 0x02` (`SEGMENT_ACK`, §3.5)
+plays for the Auto-mode storage path.
+
+#### F. Delta-Nibble Decompression (`0xD3` / `0xD2` payload) -- PARTIALLY confirmed
+
+From the `SpO2.exe` disassembly (`0x004c4875`):
+
+- Byte `0x04` of the 16-byte data span: the base value for this subframe.
+- Bytes `0x05..0x12` (14 bytes): each byte packs **two** measurement points,
+  sign-and-magnitude rather than the pure-subtraction scheme in §3.5.3:
+  - Point 1: bit 7 = sign (`0` = `+`, `1` = `-`), bits 4-6 = magnitude (0-7).
+  - Point 2: bit 3 = sign, bits 0-2 = magnitude (0-7).
+  - **Sentinel:** sign bit `1` with magnitude `7` means the point is invalid
+    (`0x7F` -- no finger / signal loss / end of data), the same `0x7F` value
+    the storage path uses for SpO2 out-of-range (§3.5.3), reached here by a
+    different bit pattern rather than by the arithmetic going out of range.
+
+> [!WARNING]
+> **Confirmed on real hardware (2026-10-15): the framing above, not the
+> value formula.** Captured a real `0xD3`/`0xD2` exchange end to end -- 3
+> reports each, 7 subframes each, **every subframe's checksum validates**
+> (`sum(bytes[0:19]) % 128 == bytes[19]`), and whole-subframe `0x7F` bytes
+> (meaning no finger/no signal) line up at the **same** subframe positions in
+> both streams (seq 0, 2 and 5), consistent with SpO2 and pulse being
+> measured together, second by second.
+>
+> Decoding non-sentinel bytes with the formula above (`value = base ± magnitude`,
+> fixed per-subframe base) does **not** yet produce physiologically plausible
+> numbers: both streams land in overlapping ranges well above 100 and include
+> negative values, impossible for either SpO2 % or BPM. Something about the
+> base/delta relationship is still wrong -- a strong candidate, by analogy
+> with the storage path's own dynamic-baseline escape (§3.5.3), is a
+> **running** baseline that updates point to point rather than one fixed
+> value per subframe, but this is not yet tested. Do not implement a decoder
+> against the formula above without re-deriving it against a fresh capture.
+
+---
+
 ## 4. Proprietary `.SpO2` Binary File Format
 
 The Windows Contec SpO2 Assistant software and PO-400 use the `.SpO2` binary format for storing 1 Hz recording sessions (also supported by OSCAR for CPAP oximetry imports).

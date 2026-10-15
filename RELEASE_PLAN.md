@@ -237,6 +237,49 @@ remaining open question (how, or whether, a Manual-mode session can be read
 via USB at all) is better answered by the device's own UI than more blind
 byte-pattern guessing against an unfamiliar binary.
 
+**RESOLVED (psytrap, 2026-10-15): Manual mode has its own, completely
+separate protocol** -- `0xA0`/`0xD0` (header), `0xA2`/`0xD2` (pulse),
+`0xA3`/`0xD3` (SpO2), `0xA7`/`0xD8` (block ack), found via a live USB capture
+of SpO2 Assistant reading a real Manual recording, cross-referenced against
+`SpO2.exe`'s disassembly. Full byte maps now in `PROTOCOL.md` §3.14 and
+`analysis/po400_bytemap_reference.md`. This is why `0x9C`/`0x9D` (and the
+ruled-out `0xA5`/`0xA6` hypothesis just above) never found anything: Manual
+sessions were never reachable through the Auto-mode storage path at all, by
+design, not by a bug. All the guessing above -- user slots, `0xA5`/`0xA6`,
+the static byte-pattern scan -- correctly found nothing, because none of
+those were the real mechanism.
+
+Verified live against the real device, not just transcribed:
+- `0xA0` header query: confirmed, but the original transcription had the
+  date/time/duration fields one byte too early (missing an unidentified
+  `0x00` byte at offset `0x01`); fixed in both docs.
+- `0xA3`/`0xD3` and `0xA2`/`0xD2` data blocks: **framing confirmed, value
+  decode formula not yet correct.** 3 reports, 7 subframes each, every
+  subframe's checksum validates, and whole-`0x7F` sentinel subframes line up
+  at the same positions in both streams (seq 0, 2, 5) -- strong evidence the
+  two series are measured together, second by second. But decoding the
+  non-sentinel bytes with the documented fixed-base-per-subframe formula
+  gives overlapping, physiologically impossible values for both series
+  (negative numbers, values over 127). Likely needs a running baseline
+  (analogous to the storage path's own dynamic-baseline escape, §3.5.3)
+  rather than one fixed value per subframe -- not yet tested.
+- Device behaviour, independently clarified: Manual mode holds exactly **one**
+  recording slot, overwritten every time a new Manual recording starts
+  (psytrap, confirmed via the device's own on-screen warning). This explains
+  both the mode-switch erasure (Auto and Manual use entirely separate storage)
+  and why the queried duration (41 s) need not match any particular earlier
+  recording attempt -- it reflects whatever is in that one slot right now.
+
+Not yet done: the running-baseline hypothesis, and any actual code
+implementation (`fiedle400` has zero support for these opcodes yet -- this is
+new protocol knowledge, not a working decoder). Also unexplained: why SpO2
+Assistant itself did not detect the device during this session (Windows-level
+connect sound heard, device not shown in the app) despite having worked
+before -- not reproduced further once the Manual-mode protocol investigation
+took priority; the USBPcap/Wireshark capture tooling installed for this
+(`enable_testsigning`, TESTSIGNING now on) remains unused for that specific
+question and sits on the laptop for whenever it is revisited.
+
 Raw trace of the session query after that cycle: a bare `COMMAND_ACK`
 (`f0 70`), no `0xEC` data -- the same shape as T7's bare-ACK pattern on other
 queries, now also seen on the session-index query itself. psytrap: "storage
