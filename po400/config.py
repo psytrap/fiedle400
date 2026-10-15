@@ -24,6 +24,11 @@ from typing import Optional
 APP_NAME = "po400"
 CONFIG_FILENAME = "config.json"
 WORKDIR_KEY = "workdir"
+WORKDIR_ENV = "PO400_WORKDIR"
+
+
+class WorkdirError(ValueError):
+    """An explicitly requested working directory cannot be created or written to."""
 
 
 def config_dir() -> str:
@@ -107,8 +112,33 @@ def ensure_usable_dir(path: str) -> Optional[str]:
     return path
 
 
+def explicit_workdir(flag_value: Optional[str] = None) -> Optional[str]:
+    """Return a per-run working directory from the --workdir flag or PO400_WORKDIR.
+
+    The flag beats the environment variable. Neither is saved to the settings
+    file and neither prompts, so scripts and CI can choose a location without
+    side effects. Returns None when neither is given, so the caller falls back
+    to resolve_workdir(). An explicit choice that is unusable raises
+    WorkdirError instead of silently writing somewhere else.
+    """
+    if flag_value and flag_value.strip():
+        source, value = "--workdir", flag_value
+    else:
+        value = os.environ.get(WORKDIR_ENV, "")
+        if not value.strip():
+            return None
+        source = WORKDIR_ENV
+    usable = ensure_usable_dir(value)
+    if not usable:
+        raise WorkdirError(f"{source}: cannot create or write to {value}")
+    return usable
+
+
 def resolve_workdir(prompt_func=None, stream=None) -> str:
     """Return the directory new recordings should be written to.
+
+    Callers check explicit_workdir() first: the --workdir flag and the
+    PO400_WORKDIR variable override everything below for a single run.
 
     Order of precedence:
       1. the configured working directory, when one is stored and usable;

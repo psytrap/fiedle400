@@ -8,6 +8,7 @@ input() when stdin is not a terminal. If that guard regresses, a piped command,
 a CI run, or this very suite would block forever waiting for a keystroke.
 """
 
+import io
 import os
 import sys
 import tempfile
@@ -144,6 +145,91 @@ class TestResolveWorkdirInteractive(ConfigTestBase):
     def test_prompt_treats_eof_as_declining(self):
         with mock.patch("builtins.input", side_effect=EOFError):
             self.assertIsNone(config._prompt_for_workdir(self.tmp.name, sys.stdout))
+
+
+
+
+class TestExplicitWorkdir(ConfigTestBase):
+    """--workdir and PO400_WORKDIR: per-run, no prompt, nothing saved."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ.pop(config.WORKDIR_ENV, None)
+
+    def _no_input(self):
+        def explode(*_args, **_kwargs):
+            raise AssertionError("an explicit workdir must never prompt")
+        return mock.patch("builtins.input", explode)
+
+    def test_none_when_neither_is_given(self):
+        self.assertIsNone(config.explicit_workdir(None))
+
+    def test_flag_is_used_and_created(self):
+        target = os.path.join(self.tmp.name, "flag-dir")
+        with self._no_input():
+            self.assertEqual(config.explicit_workdir(target), os.path.abspath(target))
+        self.assertTrue(os.path.isdir(target))
+        self.assertFalse(os.path.exists(config.config_path()))
+
+    def test_env_var_is_used_when_no_flag(self):
+        target = os.path.join(self.tmp.name, "env-dir")
+        with mock.patch.dict(os.environ, {config.WORKDIR_ENV: target}), self._no_input():
+            self.assertEqual(config.explicit_workdir(None), os.path.abspath(target))
+        self.assertFalse(os.path.exists(config.config_path()))
+
+    def test_flag_beats_env_var(self):
+        flag = os.path.join(self.tmp.name, "flag-dir")
+        env = os.path.join(self.tmp.name, "env-dir")
+        with mock.patch.dict(os.environ, {config.WORKDIR_ENV: env}):
+            self.assertEqual(config.explicit_workdir(flag), os.path.abspath(flag))
+
+    def test_blank_env_var_is_ignored(self):
+        with mock.patch.dict(os.environ, {config.WORKDIR_ENV: "  "}):
+            self.assertIsNone(config.explicit_workdir(None))
+
+    def test_unusable_explicit_dir_raises_naming_the_source(self):
+        blocker = os.path.join(self.tmp.name, "is-a-file")
+        with open(blocker, "w", encoding="utf-8") as fh:
+            fh.write("x")
+        with self.assertRaises(config.WorkdirError) as cm:
+            config.explicit_workdir(blocker)
+        self.assertIn("--workdir", str(cm.exception))
+        with mock.patch.dict(os.environ, {config.WORKDIR_ENV: blocker}), \
+                self.assertRaises(config.WorkdirError) as cm:
+            config.explicit_workdir(None)
+        self.assertIn(config.WORKDIR_ENV, str(cm.exception))
+
+    def test_stored_setting_is_untouched(self):
+        stored = os.path.join(self.tmp.name, "stored")
+        config.set_workdir(stored)
+        config.explicit_workdir(os.path.join(self.tmp.name, "flag-dir"))
+        self.assertEqual(config.get_workdir(), stored)
+
+
+class TestDownloadWorkdirFlag(ConfigTestBase):
+    """The download command validates --workdir before it touches the device."""
+
+    def test_bad_workdir_fails_before_connecting(self):
+        from po400 import cli
+        blocker = os.path.join(self.tmp.name, "is-a-file")
+        with open(blocker, "w", encoding="utf-8") as fh:
+            fh.write("x")
+        with mock.patch.object(cli, "PulsoxHidDevice") as dev_cls, \
+                mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+            with self.assertRaises(SystemExit) as cm:
+                cli.main(["download", "--workdir", blocker])
+        self.assertEqual(cm.exception.code, 1)
+        dev_cls.assert_not_called()
+        self.assertIn("cannot create or write to", out.getvalue())
+
+    def test_explicit_output_ignores_workdir(self):
+        from po400 import cli
+        with mock.patch.object(config, "explicit_workdir") as explicit, \
+                mock.patch.object(cli, "PulsoxHidDevice") as dev_cls:
+            dev_cls.return_value.connect.side_effect = RuntimeError("stop here")
+            with mock.patch("sys.stdout", new_callable=io.StringIO), self.assertRaises(SystemExit):
+                cli.main(["download", "-o", "x.csv", "--workdir", "/nonexistent"])
+        explicit.assert_not_called()
 
 
 if __name__ == "__main__":

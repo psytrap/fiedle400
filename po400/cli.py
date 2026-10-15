@@ -228,6 +228,14 @@ def command_download(args):
     download_all = args.all or args.session == 0
     verbose_level = getattr(args, "verbose", 0)
 
+    # Validate an explicit --workdir / PO400_WORKDIR before touching the device,
+    # so a typo fails in a second rather than after a long download.
+    try:
+        override_dir = None if args.output else config.explicit_workdir(getattr(args, "workdir", None))
+    except config.WorkdirError as e:
+        print(f"❌ {e}")
+        return 1
+
     dump_path = None
     if getattr(args, "dump", None) is not None:
         if args.dump == "auto":
@@ -261,11 +269,9 @@ def command_download(args):
         dev.close()
 
     print(f"\nDownload complete. Total records collected across all sessions: {len(total_records)}")
-    # An explicit -o wins outright; otherwise fall back to the configured
-    # working directory (prompting once on a first interactive run).
-    # TODO: add a --workdir flag and a PO400_WORKDIR env var so non-interactive
-    # callers can choose a location without writing the settings file.
-    target_dir = None if args.output else config.resolve_workdir()
+    # Precedence: -o, then --workdir, then PO400_WORKDIR, then the stored
+    # setting (prompting once on a first interactive run), then the cwd.
+    target_dir = None if args.output else (override_dir or config.resolve_workdir())
     saved_path = _export_records_to_file(
         total_records, args.output, args.format.lower(), output_dir=target_dir
     )
@@ -789,6 +795,7 @@ def main(argv: Optional[List[str]] = None):
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
     parser_dl.add_argument("-o", "--output", help="Output file path (default: po400_all_sessions_<timestamp>.spo2 in the configured working directory).")
+    parser_dl.add_argument("--workdir", help="Directory for this download only (overrides PO400_WORKDIR and the stored setting; not saved). Ignored with -o.")
     parser_dl.add_argument("-f", "--format", choices=["spo2", "csv", "json"], default="spo2", help="Output format: 'spo2' (default), 'csv', or 'json'.")
     parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
     parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")

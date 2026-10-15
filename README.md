@@ -145,6 +145,12 @@ po400 sessions
 # 4. Download all sessions (defaults to Contec .SpO2 binary format)
 po400 download -o all_sessions.spo2
 
+# 4b. Choose where recordings go
+po400 config --workdir ~/Recordings          # stored setting (asked once on first interactive run)
+po400 download --workdir /tmp/run1           # this run only, not saved
+PO400_WORKDIR=/tmp/run1 po400 download       # same, for scripts and CI
+# Precedence: -o > --workdir > PO400_WORKDIR > stored setting > current directory
+
 # 5. Download a specific session to CSV or JSON
 po400 download -s 1 -o session_1.csv -f csv
 po400 download -s 1 -o session_1.json -f json
