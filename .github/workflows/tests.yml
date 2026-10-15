@@ -1,0 +1,49 @@
+name: Tests
+
+# Unit & mock tests on every branch push and pull request.
+# The release workflow (build-release.yml) reuses this via workflow_call,
+# so a tag push runs it once there, gated before the binary build.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    name: Test ${{ matrix.runner }} (Python ${{ matrix.python }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        runner: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.11']
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          python scripts/bump_version.py show
+          version=$(python -c "import po400; print(po400.__version__)")
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match package version ${version}" >&2
+            exit 1
+          fi
+
+      - name: Unit & mock tests (stdlib only, zero-dependency check)
+        run: python -m unittest discover tests -v
+
+      - name: Unit & mock tests (with optional plot extra)
+        run: |
+          python -m pip install --upgrade pip
+          pip install matplotlib
+          python -m unittest discover tests -v

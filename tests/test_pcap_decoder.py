@@ -1,31 +1,27 @@
-import unittest
+"""Regression test: decode the reference USB capture in analysis/ end to end."""
+
 import os
 import sys
+import unittest
 
-# Ensure po400 and capture module can be imported
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "capture_tools"))
+from decode_pcap import parse_pcap_file, decode_pcap_reports
 
-try:
-    from capture.decode_pcap import parse_pcap_file, decode_pcap_reports
-    HAS_CAPTURE_MODULE = True
-except ImportError:
-    HAS_CAPTURE_MODULE = False
+PCAP_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "analysis", "bum400_20260906_100516.pcap"))
 
 
 class TestPcapDecoder(unittest.TestCase):
 
     def test_decode_raw_pcap_stream(self):
-        if not HAS_CAPTURE_MODULE:
-            self.skipTest("Legacy capture module not installed")
-        pcap_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "analysis", "bum400_20260906_100516.pcap"))
-        if not os.path.exists(pcap_path):
-            self.skipTest(f"PCAP file not found: {pcap_path}")
-
-        reports = parse_pcap_file(pcap_path)
+        reports = parse_pcap_file(PCAP_PATH)
         self.assertGreater(len(reports), 0)
 
         sessions, samples = decode_pcap_reports(reports)
-        self.assertEqual(len(sessions), 2)
+        # The capture holds a single 0xEC session header: session 1, 243 samples
+        # (see analysis/bum400_20260906_100516.md, frame 067).
+        self.assertEqual(len(sessions), 1)
+        self.assertEqual(sessions[0]["session_id"], 1)
+        self.assertEqual(sessions[0]["record_count"], 243)
         self.assertGreater(len(samples), 0)
 
         # Check that valid samples (status == ok) have physiological SpO2 (30..100) and HR (25..250)
@@ -34,6 +30,12 @@ class TestPcapDecoder(unittest.TestCase):
         for s in valid_samples:
             self.assertTrue(30 <= s["spo2"] <= 100)
             self.assertTrue(25 <= s["heart_rate"] <= 250)
+
+    def test_legacy_pcap_little_endian_is_parsed(self):
+        """A little-endian legacy pcap (d4 c3 b2 a1 on disk) must yield reports, not an empty list."""
+        with open(PCAP_PATH, "rb") as f:
+            self.assertEqual(f.read(4), b"\xd4\xc3\xb2\xa1")
+        self.assertGreater(len(parse_pcap_file(PCAP_PATH)), 0)
 
 
 if __name__ == "__main__":

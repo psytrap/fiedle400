@@ -3,7 +3,7 @@
 > **Scope:** First tagged release of the `po400` CLI (GitHub Release with Linux, Windows and macOS binaries)
 > **Cadence:** Two-Phase Version Bump (Patch Pre-Flight • Minor Post-Shipment), adapted from the RefDiff rollout plan
 > **Baseline:** `0.1.0` (no git tags exist yet; `master` has 11 commits)
-> **Status:** Strategy approved by psytrap (2026-10-15). B1, B1b and B3 are done in the cloud copy; nothing has been tagged or released.
+> **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B6 are resolved: B1, B1b and B3 via patch 0001 (applied locally and tested on real hardware by psytrap, 2026-10-15), B2, B4, B5 and B6 via patch 0002. Nothing has been tagged or released.
 > **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap pulls them locally and runs the live gates (G5–G7).
 
 ---
@@ -38,18 +38,18 @@ git diff --stat && git diff                                # Diff audit: zero de
 python3 -m unittest discover tests -v                      # G1/G2: full mock suite
 python3 -m po400 --version && python3 -m po400 --help      # G4: stdlib-only smoke test (no matplotlib)
 pyinstaller po400.spec && ./dist/po400 --version           # G5: local binary smoke test
-python3 -m unittest tests.test_device_live -v              # G6: live hardware, both backends
+PO400_LIVE=1 python3 -m unittest tests.test_device_live -v  # G6: live hardware, both backends (opt-in)
 po400 download -o output/rc.spo2 && po400 plot output/rc.spo2   # G7: visual acknowledgment
 ```
 
 | Gate | Check | Today |
 |:---|:---|:---|
-| **G1 Mock suite** | `python3 -m unittest discover tests`: 0 failures, 0 errors. The only skips allowed are the 6 live-device tests (plus the 5 plot tests when matplotlib is absent). | 100 pass / 7 skip with matplotlib; the pcap skip is still open (B2). |
-| **G2 Capture regression** | `test_pcap_decoder` actually runs against `analysis/bum400_20260906_100516.pcap` (it must not skip). | Always skipped: wrong import path (B2). |
+| **G1 Mock suite** | `python3 -m unittest discover tests`: 0 failures, 0 errors. The only skips allowed are the 6 opt-in live-device tests (plus the 5 plot tests when matplotlib is absent); the count must not vary with device state. | ✅ 102 pass / 6 skip (live device only) with matplotlib; also green on a simulated fresh clone without `archive/`. |
+| **G2 Capture regression** | `test_pcap_decoder` actually runs against `analysis/bum400_20260906_100516.pcap` (it must not skip). | ✅ Runs and passes (B2). |
 | **G3 Version sync** | `tests/test_version.py`: `po400.__version__` equals `pyproject.toml` version; `po400 --version` prints it; bump script cycle works. | ✅ Passing. |
 | **G4 Zero-dependency promise** | In a clean venv with no third-party packages, `python3 -m po400 --help`, `info`, `sessions` and `download` import and run. `plot` prints an install hint and exits 1. | ✅ Verified in a clean venv: 107 tests run, 0 failures (plot tests skip). |
 | **G5 Binary build** | `pyinstaller po400.spec` succeeds locally; `dist/po400 --version` and `--help` run. | Not yet verified. |
-| **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `tests/test_device_live.py` passes with a real PO-400 attached, on `--backend hidraw` **and** `--backend hid`. On Windows, `po400 info` runs on a real machine. | Requires the device; can't run in the cloud. |
+| **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `PO400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on `--backend hidraw` **and** `--backend hid`. Never run two live runs at once (a lock file now serialises them). On Windows, `po400 info` runs on a real machine. | Patch 0001 tested on real hardware by psytrap (2026-10-15). Re-run on the RC for both backends. |
 | **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `po400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | Manual. |
 | **G8 Output location** | Per `AGENTS.md`, the product defaults to the current directory, not `output/`. | `po400 plot` defaults to `output/` (cli.py plot help text). Fix or document an explicit exception. |
 
@@ -63,13 +63,13 @@ Each blocker is a small, separate commit, landed **before** the patch bump.
 |:---|:---|:---|:---|
 | **B1** ✅ | matplotlib is a hidden hard dependency | `po400/__init__.py:15` imports `plot` eagerly, so every `from po400 import ...` (including `cli.py:24`) pulls in matplotlib. `cli.py:42` already imports `plot` lazily, so the eager import defeats that. | Done: `plot_session` is resolved lazily via `__getattr__`; `plot = ["matplotlib"]` extra added; `po400 plot` prints an install hint when matplotlib is missing. |
 | **B1b** ✅ | The release binary would crash on start | `.github/workflows/build-release.yml` installs only `pyinstaller hidapi`. Because of B1, the frozen binary would raise `ImportError` on every command (inferred, not yet built). | Fixed by B1. **Decision (psytrap): plot is not shipped in the binary.** `po400.spec` excludes matplotlib. **Graceful failure (psytrap):** every command now runs through `cli.run_guarded`, which turns unexpected errors into a one-line message and exit code 1 (Ctrl+C → 130); `PO400_DEBUG=1` shows the full traceback. |
-| **B2** | The pcap regression test never runs | `tests/test_pcap_decoder.py` imports `capture.decode_pcap`, but the module is at `archive/capture/` (and `archive/` is git-ignored). | Move the decoder into the package (`po400/tools/decode_pcap.py`) or the tests (`tests/fixtures/`), and commit the 148 KB pcap fixture. |
-| **B2b** | The pcap decoder reads byte order backwards | `archive/capture/decode_pcap.py:73` treats a file starting with `d4 c3 b2 a1` as big-endian. It is little-endian, so 0 reports are parsed. | Flip the check. Verified locally: the decoder then yields 274 reports and 244 samples. |
-| **B2c** | The test expects 2 sessions; the capture has 1 | After B2b: one `0xEC` frame, session 1, 243 records, 4m 03s. | Confirm against the capture notes and fix whichever side is wrong (user decision). |
+| **B2** ✅ | The pcap regression test never runs | `tests/test_pcap_decoder.py` imports `capture.decode_pcap`, but the module is at `archive/capture/` (and `archive/` is git-ignored). | Done: decoders copied to `tests/capture_tools/` (tracked); the pcap fixture in `analysis/` was already tracked. This also fixes `test_export_spo2.py`, which imported `decode_spo2` from the git-ignored `archive/` and would have failed on a fresh clone or in CI. |
+| **B2b** ✅ | The pcap decoder reads byte order backwards | `archive/capture/decode_pcap.py:73` treats a file starting with `d4 c3 b2 a1` as big-endian. It is little-endian, so 0 reports are parsed. | Done in `tests/capture_tools/decode_pcap.py` (274 reports, 244 samples); a test pins the little-endian case. |
+| **B2c** ✅ | The test expects 2 sessions; the capture has 1 | After B2b: one `0xEC` frame, session 1, 243 records, 4m 03s. | The test was wrong: `analysis/bum400_20260906_100516.md` (frame 067) shows one `0xEC` header with 243 samples. The test now expects 1 session, id 1, 243 records. Open observation: the notes say 243 samples ≈ 122 s, while `duration_str` reports 4m 03s. |
 | **B3** ✅ | Version drift and no `--version` | See G3. | Done: `scripts/bump_version.py` (`show`, `set`, `patch`, `minor`, `major`; refuses to bump when manifests disagree), `po400 --version`, `tests/test_version.py`. |
-| **B4** | The release workflow doesn't test | `build-release.yml` builds on tag push with no test step. | Add a `test` job (matrix: ubuntu, windows, macos × Python 3.8 and 3.12) that runs G1–G4; make `build` depend on it with `needs: test`. Also add a tag check that `v<tag>` equals the `pyproject.toml` version. |
-| **B5** | Stale build metadata | `po400.egg-info/SOURCES.txt` lacks `export.py`, `plot.py` and newer tests; `po400.spec` hidden imports omit `po400.export` and `po400.plot`. | Delete the tracked `egg-info` (it's already in `.gitignore`). Spec hidden imports: `po400.export` added (done). |
-| **B6** | Docs point at a local machine | README links use `file:///home/mik/...`. | Use relative links. |
+| **B4** ✅ | The release workflow doesn't test | `build-release.yml` builds on tag push with no test step. | Done: `test` job on ubuntu, windows and macos (Python 3.11) runs the suite stdlib-only (G4), then again with matplotlib (G1/G2); `build` has `needs: test`; on tag pushes the job fails unless `v<__version__>` equals the tag. |
+| **B5** ✅ | Stale build metadata | `po400.egg-info/SOURCES.txt` lacks `export.py`, `plot.py` and newer tests; `po400.spec` hidden imports omit `po400.export` and `po400.plot`. | Not an issue in git: `po400.egg-info/` is untracked (checked against the git index); it is only a stale local build leftover you can delete. Spec hidden imports: `po400.export` added in 0001. |
+| **B6** ✅ | Docs point at a local machine | README links use `file:///home/mik/...`. | Done: README links are relative. |
 
 ---
 
@@ -104,7 +104,7 @@ Each blocker is a small, separate commit, landed **before** the patch bump.
 
 ## 6. Runbook Checklist
 
-- [ ] B1–B6 landed as separate commits; G1–G4 green locally (B1, B1b, B3 done in cloud copy; B2, B4, B5 egg-info, B6 open)
+- [ ] B1–B6 landed as separate commits; G1–G4 green locally (0001: B1, B1b, B3 applied; 0002: B2, B4, B5, B6)
 - [ ] Phase 1: `bump_version.py patch`, run **once** → `0.1.1`
 - [ ] Diff audit: `git diff --stat && git diff`, zero debris
 - [ ] G5: local PyInstaller binary runs `--version` / `--help`

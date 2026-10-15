@@ -7,8 +7,13 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    name: Test
+    uses: ./.github/workflows/tests.yml
+
   build:
     name: Build ${{ matrix.os }} (${{ matrix.arch }})
+    needs: test
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:

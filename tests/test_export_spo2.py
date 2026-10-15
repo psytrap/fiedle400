@@ -19,9 +19,9 @@ from po400.export import (
     export_records,
 )
 
-# Also import decode functions from archive to test round-trip compatibility
+# Also import the reference decoder to test round-trip compatibility
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "archive", "capture")))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "capture_tools"))
 from decode_spo2 import parse_header, parse_samples
 
 
