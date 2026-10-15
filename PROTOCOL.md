@@ -556,17 +556,33 @@ From the `SpO2.exe` disassembly (`0x004c4875`):
 > **Update, live-tested 2026-10-15:** the running-chain correction is
 > confirmed to be the right shape, but is not fully correct yet. Re-decoding
 > with `S_n = S_{n-1} ± magnitude` (sign/magnitude nibble, running from
-> the first byte of each subframe rather than a fixed base), with
-> per-series sentinels (`0x7F`/127 for SpO2, `0xFF`/255 for Pulse) and a
-> hard stop on the terminator (sign=1, magnitude=7, ends the subframe
-> rather than skipping one point), makes **Pulse** land in a
-> physiologically plausible range for 2 of 7 captured subframes (base 96
-> → 103 bpm, base 112 → 119 bpm). **SpO2** is still wrong: decoded
-> values run slightly over the 0-100% ceiling (116 → 123, 120 →
-> 127), so something about the SpO2 series' base/delta relationship --
-> possibly the starting base value, possibly a clamp or scale this series
-> applies that Pulse doesn't -- remains unresolved. Do not treat this
-> formula as final for SpO2.
+> the first byte of each subframe rather than a fixed base), with a
+> **single shared sentinel `0x7F`/127 for both series** (re-checked against
+> a careful byte-exact re-split of the capture into 20-byte checksummed
+> records -- the earlier claim of a separate `0xFF`/255 sentinel for Pulse
+> was a parsing mistake, not a real distinction) and a hard stop on the
+> terminator (sign=1, magnitude=7, ends the subframe rather than skipping
+> one point), makes **Pulse** land in a physiologically plausible range for
+> 2 of 7 captured subframes (base 96 → 103 bpm, base 112 → 119 bpm).
+> **SpO2** is still wrong as a direct percentage: decoded values run over
+> the 0-100% ceiling (116 → 123, 120 → 127).
+>
+> **New hypothesis, untested against ground truth:** subtracting a constant
+> offset of **27-28** from every decoded SpO2 value lands all four observed
+> points in a plausible 88-100% band (116/123/120/127 → 88-89/95-96/92-93/
+> 99-100), consistent with the raw byte being `actual% + offset` and
+> `0x7F`/127 being reserved purely as the sentinel, sitting just above the
+> realistic ceiling rather than colliding with it. The exact offset isn't
+> pinned down by 2 subframes of data. A static scan of the *entire* `.text`
+> section of `archive/bruteforce/SpO2.exe` for the sign/magnitude
+> nibble-decode idiom (`shr/sar reg,4` near `and reg,0x0F` and
+> `and`/`test reg,0x07`/`0x08` within 64 bytes) found zero matches anywhere
+> in the binary -- reinforcing, independently of the address mismatch
+> already noted in RELEASE_PLAN.md, that this build genuinely does not
+> contain the routine, so static analysis of this local binary is not
+> expected to resolve the offset. Confirming or refuting the offset needs a
+> fresh live capture logged side by side with SpO2 Assistant's own displayed
+> reading as ground truth. Do not treat either formula as final for SpO2.
 
 ---
 

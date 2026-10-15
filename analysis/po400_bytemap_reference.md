@@ -531,4 +531,30 @@ Punkt zu Punkt aktualisiert, statt eines festen Werts pro Subframe -- noch
 nicht getestet. Bitte die Formel nicht ungeprüft implementieren, bevor sie an
 einem frischen Mitschnitt neu verifiziert wurde.
 
+> **Update, live getestet 2026-10-15:** Die laufende-Basiswert-Korrektur
+> (`S_n = S_{n-1} ± Betrag`) ist die richtige Grundform, aber noch nicht
+> vollständig korrekt. Mit einem **einzigen gemeinsamen Sentinel
+> `0x7F`/127 für beide Reihen** (nach exaktem Neu-Parsing der 20-Byte-
+> Subframes bestand kein Unterschied zwischen SpO2 und Puls -- eine frühere
+> Annahme getrennter Sentinel-Werte war ein Parsing-Fehler) und Hard-Stop
+> beim Terminator (Vorzeichen=1, Betrag=7) ergibt **Puls** für 2 von 7
+> Subframes physiologisch plausible Werte (Basis 96 → 103 bpm, Basis 112
+> → 119 bpm). **SpO2** bleibt als direkter Prozentwert falsch: dekodierte
+> Werte liegen über der 0-100%-Grenze (116 → 123, 120 → 127).
+>
+> **Neue, noch nicht verifizierte Hypothese:** Zieht man von jedem
+> dekodierten SpO2-Wert einen konstanten Offset von **27-28** ab, landen alle
+> vier beobachteten Werte in einem plausiblen 88-100%-Band (116/123/120/127
+> → 88-89/95-96/92-93/99-100) -- passend dazu, dass `0x7F`/127
+> ausschließlich als Sentinel reserviert ist, knapp über der realistischen
+> Obergrenze statt mit ihr zusammenzufallen. Der genaue Offset ist mit nur 2
+> Subframes nicht sicher bestimmbar. Eine heuristische Instruktions-Suche
+> (`shr/sar reg,4` nahe `and reg,0x0F` und `and`/`test reg,0x07`/`0x08`
+> innerhalb von 64 Bytes) über den **gesamten** `.text`-Abschnitt von
+> `archive/bruteforce/SpO2.exe` fand **keine** Treffer -- untermauert
+> unabhängig von der bereits dokumentierten Adress-Diskrepanz, dass dieser
+> Build die Dekodierroutine schlicht nicht enthält. Bestätigung oder
+> Widerlegung des Offsets braucht einen frischen Live-Mitschnitt mit
+> paralleler Ground-Truth-Anzeige in SpO2 Assistant.
+
 ---

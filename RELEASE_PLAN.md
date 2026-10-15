@@ -283,14 +283,29 @@ question and sits on the laptop for whenever it is revisited.
 **Update: the running-baseline fix mostly works for Pulse, not yet for
 SpO2 (psytrap, live-tested 2026-10-15).** Re-decoded the captured subframes
 as a running chain (`S_n = S_{n-1} +/- delta`, not a fixed per-subframe base)
-with per-series sentinels (`0x7F` for SpO2, `0xFF` for Pulse, matching a
-deeper disassembly pass relayed separately) and a hard stop on the
-sign=1/delta=7 terminator rather than treating it as a per-point gap.
-Two Pulse subframes landed in genuinely plausible heart-rate ranges
-(base 96 -> 103 bpm; base 112 -> 119 bpm). SpO2 subframes still run slightly
-over the 0-100% ceiling (116 -> 123; 120 -> 127) -- closer than before, not
-yet right. Do not wire this into any automatic decoder until SpO2 converges
-into valid range too.
+with a single shared sentinel `0x7F` for both series (a careful byte-exact
+re-split into 20-byte checksummed records showed the earlier claim of a
+separate `0xFF` sentinel for Pulse was a parsing mistake, not a real
+distinction) and a hard stop on the sign=1/delta=7 terminator rather than
+treating it as a per-point gap. Two Pulse subframes landed in genuinely
+plausible heart-rate ranges (base 96 -> 103 bpm; base 112 -> 119 bpm). SpO2
+subframes still run over the 0-100% ceiling as a direct percentage
+(116 -> 123; 120 -> 127). **New, untested hypothesis:** subtracting a
+constant offset of 27-28 from every decoded SpO2 value puts all four
+observed points into a plausible 88-100% band (116/123/120/127 ->
+88-89/95-96/92-93/99-100), consistent with `0x7F`/127 being reserved purely
+as the sentinel just above the realistic ceiling rather than colliding with
+it -- but 2 subframes isn't enough to pin the exact constant. A heuristic
+instruction-level scan (`shr/sar reg,4` near `and reg,0x0F` and
+`and`/`test reg,0x07`/`0x08` within 64 bytes) across the *entire* `.text`
+section of `archive/bruteforce/SpO2.exe` found zero matches -- reinforcing,
+independently of the address mismatch below, that this build does not
+contain the decode routine at all, so static analysis of this local binary
+is not expected to resolve the offset. Confirming or refuting it needs a
+fresh live capture logged alongside SpO2 Assistant's own displayed reading
+as ground truth. Do not wire either formula into any automatic decoder
+until SpO2 converges into valid range and is cross-checked against ground
+truth.
 
 **Static cross-check of the relayed disassembly addresses: inconclusive, not
 a contradiction.** Two cited addresses (the delta-decode loop, the `0xD8`
