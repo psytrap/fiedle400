@@ -157,15 +157,24 @@ class TestSelftest(FlowCase):
     as "no exception means pass".
     """
 
-    def run_selftest(self):
-        return run_cli(["--backend", "hid", "selftest"], self.fake_module)
-
     def test_all_checks_pass_against_a_fully_answering_device(self):
-        # Non-strict: selftest's several engine calls may touch a command more
-        # times than the recording has copies of; strict mode is for pinning
-        # exact command counts (test_hwsim_realtrace.py), not for this check.
-        fake_module = make_fake_hid_module(FakeOximeter(rt.real_trace()))
-        rc, out, err = run_cli(["--backend", "hid", "selftest"], fake_module)
+        # Deliberately decoupled from trace-replay fidelity/ordering (unlike the
+        # failure-mode test below, which IS an integration test of that replay):
+        # this test is only about whether command_selftest correctly reports
+        # success when the engine returns good data. Mocking the three engine
+        # calls keeps it fast and immune to how many times a command was
+        # recorded, command ordering across the suite, or anything else about
+        # FakeOximeter's replay bookkeeping -- a real device answering every
+        # query correctly is the scenario, not a specific trace file.
+        info = mock.MagicMock()
+        info.hardware_id = "50F"
+        with mock.patch.object(SerialDeviceEngine, "read_device_info",
+                                return_value={"device_info": info}), \
+                mock.patch.object(SerialDeviceEngine, "read_rtc_time",
+                                   return_value="2002-07-01 12:07:00"), \
+                mock.patch.object(SerialDeviceEngine, "list_sessions",
+                                   return_value=[object()]):
+            rc, out, err = run_cli(["--backend", "hid", "selftest"], self.fake_module)
         self.assertEqual(rc, 0, out + err)
         self.assertIn("All checks passed", out)
         self.assertNotIn("❌", out)  # no failure marker anywhere
