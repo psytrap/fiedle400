@@ -58,3 +58,45 @@ on Windows rather than crashing. Confirmed by reading the code.
 - The user runs this on real hardware. Never erase device flash; stored sessions
   are real data. Read-only device operations only.
 - Local repo state: HEAD 468ea4c, tree clean, nothing uncommitted.
+
+---
+
+## CONFIRMED on real hardware, 2026-10-15
+
+Run on the Windows 8.1 laptop (6.3.9600, AMD64) over SSH, Python 3.8 32-bit,
+`hidapi` 0.15.0 from PyPI (`cp38-win32` wheel), real PO-400 attached:
+
+    set PYTHONIOENCODING=utf-8 && set PO400_LIVE=1
+    py -3.8 -m unittest tests.test_device_live -v
+    => Ran 6 tests, FAILED (failures=2, errors=1)
+
+All three predictions above are confirmed, with the exact messages:
+
+- `test_01` FAIL: "Expected at least one PO-400 device detected via sysfs."
+  (`find_pulsox_hid_devices()` returns [] on Windows)
+- `test_02` ERROR: "The 'hidraw' backend is only supported on Linux
+  (current OS: win32)." -- raised from `po400/hid_driver.py:432`
+- `test_03` FAIL: "Kernel hidraw node did not reappear after closing the
+  libusb-backed handle." -- `wait_for_hidraw_reattach()` must be a no-op
+  off Linux, as requested above.
+
+**Tests 04, 05 and 06 PASS on Windows.** The protocol layer is fine; only the
+three Linux-specific tests need gating.
+
+## Device binding question: ANSWERED
+
+The PO-400 binds to the stock Windows HID class driver. No Zadig, no driver
+install. This closes the TODOs at PACKAGING.md:137 and :167.
+
+    USB\VID_28E9&PID_028A\PULSE_OXIMETER
+      Name: USB Input Device   Service: HidUsb   Status: OK
+    HID\VID_28E9&PID_028A\7&374D558A&0&0000
+      Name: HID-compliant device   Status: OK
+
+`hid.enumerate(0x28E9, 0x028A)` returns one interface, product string
+"Pulse Oximeter". `po400 info` reads firmware v2.0, serial 50F, RTC,
+user profile and flash geometry correctly -- the full stack works on Windows.
+
+Note the Windows path uses the native Windows HID API, not libusb, so the
+kernel-driver detach problem does not exist there. Any Windows equivalents of
+tests 01-03 should not assume it does.
