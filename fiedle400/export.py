@@ -11,7 +11,7 @@ import json
 import os
 import struct
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional
 
 # Header length for .SpO2 binary format (0x043C)
 SPO2_HEADER_SIZE = 1084

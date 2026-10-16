@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 from fiedle400.hid_driver import (
     HidBackend,
     LinuxHidrawBackend,
-    MockHidDevice,
     PulsoxHidDevice,
     resolve_default_backend,
 )
@@ -105,15 +104,6 @@ class TestHidDriverBackends(unittest.TestCase):
 
             backend.close()
             mock_dev_inst.close.assert_called_once()
-
-    def test_mock_hid_device_descriptor_info(self):
-        dev = MockHidDevice()
-        meta = dev.get_descriptor_info()
-        self.assertEqual(meta["manufacturer"], "Contec Medical Systems (Mock)")
-        self.assertEqual(meta["product"], "Pulse Oximeter (Mock)")
-        self.assertEqual(meta["vid_hex"], "28E9")
-        self.assertEqual(meta["pid_hex"], "028A")
-        self.assertEqual(meta["metadata_source"], "Mock Simulator")
 
     def test_linux_hidraw_backend_descriptor_info(self):
         backend = LinuxHidrawBackend(dev_path="/dev/hidraw_dummy")

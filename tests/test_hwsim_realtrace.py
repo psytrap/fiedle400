@@ -15,11 +15,9 @@ import contextlib
 import io
 import os
 import sys
-import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import hwsim  # noqa: E402
 from hwsim import FakeOximeter, HidrawSim, Trace, VirtualClock, command_key  # noqa: E402
 import test_hwsim_linux as base  # noqa: E402  (module import only: its test classes are not collected here)
 

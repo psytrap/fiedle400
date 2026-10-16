@@ -103,7 +103,7 @@ def print_summary(meta, samples, filepath):
     hr_vals   = [s["heart_rate"] for s in valid]
 
     print(f"\n{'='*54}")
-    print(f"  Contec .SpO2 File Decoder")
+    print("  Contec .SpO2 File Decoder")
     print(f"{'='*54}")
     print(f"  File            : {os.path.basename(filepath)}")
     print(f"  File Size       : {os.path.getsize(filepath):,} bytes")

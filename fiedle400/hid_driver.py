@@ -423,9 +423,6 @@ class HidBackend:
             self._dev = None
 
 
-# Backward compatibility alias
-HidapiBackend = HidBackend
-
 
 class PulsoxHidDevice:
     """Manager for communicating with the Pulsox PO-400 raw HID node.
@@ -503,58 +500,6 @@ class PulsoxHidDevice:
 
     def close(self):
         self._backend.close()
-
-    def __enter__(self):
-        self.connect()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
-
-
-class MockHidDevice:
-    """Mock HID Device simulator for offline parameter sweeps and unit testing."""
-
-    def __init__(self, responses=None):
-        self.responses = responses or []
-        self.written = []
-        self.backend_name = "mock"
-
-    def connect(self) -> str:
-        return "/dev/hidraw_mock"
-
-    def is_connected(self) -> bool:
-        return True
-
-    def write_report(self, data: bytes) -> int:
-        self.written.append(data)
-        return len(data)
-
-    def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
-        if self.responses:
-            return self.responses.pop(0)
-        # Default mock response: COMMAND_ACK (0xF0 0x70)
-        return bytes([0xF0, 0x70] + [0x00] * 62)
-
-    def read_report_blocking(self, max_bytes: int = 64, timeout_sec: float = 2.0) -> Optional[bytes]:
-        return self.read_report(max_bytes)
-
-    def get_descriptor_info(self) -> dict:
-        return {
-            "manufacturer": "Contec Medical Systems (Mock)",
-            "product": "Pulse Oximeter (Mock)",
-            "serial_number": "MOCK-50F",
-            "release_number": "v1.00 (BCD 0x0100)",
-            "bus_path": "Mock-USB-Bus",
-            "hid_id": "0003:28E9:028A",
-            "hid_name": "Pulse Oximeter Mock",
-            "vid_hex": "28E9",
-            "pid_hex": "028A",
-            "metadata_source": "Mock Simulator",
-        }
-
-    def close(self):
-        pass
 
     def __enter__(self):
         self.connect()

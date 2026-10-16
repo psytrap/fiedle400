@@ -30,8 +30,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import hwsim  # noqa: E402
-from hwsim import FakeOximeter, Trace, VirtualClock, command_key, make_fake_hid_module  # noqa: E402
+from hwsim import scrub_env, FakeOximeter, Trace, VirtualClock, command_key, make_fake_hid_module  # noqa: E402
 import test_hwsim_realtrace as rt  # noqa: E402  (module import only: its test classes are not collected here)
 
 from fiedle400 import cli  # noqa: E402
@@ -42,8 +41,9 @@ from fiedle400.hid_driver import PulsoxHidDevice  # noqa: E402
 def run_cli(argv, fake_module):
     """Run the CLI's main() with stdout/stderr captured, hid faked, exit() caught."""
     out, err = io.StringIO(), io.StringIO()
-    with mock.patch.dict(sys.modules, {"hid": fake_module}), \
+    with mock.patch.dict(sys.modules, {"hid": fake_module}), mock.patch.dict(os.environ), \
             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        scrub_env()
         try:
             cli.main(argv)
             rc = 0

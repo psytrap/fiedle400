@@ -22,8 +22,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import hwsim  # noqa: E402
-from hwsim import FakeOximeter, HidrawSim, Trace, VirtualClock, command_key  # noqa: E402
+from hwsim import scrub_env, FakeOximeter, HidrawSim, Trace, VirtualClock, command_key  # noqa: E402
 
 from fiedle400 import cli, export, hid_driver  # noqa: E402
 from fiedle400.engine import SerialDeviceEngine, SerialPacketDetector, SerialByteStreamBuffer  # noqa: E402
@@ -86,7 +85,8 @@ def sent_names(fake):
 def run_cli(argv):
     """Run cli.main, returning (exit code, stdout, stderr)."""
     out, err = io.StringIO(), io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+    with mock.patch.dict(os.environ), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        scrub_env()
         try:
             rc = cli.main(argv)
         except SystemExit as e:
@@ -218,7 +218,7 @@ class TestPcapTrace(unittest.TestCase):
 @unittest.skipUnless(LINUX, "LinuxHidrawBackend is Linux-only")
 class TestHidrawDiscovery(unittest.TestCase):
     def test_sysfs_scan_finds_the_simulated_node(self):
-        with HidrawSim(fresh_fake()) as sim:
+        with HidrawSim(fresh_fake()):
             devs = find_pulsox_hid_devices()
         self.assertEqual(len(devs), 1)
         path, uevent, readable = devs[0]
@@ -410,7 +410,6 @@ class TestDownloadFlow(FlowCase):
             series[dtype] = decode_ed_subframes(frames, is_spo2=(dtype == 1))
         self.assertEqual(len(series[1]), 243)   # raw 2 Hz values
         self.assertEqual(len(records), 122)     # engine halves the rate: two raw values per record
-        checked = 0
         # Two raw values per record; an odd final value is a record of its own (243 = 121 pairs + 1).
         def value(raw, i):
             return raw[2 * i + 1] if 2 * i + 1 < len(raw) else raw[2 * i]
@@ -482,6 +481,12 @@ class TestFaults(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertTrue(written)
         self.assertEqual(rows, 122)
+
+    def test_timeout_flag_caps_the_download(self):
+        """-t/--timeout used to be ignored for real sessions (record_count won over duration)."""
+        rc, out, err, written, rows, fake = self.run_download(extra=("-t", "30"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(rows, 30)
 
     def test_unplugged_mid_download_fails_with_one_clear_line_and_writes_nothing(self):
         rc, out, err, written, rows, fake = self.run_download(unplug_after=7)

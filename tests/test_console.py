@@ -1,6 +1,5 @@
 """Mock tests for Windows console sizing (fiedle400.console), runnable on any OS."""
 
-import ctypes
 import unittest
 
 from fiedle400 import console

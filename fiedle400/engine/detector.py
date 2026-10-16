@@ -1,11 +1,10 @@
 """Serial Packet Detector for Pulsox PO-400 / CMS-60D stream reports."""
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from ..protocol import (
     DecodedPacket,
-    SessionInfo,
     DeviceInfo,
     Parsers,
     decode_status_flags,

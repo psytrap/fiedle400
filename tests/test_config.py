@@ -30,6 +30,10 @@ class ConfigTestBase(unittest.TestCase):
         )
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The developer's own FIEDLE400_*/PO400_* settings must not leak in
+        # (patch.dict restores them afterwards).
+        for key in [k for k in os.environ if k.startswith(("FIEDLE400_", "PO400_"))]:
+            del os.environ[key]
 
 
 class TestConfigPaths(ConfigTestBase):

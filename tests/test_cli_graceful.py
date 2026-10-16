@@ -9,7 +9,9 @@ from contextlib import redirect_stderr, redirect_stdout
 from types import SimpleNamespace
 from unittest import mock
 
-from fiedle400 import cli
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from hwsim import scrub_env  # noqa: E402
+from fiedle400 import cli  # noqa: E402
 
 
 class TestRunGuarded(unittest.TestCase):
@@ -18,8 +20,8 @@ class TestRunGuarded(unittest.TestCase):
             raise OSError("device unplugged")
 
         err = io.StringIO()
-        with redirect_stderr(err), mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("FIEDLE400_DEBUG", None)
+        with redirect_stderr(err), mock.patch.dict(os.environ):
+            scrub_env()
             rc = cli.run_guarded(boom, SimpleNamespace())
         self.assertEqual(rc, 1)
         self.assertIn("OSError: device unplugged", err.getvalue())
@@ -46,8 +48,9 @@ class TestRunGuarded(unittest.TestCase):
 
     def test_main_routes_subcommand_through_guard(self):
         with mock.patch.object(cli, "command_read_time", side_effect=RuntimeError("no ack")), \
-                redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as cm:
-            os.environ.pop("FIEDLE400_DEBUG", None)
+                redirect_stderr(io.StringIO()) as err, mock.patch.dict(os.environ), \
+                self.assertRaises(SystemExit) as cm:
+            scrub_env()
             cli.main(["read-time"])
         self.assertEqual(cm.exception.code, 1)
         self.assertIn("RuntimeError: no ack", err.getvalue())

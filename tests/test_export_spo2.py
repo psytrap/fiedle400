@@ -6,7 +6,6 @@ import tempfile
 import unittest
 from datetime import datetime
 
-from fiedle400 import export
 from fiedle400.export import (
     SPO2_HEADER_SIZE,
     SPO2_MAGIC,

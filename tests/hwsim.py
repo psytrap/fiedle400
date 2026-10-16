@@ -46,10 +46,20 @@ import json
 import os
 import shutil
 import socket
-import struct
 import tempfile
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from unittest import mock
+
+
+def scrub_env():
+    """Remove the developer's FIEDLE400_*/PO400_* settings for one test.
+
+    Use inside a `mock.patch.dict(os.environ, {})` (or `addCleanup` of one) so
+    they are restored afterwards. Without it a developer who exports
+    FIEDLE400_DEBUG=1 gets failures that CI never sees.
+    """
+    for key in [k for k in os.environ if k.startswith(("FIEDLE400_", "PO400_"))]:
+        del os.environ[key]
 
 REPORT_LEN = 64
 

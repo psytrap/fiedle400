@@ -8,24 +8,22 @@ Commands:
 
 import argparse
 import codecs
-import csv
-import json
 import os
 import platform
 import re
 import sys
 import time
 from datetime import datetime, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 try:
-    import readline  # Enable terminal arrow keys, line editing, and history in input()
+    import readline  # noqa: F401  (side effect) Enable terminal arrow keys, line editing, and history in input()
 except ImportError:
     pass
 
 from fiedle400 import __version__, config, console, export, protocol, serial_engine
 from fiedle400.protocol import Commands, Parsers
-from fiedle400.hid_driver import PulsoxHidDevice, get_usb_sysfs_info, resolve_default_backend
+from fiedle400.hid_driver import PulsoxHidDevice, resolve_default_backend
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
@@ -176,41 +174,6 @@ def command_detect(args) -> int:
     return 0
 
 
-def _discover_sessions_to_download(dev, download_all: bool, target_session: int, debug: bool = False) -> List[protocol.SessionInfo]:
-    """Helper to discover available SessionInfo objects for download using SerialDeviceEngine."""
-    engine = serial_engine.SerialDeviceEngine(dev)
-    session_list = engine.list_sessions(debug=debug)
-
-    if not download_all and target_session > 0:
-        matched = [s for s in session_list if s.session_id == target_session]
-        if matched:
-            s = matched[0]
-            print(f"Discovered Session #{target_session} metadata: Duration={s.duration_str}, Timestamp={s.timestamp}")
-            return [s]
-        else:
-            print(f"Target Session #{target_session} not found in index table; using default bounds...")
-            return [protocol.SessionInfo(session_id=target_session, user_id=1, record_count=60, duration_sec=60)]
-
-    if not session_list:
-        print("No active session table returned; defaulting to downloading Session #1...")
-        return [protocol.SessionInfo(session_id=1, user_id=1, record_count=60, duration_sec=60)]
-
-    sess_ids = [s.session_id for s in session_list]
-    print(f"Found {len(session_list)} sessions to download: {sess_ids}")
-    return session_list
-
-
-def _download_single_session(dev, sess_info: protocol.SessionInfo, timeout_limit: float, debug: bool = False) -> List[dict]:
-    """Helper to extract stored records for a single session ID using SerialDeviceEngine."""
-    sess_id = sess_info.session_id
-    dur_str = sess_info.duration_str
-    print(f"\n---> Requesting Session #{sess_id} Data Blocks ({dur_str})...")
-
-    engine = serial_engine.SerialDeviceEngine(dev)
-    return engine.download_session(sess_info, debug=debug)
-
-
-
 def _export_records_to_file(
     records: List[dict],
     output_filename: Optional[str] = None,
@@ -309,9 +272,9 @@ def command_sessions(args):
         dev.close()
 
 
-    print(f"\n==================================================")
+    print("\n==================================================")
     print(f"  PULSOX PO-400 STORED RECORDING SESSIONS  (fiedle400 v{__version__})")
-    print(f"==================================================")
+    print("==================================================")
 
     if not sessions:
         print("No stored recording sessions found in device memory.")
@@ -400,7 +363,7 @@ def command_set_time(args):
         target_dt = datetime.now()
 
     ts_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Connecting to Pulsox PO-400 to set Real-Time Clock (RTC)...")
+    print("Connecting to Pulsox PO-400 to set Real-Time Clock (RTC)...")
     try:
         dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
@@ -545,9 +508,9 @@ def command_info(args):
     geom_str = (info.flash_geometry if info else None) or not_reported
     model_str = (info.hardware_id if info else None) or not_reported
 
-    print(f"\n==================================================")
-    print(f"  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
-    print(f"==================================================")
+    print("\n==================================================")
+    print("  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
+    print("==================================================")
     print(f"  fiedle400 Tool Version     : {tool_version_line()}")
     print(f"  Device Path / Node     : {node_path}")
     print(f"  Active HID Backend     : {backend_label}")
@@ -571,7 +534,7 @@ def command_info(args):
     print(f"  Active Session User ID : User #{active_user_id}")
     print(f"  Device RTC Timestamp   : {rtc_time_str}")
     print(f"  Storage Memory Geometry: {geom_str}")
-    print(f"==================================================\n")
+    print("==================================================\n")
 
     return 0
 

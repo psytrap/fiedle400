@@ -200,7 +200,7 @@ class TestLiveDevice(unittest.TestCase):
         import_hid_or_skip(self)
 
         dev = PulsoxHidDevice(backend="hid")
-        node_path = dev.connect()
+        dev.connect()
         try:
             self.assertTrue(dev.is_connected())
             self.assertEqual(dev.backend_name, "hid")

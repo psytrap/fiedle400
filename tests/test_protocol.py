@@ -4,8 +4,6 @@ from fiedle400.protocol import (
     Commands,
     Parsers,
     Opcode,
-    DataPoint,
-    DeviceInfo,
     SessionInfo,
     decode_usb_vid_pid,
 )

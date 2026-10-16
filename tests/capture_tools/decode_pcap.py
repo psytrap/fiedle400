@@ -21,12 +21,12 @@ import os
 import struct
 import sys
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple
 
 # Ensure the fiedle400 package (repository root, two levels up) can be imported
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from fiedle400.protocol import Parsers, SessionInfo
+from fiedle400.protocol import Parsers
 from fiedle400.serial_engine import SerialPacketDetector, SerialByteStreamBuffer
 
 
@@ -179,7 +179,7 @@ def print_summary(filepath: str, reports_cnt: int, sessions: List[Dict[str, Any]
     hr_vals = [s["heart_rate"] for s in valid]
 
     print(f"\n{'='*58}")
-    print(f"  PO-400 / CMS-60D Stored Session PCAP Decoder")
+    print("  PO-400 / CMS-60D Stored Session PCAP Decoder")
     print(f"{'='*58}")
     print(f"  File            : {os.path.basename(filepath)}")
     print(f"  File Size       : {os.path.getsize(filepath):,} bytes")

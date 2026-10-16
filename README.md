@@ -2,7 +2,9 @@
 
 A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID.
 
-For detailed hardware & protocol specifications, see [DESIGN.md](DESIGN.md).
+> **Status: alpha.** It works against real hardware, but is still under test. See [RELEASE_PLAN.md](RELEASE_PLAN.md).
+
+For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protocol see [PROTOCOL.md](PROTOCOL.md).
 
 > **Renamed from `po400`.** The tool is now `fiedle400`; the device is still the PO-400. Saved settings are copied over on first run, and the old `PO400_*` environment variables still work.
 
@@ -101,8 +103,8 @@ class driver automatically (no Zadig, no manual driver step).
 
 #### Running from source instead
 
-- Python 3.8+
-- `hid` library: `pip install hid`
+- Python 3.11+
+- `hid` library: `pip install hid` (CI and the release binary use the `hidapi` package, which also provides `import hid`)
 
 ```cmd
 REM Windows batch wrapper
@@ -123,7 +125,7 @@ You can explicitly choose the driver backend via the `--backend` (`--driver`) fl
 | Backend | Description | Default On | Dependencies |
 |---|---|---|---|
 | `hidraw` | Linux kernel direct `/dev/hidraw*` interface | **Linux** | Standard Library only (0 dependencies) |
-| `hid` | Cross-platform driver via `import hid` | **Windows** | `pip install hid` |
+| `hid` | Cross-platform driver via `import hid` | **Windows, macOS** | `pip install hid` |
 
 ```bash
 # Force hidraw (Linux default):
@@ -140,6 +142,9 @@ fiedle400 --backend hid info
 ```bash
 # 1. Read device information
 fiedle400 info
+
+# 1b. Watch the live stream (decoded packets)
+fiedle400 detect
 
 # 2. Read & synchronize device Real-Time Clock (RTC)
 fiedle400 read-time
@@ -175,8 +180,10 @@ fiedle400 clear -y
 
 Run the complete test suite (all tests use mocks and require 0 external dependencies):
 ```bash
-python3 -m unittest discover tests
+python3 -m unittest discover -s tests
 ```
+The suite must give the same result on any machine: it does not touch real hardware, the real
+`/dev` or `/sys`, your saved settings, or `FIEDLE400_*`/`PO400_*` variables.
 
 The hardware tests in `tests/test_device_live.py` are opt-in, so the default run gives
 the same result whether or not a device is attached. With a PO-400 plugged in:
@@ -210,6 +217,8 @@ python3 tests/capture_tools/record_exchange.py --no-download --probe-firmware --
 ## Documentation & Protocol References
 
 - **[SPO2_FORMAT.md](SPO2_FORMAT.md)**: Full binary format specification for Contec / Pulsox `.SpO2` files.
-- **[DESIGN.md](DESIGN.md)**: Full technical specification, USB HID framing, command codes, and memory architecture.
+- **[DESIGN.md](DESIGN.md)**: Code architecture, module map, download flow, test layout.
+- **[AGENTS.md](AGENTS.md)**: Rules for contributors, human or AI: commands, patch workflow, invariants.
 - **[PROTOCOL.md](PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
-- **[PACKAGING.md](PACKAGING.md)**: Distribution and installer design specifications.
+- **[PACKAGING.md](PACKAGING.md)**: How the binaries, the Windows installer and the Linux tarball are built.
+- **[RELEASE_PLAN.md](RELEASE_PLAN.md)**: Release gates, version-bump strategy, open findings.

@@ -2,7 +2,7 @@
 
 > **Scope:** First tagged release of the `fiedle400` CLI (GitHub Release with Linux, Windows and macOS binaries)
 > **Cadence:** Two-Phase Version Bump (Patch Pre-Flight • Minor Post-Shipment), adapted from the RefDiff rollout plan
-> **Baseline:** `0.1.12` (patch-bumped freely per §1's rule; `master` has 51 commits; no git tags exist yet)
+> **Baseline:** see `fiedle400/__init__.py` for the current version (patch-bumped freely per §1's rule; no git tags exist yet)
 > **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B7 resolved. The `fiedle400` rename (§3b, patch 0010) has landed. All findings T1-T7 (§3d) are **fixed in patch 0013 and verified against the real device** -- not just the simulator: `sessions`/`download` on the real PO-400 now correctly show 107 records / 1m 47s (was 214 / 4m 03s), and `info` honestly reports fields the device never answers instead of inventing them. A new finding, T8, was found afterward (Linux `hid`/libusb backend). `fiedle400 selftest` (new) gives a one-command, read-only hardware check with no env var needed. Nothing has been tagged or released.
 > **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap applies the patches locally, runs the live gates (G5–G7) and pushes to the private remote `github.com/psytrap/fiedle400`, where CI (`tests.yml`) runs on every push and PR.
 
@@ -124,7 +124,7 @@ RC" intent still holds and is why G5/G6 above were re-verified at `0.1.11`.
 |:--|:---|:---|
 | **D1 Code signing** | **Won't fix.** Binaries ship unsigned. | Release notes tell users how to get past the SmartScreen warning and to verify the SHA-256. Revisit only if it blocks adoption. |
 | **D2 macOS** | **Keep it, verified by CI.** No Mac and no hardware to test on by hand. | The suite runs on `macos-latest`, and the build job now runs the built binary's `--version`, `--help` and `config` on every OS. That is macOS's only gate, so it must stay green. |
-| **D3 Python floor** | **Open.** `requires-python = ">=3.8"` while CI tests only 3.11. | Either add 3.8 to the matrix or raise the floor to what is actually tested. |
+| **D3 Python floor** | **Done: floor is 3.11** (`requires-python = ">=3.11"`, README says 3.11+), which is what CI tests. | Lowering it means adding that version to the CI matrix first. |
 | **D4 Minimum Windows** | **Windows 8.1.** Verified with the installer on 6.3.9600 x64 against a real device. | Stated in the release notes. |
 | **D5 Upgrade path** | **Won't test (psytrap).** The installer keeps the old AppId so it upgrades a po400 install, and `config.py` migrates the settings file. | Written and committed, deliberately not exercised on a machine with po400 installed. Both degrade safely: a failed migration just re-asks for the working directory. |
 
@@ -450,7 +450,7 @@ Audit the rest of the suite for the same shape of mistake: any test that calls
 through to something environment-dependent (the real filesystem, real device
 enumeration, a real network call, wall-clock time) without mocking it, and
 that happens to pass only because of what this development machine has
-attached, installed, or happens to return right now. Not yet done.
+attached, installed, or happens to return right now. **Audit delivered in patch 0014** (findings and open proposals: `handoff/clean-audit-response.md`).
 
 **TODO (psytrap, 2026-10-15): cross-check the test suite for code smell.**
 Broader than the environment-assumption audit above -- a pass over

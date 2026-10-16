@@ -1,10 +1,10 @@
 """Inbound HID report decoders and Parsers factory class."""
 
 from datetime import datetime
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple
 
 from .models import DataPoint, SessionInfo, DeviceInfo
-from .decompression import decode_ed_subframes, decode_status_flags
+from .decompression import decode_ed_subframes
 
 
 def parse_rtc_response(report_bytes: bytes) -> Optional[datetime]:
@@ -230,7 +230,6 @@ def parse_ed_data_frames(report_bytes: bytes, base_timestamp: Optional[datetime]
     while idx + 6 <= len(report_bytes):
         header = report_bytes[idx]
         if header in [0xED, 0xEB]:
-            sub_status = report_bytes[idx + 1]
             ppg_wave = report_bytes[idx + 2]
             hr = report_bytes[idx + 3]
             flags = report_bytes[idx + 4]

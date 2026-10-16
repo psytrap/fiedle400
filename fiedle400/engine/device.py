@@ -23,7 +23,7 @@ class SerialDeviceEngine:
         self.detector = SerialPacketDetector()
         self.dump_fp = None
         self.last_dump_time = None
-        self._is_mock = hasattr(device, "responses") or type(device).__name__ == "MockHidDevice"
+        self._is_mock = hasattr(device, "responses")  # test doubles script replies; real devices never do
 
     def _sleep(self, seconds: float):
         if not self._is_mock:
@@ -519,7 +519,7 @@ class SerialDeviceEngine:
         if dump_file:
             self.dump_fp = open(dump_file, "w", encoding="utf-8")
             self.last_dump_time = time.time()
-            self.dump_fp.write(f"# Pulsox PO-400 Session Download HID Frame Trace Dump\n")
+            self.dump_fp.write("# Pulsox PO-400 Session Download HID Frame Trace Dump\n")
             self.dump_fp.write(f"# Generated: {datetime.now().isoformat()}\n\n")
 
         try:
@@ -547,7 +547,11 @@ class SerialDeviceEngine:
                 print(f"\n---> Requesting Session #{sess_id} Data Blocks ({dur_str})...")
 
                 if timeout_override > 0:
-                    sess_info.duration_sec = int(timeout_override)
+                    # -t/--timeout caps the download at that many seconds (= records, 1 per second).
+                    cap = int(timeout_override)
+                    sess_info.duration_sec = min(sess_info.duration_sec, cap) if sess_info.duration_sec > 0 else cap
+                    if sess_info.record_count > 0:
+                        sess_info.record_count = min(sess_info.record_count, cap)
 
                 records = self.download_session(sess_info, debug=debug)
                 total_records.extend(records)
@@ -628,5 +632,5 @@ class SerialDeviceEngine:
         c_check = Commands.build_hid(0xA5)
         self.dev.write_report(c_check)
         time.sleep(0.3)
-        events = self.read_packets(debug=debug)
+        self.read_packets(debug=debug)
         return True

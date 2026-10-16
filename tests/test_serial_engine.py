@@ -1,9 +1,7 @@
 import unittest
-from datetime import datetime
 from fiedle400.serial_engine import (
     SerialByteStreamBuffer,
     SerialPacketDetector,
-    DecodedPacket,
 )
 
 
