@@ -302,6 +302,12 @@ simulator or a scripted hardware check. Promote by re-running the release
 flow with `prerelease: false` once G7 passes; no version bump is required
 just for that promotion.
 
+**Promoted (psytrap, 2026-10-16).** G7 passed `0.3.9`'s re-verification
+(190 real records downloaded and plotted, physiologically plausible) after
+psytrap's own short manual test of the installed `0.3.9` binary looked
+good. `build-release.yml` now ships `prerelease: false` with beta-worded
+release notes.
+
 ---
 
 ## 3g. New TODOs (psytrap, 2026-10-16)

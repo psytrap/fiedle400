@@ -223,19 +223,20 @@ jobs:
         with:
           files: release-assets/*/*
           draft: false
-          # Alpha (RELEASE_PLAN.md 3f): G7 (a real finger-on-probe session,
-          # plot confirmed physiologically plausible) is not done yet. Flip to
-          # false to promote to beta once it is -- no version bump needed for
-          # that promotion by itself.
-          prerelease: true
+          # Beta (RELEASE_PLAN.md 3f): G7 (a real finger-on-probe session,
+          # plot confirmed physiologically plausible) passed -- first
+          # 2026-10-15, re-confirmed repeatedly since, including a 190-record
+          # real download/plot on 2026-10-16. Promoted from alpha 2026-10-16
+          # (psytrap); no version bump needed for the promotion itself.
+          prerelease: false
           body: |
             ### Pulsox PO-400 Standalone Executables & Installers
 
-            **Alpha release.** All automated gates pass, but no real-world
+            **Beta release.** All automated gates pass, and a real-world
             finger-on-probe session has been recorded and visually confirmed
-            yet (RELEASE_PLAN.md gate G7) -- the protocol/decoder fixes are
-            verified against real hardware reads (session listing, downloads,
-            device info), just not yet against a live physiological signal.
+            (RELEASE_PLAN.md gate G7): SpO2 and heart-rate traces show real
+            physiological variation, not flat-lined or implausible values.
+            Promoted from alpha to beta 2026-10-16.
 
             **Windows SmartScreen:** these binaries are not code-signed, so Windows
             will show a "Windows protected your PC" warning. Choose *More info* →

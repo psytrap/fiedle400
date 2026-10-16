@@ -2,7 +2,7 @@
 
 A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID. Runs on **Windows and Linux**, verified against real hardware on both (macOS support is present but not yet verified).
 
-> **Status: alpha.** It works against real hardware, but is still under test. See [RELEASE_PLAN.md](RELEASE_PLAN.md).
+> **Status: beta.** Verified against real hardware, including a real finger-on-probe session with a plausible SpO2/heart-rate trace. See [RELEASE_PLAN.md](RELEASE_PLAN.md).
 
 For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protocol see [PROTOCOL.md](PROTOCOL.md).
 
