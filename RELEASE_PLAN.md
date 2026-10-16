@@ -438,6 +438,13 @@ only gate for it, same as every prior cycle (RELEASE_PLAN.md D2).
 1. **Live audit (the analogue of `check:deploy`):** download each published asset from the Release page, verify SHA-256 against the CI artifacts, and run `--version` to confirm it prints `0.1.1`.
 2. **Phase 2 (final step):** only when Ring 3.1 passes and the user has reviewed the feature work: `python3 scripts/bump_version.py minor` → `0.2.0`, committed as `chore(release): open 0.2.0 after v0.1.1`. No tag; the next cycle's patch bump produces `0.2.1`.
 
+**`v0.3.9` (psytrap, 2026-10-16): Ring 3.1 done.** Downloaded
+`fiedle400-linux-x64.tar.gz` from the published Release page itself
+(not CI), SHA-256 `a0d073a5...` -- matches the same artifact pulled from
+the tag's CI run byte for byte. Extracted and ran `--version`: prints
+`fiedle400 0.3.9`. **Phase 2 (minor bump) not yet done** -- pending
+psytrap's review of the feature work before opening `0.4.0`.
+
 ---
 
 ## 5. Rollback
