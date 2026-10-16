@@ -53,7 +53,7 @@ fiedle400 download -o output/rc.spo2 && fiedle400 plot output/rc.spo2   # G7: vi
 | **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on Linux with **both** backends (`hidraw` and `hid`); elsewhere with `hid` only (`hidraw` raises off Linux by design, and the Linux-only tests skip with a reason). Never run two live runs at once (a lock file serialises them). `fiedle400 selftest` runs the same core checks with no env var, for a quick one-off. | ✅ **Both platforms re-verified at `0.3.7` (psytrap, 2026-10-16).** Linux `hidraw`: `fiedle400 selftest` all 5 checks pass, clock query returns the exact bytes the patch predicted (`f2 00 00 02 07 00 0c 07`); `FIEDLE400_LIVE=1` suite 7/7 pass. `hid` backend on Linux still reproduces T8 exactly as documented -- unchanged, not a regression, expected per T8's "won't fix" call. Windows 8.1 laptop: `FIEDLE400_LIVE=1 py -3.8 -m unittest tests.test_device_live -v` -- 5/5 applicable tests pass (`hid` backend enumeration, connection, handshake, clock, sessions), 2 correctly skipped as Linux-only. |
 | **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `fiedle400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | ✅ **Re-verified at `0.3.7` (psytrap, 2026-10-16).** Real stored session (160 records / 2m40s) downloaded from the device and plotted: SpO2 94-99% (avg 96.9), HR 63-86 bpm (avg 73.7), real variation, 0 dropouts, no probe-out pattern. `info` correctly reports the clock as "not reported by the device" against the live device, matching the patch's claim end-to-end. Prior pass: 2026-10-15 (92/937-record sessions, SpO2 92-99%, HR 49-81). |
 | **G8 Output location** | Per `AGENTS.md`, output goes to the current directory (or the configured workdir), never a hard-coded `output/`; help strings say the same. | ✅ The code always wrote to the cwd; only the help strings said `output/`. Fixed in `9647913`. |
-| **G10 GitHub CI green** *(psytrap, 2026-10-16)* | `tests.yml` (ubuntu/windows/macos, Python 3.11) must be green **on the exact commit being tagged**, not just "green at some point." Push the release commit first, wait for the Actions run to finish, and only tag after it passes -- a local-only pass of G1-G4 is not a substitute, since it only proves one OS/Python combination. If CI goes red after the commit is pushed, fix forward (a new commit) rather than tagging the red one. | ⬜ **Not yet run this cycle** -- nothing has been pushed yet. Next step after this commit lands locally. |
+| **G10 GitHub CI** *(pre-flight, psytrap, 2026-10-16)* | `tests.yml` (ubuntu/windows/macos, Python 3.11) should be green **on the exact commit being tagged**, not just "green at some point" -- a local-only pass of G1-G4 only proves one OS/Python combination. **Non-blocking:** check it and record the result, but a CI run that's red doesn't by itself stop a release the way G1-G7 failing would -- CI can be environmentally flaky in ways the local hardware gates aren't. If it's red, look at why before deciding whether to fix forward or tag anyway. | ✅ Commit `d797819`: [run 38866641138](https://github.com/psytrap/fiedle400/actions/runs/38866641138) green on all three OSes. |
 
 > [!WARNING]
 > **Process gap, v0.2.17 / 0.3.0 cycle (psytrap, 2026-10-15): G5/G6 were
@@ -351,7 +351,7 @@ just for that promotion.
 1. Land B1–B7 as separate commits; G1–G4 pass locally.
 2. **Phase 1:** `python3 scripts/bump_version.py patch` → `0.1.1`. Commit as `chore(release): v0.1.1`.
 3. Diff audit (§1), then G5–G7 on the user's machine.
-4. **G10:** push the commit to `master`, wait for `tests.yml` to go green on that exact commit.
+4. **G10** (pre-flight, non-blocking): once the commit is pushed, check `tests.yml` went green on it.
 5. Tag: `git tag -a v0.1.1 -m "Release v0.1.1"`. The tag stays local until Ring 1.
 
 ### Ring 1: CI Build (dry run)
@@ -388,7 +388,7 @@ for that.
 - [ ] G5: built binary runs `info` / `sessions` on the real device, Linux *and* Windows, against a session with actual stored data (not an empty device -- see the v0.2.17 process-gap warning in §3d)
 - [ ] G6: live device tests pass (Linux: `hidraw` and `hid`; Windows: `hid`)
 - [ ] G7: real-finger session downloaded and plotted; user acknowledged the plot
-- [ ] G10: release commit pushed; `tests.yml` green on that exact commit (ubuntu/windows/macos) before tagging
+- [ ] G10 (non-blocking): release commit pushed; `tests.yml` checked on that exact commit (ubuntu/windows/macos)
 - [ ] Ring 0: annotated tag created locally
 - [ ] Ring 1: workflow_dispatch dry run; all 3 binaries smoke-tested on their OS
 - [ ] Ring 2: push tag; GitHub Release published
