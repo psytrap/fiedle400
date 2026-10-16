@@ -4,7 +4,7 @@
 > **Cadence:** Two-Phase Version Bump (Patch Pre-Flight • Minor Post-Shipment), adapted from the RefDiff rollout plan
 > **Baseline:** see `fiedle400/__init__.py` for the current version (patch-bumped freely per §1's rule; no git tags exist yet)
 > **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B7 resolved. The `fiedle400` rename (§3b, patch 0010) has landed. Findings T2-T7 (§3d) are **fixed in patch 0013 and verified against the real device** -- not just the simulator: `sessions`/`download` on the real PO-400 now correctly show 107 records / 1m 47s (was 214 / 4m 03s), and `info` honestly reports fields the device never answers instead of inventing them. **T1 is marked unfixed** (2026-10-16): its synthetic-only coverage doesn't count as a real-hardware fix; a loud runtime alert now covers its first real occurrence instead. A new finding, T8, was found afterward (Linux `hid`/libusb backend). `fiedle400 selftest` (new) gives a one-command, read-only hardware check with no env var needed. Nothing has been tagged or released.
-> **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap applies the patches locally, runs the live gates (G5–G7) and pushes to the private remote `github.com/psytrap/fiedle400`, where CI (`tests.yml`) runs on every push and PR.
+> **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap applies the patches locally, runs the live gates (G5–G7) and pushes to `github.com/psytrap/fiedle400` (public since 2026-10-16), where CI (`tests.yml`) runs on every push and PR.
 
 ---
 
