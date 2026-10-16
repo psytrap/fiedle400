@@ -3,6 +3,13 @@
 
 Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation aller Befehle und Antworten des Pulox PO-400 (`VID_28E9&PID_028A`), reversiert aus `SpO2.exe` (Version 2.0) und verifiziert an echten USB-PCAP-Mitschnitten.
 
+> **Maßgeblich ist `PROTOCOL.md`.** Diese deutsche Fassung wurde am 2026-10-16 gegen
+> `analysis/bum400_20260906_100516.pcap` (Hersteller-Software) und `tests/fixtures/*.trace.json`
+> (`fiedle400` am echten Gerät) abgeglichen; die Korrekturen in §§1-13 entsprechen denen in
+> `PROTOCOL.md`. Der Abschnitt zum manuellen Aufnahme-Protokoll ist bewusst **unverändert**
+> geblieben; seine offenen Abweichungen zu `PROTOCOL.md` §3.14 stehen in
+> `handoff/docs-review-response.md`.
+
 ---
 
 ## 1. Grundlegende Protokollregeln
@@ -14,8 +21,13 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
    $$\text{Checksum} = \left( \sum_{i=0}^{N-1} \text{Byte}[i] \right) \bmod 128$$
 3. **14-Bit Integer-Packing (Little-Endian 7-Bit):**
    $$\text{Value}_{14} = (\text{Byte}_{\text{high}} \ll 7) \mid \text{Byte}_{\text{low}}$$
-4. **28-Bit Integer-Packing (für Sample-Zähler & Dauer):**
+4. **28-Bit Integer-Packing (Rohwert-Zähler im `0xEC`-Header):**
    $$\text{Value}_{28} = B_0 \mid (B_1 \ll 7) \mid (B_2 \ll 14) \mid (B_3 \ll 21)$$
+   Zählt **Rohwerte mit 2 Hz**, nicht Sekunden. Datensätze (= Sekunden) = `(Value_28 + 1) // 2`
+   (243 Rohwerte -> 122 Datensätze im Hersteller-Mitschnitt).
+5. **Zwei Request-Formen:** Die Hersteller-Software sendet Befehle "nackt" (`9C 01 1D`, Null-Padding),
+   `fiedle400` meist als `7D 81 <Opcode> <Args>` mit `0x80`-Padding. Das Gerät beantwortet beide gleich.
+6. **Antworten sind Frames eigener Länge** und enden jeweils mit ihrer Prüfsumme (siehe `PROTOCOL.md` §2.2).
 
 ---
 
@@ -24,23 +36,27 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | Opcode | Name | Host Request (Hex) | Response Opcode | Bedeutung |
 | :---: | :--- | :--- | :---: | :--- |
 | **0xA7 + 0xA2** | `UNLOCK_HANDSHAKE` | `7D 81 A7 80...` & `7D 81 A2 80...` | `0xF0` | MCU State Machine entsperren (ACK `F0 70`) |
-| **0x9C [0x80]** | `SESSION_RESET` | `7D 81 9C 80 00 1C` | `0xF0` / `0xEC` | Session-Iterator auf Slot 0 zurücksetzen |
+| **0x9C [0x80]** | `SESSION_RESET` | `7D 81 9C 80 00` | `0xF0` | Session-Iterator zurücksetzen (nur `fiedle400`; die Hersteller-Software sendet es nie) |
 | **0x9C [0x01]** | `QUERY_SESSIONS` | `9C 01 1D` | `0xEC` | Session-Metadaten / Header für User 1 abfragen |
 | **0x82** | `READ_RTC` | `82 02` (oder `7D 81 82 80...`) | `0xF2` | Geräte-Uhrzeit auslesen (YY/MM/DD HH:MM:SS) |
-| **0x83** | `SET_RTC` | `83 [YY, MM, DD, HH, MM, SS, ...] [chk]` | `0xF2` / `0xF0` | Echtzeituhr im Oximeter setzen |
+| **0x83** | `SET_RTC` | `83 YY MM DD HH MM SS 33 06 [chk]` | `F3 00 73` | Echtzeituhr im Oximeter setzen (Hersteller-Mitschnitt) |
 | **0x9B [0x00]** | `DATA_STREAM_QUERY` | `9B 00 1B` (Start) / `9B 7F 1A` (Stop) | `0xEB` | Live-Datenstrom öffnen / schließen |
-| **0x9D [0x02]** | `STORAGE_INIT` | `9D 02 7F 7F 7F 00 00 1C` | `0xF0` | Flash-Lesepuffer initialisieren |
+| **0x9D [0x02]** | `STORAGE_INIT` | `9D 02 7F 7F 7F 00 00 1C` | keine | Vor dem Download gesendet; in keinem Mitschnitt beantwortet |
 | **0x9D [0x04 0x01]** | `READ_SPO2_BLOCK` | `9D 04 01 01 01 00 00 00 24` | `0xED` | SpO2-Messreihe (Block 1) anfordern |
 | **0x9D [0x04 0x02]** | `READ_PULSE_BLOCK` | `9D 04 02 01 01 00 00 00 25` | `0xED` | Pulsfrequenz-Messreihe (Block 2) anfordern |
-| **0x9D [0x02]** | `SEGMENT_ACK` | `9D 02 7F 7F 7F 00 00 1C` | `0xF0` | Datendownload bestätigen |
-| **0x81 / 0xAD** | `QUERY_DEVICE_INFO`| `81 01` / `7D 81 AD 80...` | `0xF1` | Hardware-Kennung ("50F", CMS50F / PO-400) |
-| **0x80 / 0x81** | `FIRMWARE_QUERY` | `80 00` / `81 01` | `0xCF` / `0x81` | Firmware-Versionsstring |
+| **0x9D [0x02]** | `SEGMENT_ACK` | `9D 02 7F 7F 7F 00 00 1C` | keine | Nach dem Download gesendet; keine Antwort |
+| **0x9D [0x7F]** | `STORAGE_FINALIZE` | `9D 7F 7F 7F 7F 00 00 19` | nicht zugeordnet | Hersteller-Software, dreimal nach dem Download |
+| **0x81** | `QUERY_DEVICE_INFO`| `81 01` | `0xF1` | Hardware-Kennung ("50F", CMS50F / PO-400). `0xAD` erhält nur `F0 70` |
+| **0x80** | `FIRMWARE_QUERY` | `80 00` | `F0 70` | Nur ACK auf diesem Gerät; die `0xCF`-Antwort stammt allein aus der Disassembly |
 | **0x8E [0x03]** | `SERIAL_PROFILE_QUERY` | `8E 03 11` (User), `8E 06 14`, `8E 07 15` | `0xFE` | Benutzerprofil ("user") & Seriennummer |
-| **0x8F / 0x9F** | `FLASH_GEOMETRY_QUERY` | `8F 04 00 13` / `9F 1F` | `0xEF` | Flash-Speichergeometrie & Blockgröße |
+| **0x9F** | `FLASH_GEOMETRY_QUERY` | `9F 1F` | `0xEF` | Flash-Speichergeometrie (Feldbedeutung unbestätigt) |
+| **0x8F** | (unbekannt) | `8F 04 00 13` | `FF 00 7F` | Früher als Geometrie-Abfrage geführt; das Gerät antwortet mit einem `0xFF`-Frame |
+| **0x9E** | (Geometrie-Variante) | `7D 81 9E 40 04` | `F0 70` | Was `fiedle400 info` heute sendet; nur ACK |
 | **0x90 [0x06]** | `USER_METADATA_QUERY` | `90 06 16` | `0xE0` | Alarmgrenzen (SpO2 High/Low, PR High/Low) |
-| **0x94** | `FLASH_SECTOR_QUERY`| `94 14` / `7D 81 94 ...` | `0xD4` / `0x94` | Flash-Sektor-Layout-Parameter |
-| **0xA5** | `SESSION_SELECT` | `7D 81 A5 [id] [chk]` | `0xF0` | Spezifische Session auswählen (Varianten-Geräte) |
-| **0xA6** | `SESSION_DOWNLOAD` | `7D 81 A6 [chk]` | `0xEB` | Direkter Stream-Download (Varianten-Geräte) |
+| **0x94** | `FLASH_SECTOR_QUERY`| `94 14` / `7D 81 94 ...` | `0xD4` / `0x94` | Flash-Sektor-Layout-Parameter (in keinem Mitschnitt) |
+| **0xA5** | `SESSION_SELECT` | `7D 81 A5 [id] [chk]` | keine | Varianten-Geräte; dieses Gerät antwortet nicht |
+| **0xA6** | `SESSION_DOWNLOAD` | `7D 81 A6 [chk]` | keine | Varianten-Geräte; dieses Gerät antwortet nicht |
+| **0x9A** | (unbekannt) | `9A 1A` | nicht zugeordnet | Letzter Befehl des Hersteller-Downloads |
 | **0xAA / 0x91** | `FLASH_CLEAR` | `7D 81 AA ...` bzw. `91 01 12` | `0xF0` | Flash löschen / User 1 löschen (Gefahr!) |
 | **0xA0** | `MANUAL_HEADER_QUERY` | `A0 00 20` | `0xD0` | Header der manuellen Aufnahme (Datum/Zeit/Dauer) |
 | **0xA3** | `MANUAL_READ_SPO2` | `A3 00 00 00 23` | `0xD3` | SpO2-Messreihe der manuellen Aufnahme |
@@ -55,27 +71,21 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 
 ### 1. UNLOCK_HANDSHAKE (`0xA7` + `0xA2`)
 
-#### A. Host Request: Phase 1 (`0xA7`)
-*Wird über den Protocol 0 Dispatcher (`0x004915c5`) gesendet.*
+#### A. Host Request: ein kombinierter 64-Byte-Report (`0xA7` + `0xA2`)
+*Wird über den Protocol 0 Dispatcher (`0x004915c5`) gesendet.* Korrigiert 2026-10-16: **ein** Report,
+keine Prüfsummen, Rest mit `0x80` aufgefüllt (so im Hersteller-Mitschnitt und in `fiedle400`;
+frühere Fassungen nannten zwei Reports mit Prüfsummen `0x20`/`0x1B`, die nirgends auftauchen).
 
 | Offset | Länge | Feldname | Wert / Maske | Bedeutung |
 | :--- | :--- | :--- | :--- | :--- |
 | `0x00` | 1 Byte | Sync Prefix | `0x7D` | Protokoll 0 Synchronisationsbyte |
 | `0x01` | 1 Byte | Channel ID | `0x81` | Kanal-ID / Geräte-Target |
 | `0x02` | 1 Byte | Opcode | `0xA7` | Unlock Phase 1 Befehl |
-| `0x03..0x08` | 6 Bytes | Key / Padding | `0x80 0x80 0x80 0x80 0x80 0x80` | Fester Handshake-Schlüssel / Padding |
-| `0x09` | 1 Byte | Checksum | `0x20` | `(sum(Byte[0..8])) mod 128` |
-
-#### B. Host Request: Phase 2 (`0xA2`)
-*Direkt im Anschluss oder im selben Report gesendet.*
-
-| Offset | Länge | Feldname | Wert / Maske | Bedeutung |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 Byte | Sync Prefix | `0x7D` | Protokoll 0 Synchronisationsbyte |
-| `0x01` | 1 Byte | Channel ID | `0x81` | Kanal-ID / Geräte-Target |
-| `0x02` | 1 Byte | Opcode | `0xA2` | Unlock Phase 2 Befehl |
-| `0x03..0x08` | 6 Bytes | Key / Padding | `0x80 0x80 0x80 0x80 0x80 0x80` | Fester Handshake-Schlüssel / Padding |
-| `0x09` | 1 Byte | Checksum | `0x1B` | `(sum(Byte[0..8])) mod 128` |
+| `0x03..0x08` | 6 Bytes | Key / Padding | `0x80` × 6 | Fester Handshake-Schlüssel / Padding |
+| `0x09` | 1 Byte | Sync Prefix | `0x7D` | Phase 2 folgt direkt, ohne Prüfsumme dazwischen |
+| `0x0A` | 1 Byte | Channel ID | `0x81` | |
+| `0x0B` | 1 Byte | Opcode | `0xA2` | Unlock Phase 2 |
+| `0x0C..0x3F` | 52 Bytes | Padding | `0x80` | Report-Auffüllung |
 
 #### C. Hardware Response: ACK (`0xF0`)
 *Empfangen an Adresse `0x004c5e6f`.*
@@ -106,24 +116,28 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x01` | 1 Byte | User / Slot-ID | `0x01` | User 1 (Slot 1) |
 | `0x02` | 1 Byte | Checksum | `0x1D` | `(0x9C + 0x01) mod 128 = 0x1D` |
 
-#### C. Hardware Response: Session Header (`0xEC`, 64 Bytes)
+#### C. Hardware Response: Session Header (`0xEC`, 21 Bytes)
 *Empfangen an Adresse `0x004c587a`.*
 
 | Offset | Länge | Feldname | Wert / Format | Bedeutung & Dekodierung |
 | :--- | :--- | :--- | :--- | :--- |
 | `0x00` | 1 Byte | Header-Opcode | `0xEC` | Kennung für Session-Metadaten / Segment-Header |
 | `0x01` | 1 Byte | Status & Flags | `0x40` | **Bit 6 (`0x40`):** `Session Valid / Data Ready` (1 = Daten vorhanden)<br>**Bits 0..3 (`0x0F`):** User-ID / Speicher-Slot *(Keine Paketlänge!)* |
-| `0x02` | 1 Byte | Total Segments | `0x01` | Gesamtanzahl gespeicherter Segmente (`[this + 0x1e8]`) |
-| `0x03` | 1 Byte | Segment Index | `0x01` | Aktuelle Segment-Nummer (1-basiert, `[this + 0x1ec]`) |
+| `0x02` | 1 Byte | Total Segments | `0x01` | Gesamtanzahl gespeicherter Segmente (`[this + 0x1e8]`); `fiedle400` liest das Byte als User-ID |
+| `0x03` | 1 Byte | Segment Index | `0x01` | Aktuelle Segment-Nummer (1-basiert, `[this + 0x1ec]`); `fiedle400` liest es als Session-ID. Alle Mitschnitte zeigen `01 01`, keine Lesart ist bestätigt |
 | `0x04` | 1 Byte | Year (YY) | `0x1A` (26) | Jahr seit 2000 (`2000 + 26 = 2026`) |
 | `0x05` | 1 Byte | Month (MM) | `0x09` (9) | Monat (1..12) -> September |
 | `0x06` | 1 Byte | Day (DD) | `0x06` (6) | Tag im Monat (1..31) -> 6. |
 | `0x07` | 1 Byte | Hour (HH) | `0x0A` (10) | Stunde (0..23) -> 10 Uhr |
 | `0x08` | 1 Byte | Minute (MM) | `0x00` (0) | Minute (0..59) -> 00 min |
 | `0x09` | 1 Byte | Second (SS) | `0x2E` (46) | Sekunde (0..59) -> 46 s |
-| `0x0A..0x0D` | 4 Bytes | Sample Count | `0x73 0x01 0x00 0x00` | **28-Bit Packed Little-Endian Integer (7-Bit Chunks):**<br>`Samples = B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`<br>`115 + (1 << 7) = 243 Rohwerte` (bei 2 Hz = 122 Sekunden) |
-| `0x0E..0x1D` | 16 Bytes | Username | `"user ..."` | Null-terminierter ASCII-Benutzername |
-| `0x1E..0x3F` | 34 Bytes | Reserved / Padding | `0x00...` | Hardware-Parameter / Null-Padding |
+| `0x0A..0x0D` | 4 Bytes | Sample Count | `0x73 0x01 0x00 0x00` | **28-Bit Packed Little-Endian Integer (7-Bit Chunks):**<br>`Samples = B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`<br>`115 + (1 << 7) = 243 Rohwerte` (bei 2 Hz = 122 Sekunden, `(243 + 1) // 2`) |
+| `0x0E..0x13` | 6 Bytes | Username | `"user"` + `00 00` | In allen Mitschnitten gleich |
+| `0x14` | 1 Byte | Checksum | `0x42` | `(sum(Byte[0..0x13])) mod 128` |
+| `0x15..0x3F` | 43 Bytes | Padding | `0x00...` | Null-Padding |
+
+Korrigiert 2026-10-16: früher als 64-Byte-Frame mit 16-Byte-Benutzername geführt. Der echte Frame
+ist 21 Bytes lang: `EC 40 01 01 1A 09 06 0A 00 2E 73 01 00 00 75 73 65 72 00 00 42`.
 
 ---
 
@@ -166,6 +180,13 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x06` | 1 Byte | Second | `0x00..0x3B` | Sekunde (0..59) |
 | `0x07` | 1 Byte | Checksum | `0x00..0x7F` | `(sum(Byte[0..6])) mod 128` |
 
+> **Die `0xF2`-Antwort enthält auf diesem Gerät keine aktuelle Uhrzeit.** Sie lautet in jedem
+> Mitschnitt gleich `F2 00 00 02 07 00 0C 07` (Hersteller-Mitschnitt vom 2026-09-06, vor und nach
+> einem mit `F3 00 73` quittierten `SET_RTC`; `fiedle400`-Mitschnitte vom 2026-10-15). Die Feldtabelle
+> oben ist daher unbestätigt. `fiedle400` bis 0.3.6 las ab Byte 3 und erhielt so 2002-07-01 12:07 (die
+> Minute war das Prüfsummenbyte); seit 0.3.7 wird die Antwort nicht mehr dekodiert, `read-time` zeigt sie roh. Der Hersteller-`SET_RTC` entspricht genau Tabelle B
+> (`83 1A 09 06 0A 05 18 33 06 0C`); `fiedle400 set-time` sendet ein anderes, nicht aufgezeichnetes Layout.
+
 ---
 
 ### 4. DATA_STREAM_QUERY (`0x9B`) & Live-Streaming (`0xEB`)
@@ -190,6 +211,12 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x04` | 1 Byte | SpO2 | `0x00..0x64` | Sauerstoffsättigung in % (`0x7F` = Ungültig / Finger-Out) |
 | `0x05` | 1 Byte | Checksum | `0x00..0x7F` | `(sum(Byte[0..4])) mod 128` |
 
+> **Vom einzigen Live-Mitschnitt nicht bestätigt.** Der Hersteller-Mitschnitt (ohne Finger) enthält
+> drei Frame-Formen mit jeweils gültiger Prüfsumme am Ende: `EB 00 04 40 30 5F` (6 Bytes),
+> `EB 01 06 7F 7F 7F 00 6F` (8 Bytes) und `EB 7F 6A` (3 Bytes, Antwort auf `9B 7F 1A`). Die Länge
+> hängt an Byte 1, das damit eher ein Frame-Typ als ein Status-Bitfeld ist (so behandelt es auch
+> `parsers.parse_hid_chunks`). Klärung braucht einen Mitschnitt mit Finger.
+
 ---
 
 ### 5. STORAGE_INIT, BLOCK READ (`0x9D`) & Subframes (`0xED`)
@@ -208,6 +235,9 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x06` | 1 Byte | Offset High | `0x00` | Start-Offset High-Byte |
 | `0x07` | 1 Byte | Checksum | `0x1C` | `(sum(Byte[0..6])) mod 128 = 0x1C` |
 
+So (8 Bytes) im Hersteller-Mitschnitt. `fiedle400` sendet eine 9-Byte-Variante mit zusätzlichem
+`0x00` vor der Prüfsumme. Keine der beiden wird beantwortet; der Download funktioniert danach mit beiden.
+
 #### B. Host Request: READ_SPO2_BLOCK (`0x9D 0x04 0x01`)
 
 | Offset | Länge | Feldname | Wert / Maske | Bedeutung |
@@ -217,8 +247,8 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x02` | 1 Byte | Data Type | `0x01` | **0x01 = SpO2-Messreihe** |
 | `0x03` | 1 Byte | User ID | `0x01` | User 1 |
 | `0x04` | 1 Byte | Segment ID | `0x01` | Segment 1 |
-| `0x05` | 1 Byte | Subframe Low | `0x00` | Start-Subframe Bits 0..6 |
-| `0x06` | 1 Byte | Subframe High | `0x00` | Start-Subframe Bits 7..13 |
+| `0x05` | 1 Byte | Offset Low | `0x00` | Start-Offset in Rohwerten, Bits 0..6 |
+| `0x06` | 1 Byte | Offset High | `0x00` | Start-Offset in Rohwerten, Bits 7..13 |
 | `0x07` | 1 Byte | Reserved | `0x00` | Null-Byte |
 | `0x08` | 1 Byte | Checksum | `0x24` | `(sum(Byte[0..7])) mod 128 = 0x24` |
 
@@ -231,8 +261,8 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x02` | 1 Byte | Data Type | `0x02` | **0x02 = Pulsfrequenz-Messreihe** |
 | `0x03` | 1 Byte | User ID | `0x01` | User 1 |
 | `0x04` | 1 Byte | Segment ID | `0x01` | Segment 1 |
-| `0x05` | 1 Byte | Subframe Low | `0x00` | Start-Subframe Bits 0..6 |
-| `0x06` | 1 Byte | Subframe High | `0x00` | Start-Subframe Bits 7..13 |
+| `0x05` | 1 Byte | Offset Low | `0x00` | Start-Offset in Rohwerten, Bits 0..6 |
+| `0x06` | 1 Byte | Offset High | `0x00` | Start-Offset in Rohwerten, Bits 7..13 |
 | `0x07` | 1 Byte | Reserved | `0x00` | Null-Byte |
 | `0x08` | 1 Byte | Checksum | `0x25` | `(sum(Byte[0..7])) mod 128 = 0x25` |
 
@@ -251,6 +281,16 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x08..0x1C` | 21 Bytes | Compressed Data | 42 Nibbles (4-Bit) | **Delta-komprimierte Messwerte (2 Halbmesspunkte / Byte):**<br>• `0xF_ 0xF_`: Basiswert-Initialisierung `((B1 & 0xF) << 4) \| (B2 & 0xF)`<br>• `0xFF 0xFF`: Stream Terminator (`遇到无效包，结束`)<br>• High-Nibble: `Wert = Base - (B >> 4)`<br>• Low-Nibble: `Wert = Base - (B & 0x0F)` *(0x0F = Padding)* |
 | `0x1D` | 1 Byte | Checksum | `0x00..0x7F` | **7-Bit-Summenprüfsumme:**<br>`Checksum = (sum(Byte[0..28])) mod 128` |
 
+**Ergänzungen 2026-10-16 (siehe `PROTOCOL.md` §3.5):**
+- Der Offset in Byte 5/6 der Leseanfrage zählt **Rohwerte**, keine Blöcke: Offset `k` liefert die
+  Daten ab Rohwert `k` bis zum Ende der gespeicherten Reihe. Bei Offset = Anzahl gespeicherter
+  Rohwerte kommt ein End-Frame `ED 04 01 00 00 7B 7F 7F 7F 7F 0F 7F ...` (Terminator `0xFF 0xFF`),
+  darüber hinaus nichts (`tests/fixtures/probe.trace.json`).
+- Die Maskenbytes des letzten Frames einer Antwort haben für jedes Füllbyte ein Bit gesetzt
+  (`70 7F 7F`, `78 7F 7F`, im Hersteller-Mitschnitt `00 00 60`); Byte 7 ist Maske `m2`, kein Status.
+- Finger-Out im Speicherstrom ist in keinem Mitschnitt belegt. `0x7F`/`0xFF` sind die Werte, die
+  `SpO2.exe` bei unplausiblen *dekodierten* Werten in seine eigenen Datensätze schreibt.
+
 ---
 
 ### 6. QUERY_DEVICE_INFO (`0x81` / `0xAD`) & Response (`0xF1`)
@@ -261,6 +301,8 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | :--- | :--- | :--- | :--- | :--- |
 | `0x00` | 1 Byte | Opcode | `0x81` | Geräte-Info anfordern |
 | `0x01` | 1 Byte | Checksum | `0x01` | `0x81 mod 128 = 0x01` |
+
+`0xAD` erhält auf diesem Gerät nur `F0 70`.
 
 #### B. Hardware Response: Device Info (`0xF1`, 10 Bytes)
 *Verarbeitet in `SpO2.exe` @ `0x004c7281`.*
@@ -291,6 +333,9 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x01..0x08` | 8 Bytes | Version String | ASCII `"V3.1    "` | Versionsbezeichnung der Firmware |
 | `0x09` | 1 Byte | Checksum | `0x00..0x7F` | `(sum(Byte[0..8])) mod 128` |
 
+**Nie beobachtet:** Das Gerät beantwortet `80 00` nur mit `F0 70` (dreimal im Hersteller-Mitschnitt,
+einmal in `tests/fixtures/probe.trace.json`). Tabelle B stammt allein aus der Disassembly.
+
 ---
 
 ### 8. SERIAL_PROFILE_QUERY (`0x8E`) & Response (`0xFE`)
@@ -313,6 +358,11 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x02..0x09` | 8 Bytes | Data String | ASCII `"   user "` | Benutzername bzw. Seriennummer |
 | `0x0A` | 1 Byte | Checksum | `0x00..0x7F` | `(sum(Byte[0..9])) mod 128` |
 
+**Korrektur nach Mitschnitt:** Die Länge hängt vom Sub-Index ab. `8E 03` -> `FE 03 20 20 20 75 73 65 72 20`
+(10 Bytes: 7 Zeichen `"   user"`, Prüfsumme `0x20` an `0x09`); `8E 06` -> `FE 06 07 00 00 00 0B` (7 Bytes,
+Bedeutung unbekannt); `8E 07` -> `FE 07 00 00 05` (5 Bytes, **keine** Seriennummer). Die Tabelle oben passt
+zu keiner aufgezeichneten Antwort.
+
 ---
 
 ### 9. FLASH_GEOMETRY_QUERY (`0x8F` / `0x9F`) & Response (`0xEF`)
@@ -321,10 +371,11 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 
 | Offset | Länge | Feldname | Wert / Maske | Bedeutung |
 | :--- | :--- | :--- | :--- | :--- |
-| `0x00` | 1 Byte | Opcode | `0x8F` | Speicher-Topologie anfordern |
-| `0x01` | 1 Byte | Sub-Cmd | `0x04` | Topologie-Subkommando |
-| `0x02` | 1 Byte | Param | `0x00` | Standardparameter |
-| `0x03` | 1 Byte | Checksum | `0x13` | `(0x8F + 0x04) mod 128 = 0x13` |
+| `0x00` | 1 Byte | Opcode | `0x9F` | Speicher-Topologie anfordern |
+| `0x01` | 1 Byte | Checksum | `0x1F` | `0x9F mod 128 = 0x1F` |
+
+Korrigiert 2026-10-16: Die `0xEF`-Antwort folgt auf `9F 1F`. Das früher hier genannte `8F 04 00 13`
+beantwortet das Gerät mit `FF 00 7F`.
 
 #### B. Hardware Response: Flash Geometry (`0xEF`, 8 Bytes)
 *Verarbeitet in `SpO2.exe` @ `0x004c5e8e`.*
@@ -337,6 +388,8 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x04..0x06` | 3 Bytes | Total Capacity | `0x00..0x7F` | Gesamte Speicherkapazität |
 | `0x07` | 1 Byte | Checksum | `0x30` | `(sum(Byte[0..6])) mod 128` |
 
+Einzige aufgezeichnete Antwort: `EF 00 01 40 00 00 00 30`. Die Feldbedeutungen sind unbestätigt.
+
 ---
 
 ### 10. FLASH_SECTOR_QUERY (`0x94`) & Response (`0xD4`)
@@ -347,6 +400,8 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | :--- | :--- | :--- | :--- | :--- |
 | `0x00` | 1 Byte | Opcode | `0x94` | Flash-Sektor-Layout abfragen |
 | `0x01` | 1 Byte | Checksum | `0x14` | `0x94 mod 128 = 0x14` |
+
+In keinem Mitschnitt; nur aus der Disassembly.
 
 #### B. Hardware Response: Flash Sector Layout (`0xD4`, 18 Bytes)
 *Verarbeitet in `SpO2.exe` (Länge 18 Bytes laut Global Table).*
@@ -384,6 +439,10 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | `0x05` | 1 Byte | PR High Limit | `0x00..0xFE` | Obere Puls-Alarmschwelle in bpm (z. B. 120 bpm) |
 | `0x06` | 1 Byte | Checksum | `0x00..0x7F` | `(sum(Byte[0..5])) mod 128` |
 
+Die aufgezeichnete Antwort ist 15 Bytes lang (Prüfsumme an `0x0E`):
+`E0 06 01 00 01 00 00 52 1F 00 1A 4E 1F 00 60`. `01 00 01 00` sind keine plausiblen Alarmgrenzen; die
+Tabelle ist unbestätigt.
+
 ---
 
 ### 12. SESSION_SELECT (`0xA5`) & SESSION_DOWNLOAD (`0xA6`)
@@ -411,6 +470,9 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 
 #### C. Hardware Response: ACK (`0xF0`) bzw. Stream (`0xEB`)
 *Antwortet mit Bestätigung `0xF0 0x70` oder startet kontinuierlichen Datenstrom.*
+
+Auf diesem (Flash-Speicher-)PO-400 für Session 1-3 getestet: keine Antwort, nicht einmal ein ACK
+(`CHANGELOG.md`, "Manual-mode protocol").
 
 ---
 
@@ -442,6 +504,10 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 | :--- | :--- | :--- | :--- | :--- |
 | `0x00` | 1 Byte | Opcode | `0xF0` | Bestätigung |
 | `0x01` | 1 Byte | Status | `0x70` | Löschvorgang gestartet / abgeschlossen |
+
+Nichts davon ist aufgezeichnet. `fiedle400 clear` sendet andere Bytes (`0xAF`, dann `0xAB 01 [id]` bzw.
+`0xAA 80 80`, `0xAB 80 80`, `0xAC 80 80`, jeweils mit `7D 81`-Präfix), die weder dokumentiert noch
+aufgezeichnet sind. Das Umschalten zwischen Auto- und Manual-Modus am Gerät löscht ebenfalls den Speicher.
 
 ---
 

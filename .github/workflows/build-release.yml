@@ -244,8 +244,9 @@ jobs:
             **Minimum Windows:** verified on Windows 8.1 (6.3.9600, x64) with a real
             PO-400 attached. Newer versions work; older ones are untested.
 
-            **Device clock:** the PO-400 reads 2002-07-01 and cannot be set from this
-            tool. Stored sessions keep their correct timestamps regardless.
+            **Device clock:** the PO-400 does not report its clock over USB (it answers
+            with the same fixed bytes every time), so `read-time` shows that reply raw and
+            `set-time` is unverified. Stored sessions keep their correct timestamps regardless.
             
             - **Windows (installer)**: Download `fiedle400-setup.exe` -- installs per-user, no admin rights needed.
             - **Windows (portable)**: Download `fiedle400-windows-x64.exe` (run directly from PowerShell or CMD).

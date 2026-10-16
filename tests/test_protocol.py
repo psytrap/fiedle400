@@ -171,12 +171,6 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(len(cmd), 64)
         self.assertEqual(cmd[0], Opcode.READ_RTC)
 
-    def test_parsers_rtc_time(self):
-        report = bytes([0xF2, 0x00, 0x00, 26, 9, 3, 7, 41, 6] + [0]*55)
-        dt = Parsers.parse_rtc_time(report)
-        self.assertIsNotNone(dt)
-        self.assertEqual(dt.year, 2026)
-
     def test_parsers_serial(self):
         report_sn = bytes([0xF1, 0x35, 0x30, 0x46, 0x20, 0x20] + [0]*58)
         sn, _ = Parsers.parse_serial(report_sn)

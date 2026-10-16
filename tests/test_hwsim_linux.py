@@ -444,7 +444,7 @@ class TestDownloadFlow(FlowCase):
 class TestInfoFlow(FlowCase):
     def test_reads_clock_and_user_from_recorded_replies(self):
         res = self.engine.read_device_info()
-        self.assertEqual(res["rtc_time_str"], "2002-07-01 12:07:00")
+        self.assertEqual(res["rtc_time_str"], "not reported by the device")
         self.assertEqual(res["device_info"].user_profile, "user")
 
     def test_unrecorded_queries_are_the_only_unanswered_ones(self):

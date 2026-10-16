@@ -49,10 +49,11 @@ fiedle400 download -o output/rc.spo2 && fiedle400 plot output/rc.spo2   # G7: vi
 | **G2 Capture regression** | `test_pcap_decoder` actually runs against `analysis/bum400_20260906_100516.pcap` (it must not skip). | ✅ Runs and passes (B2). |
 | **G3 Version sync** | `tests/test_version.py`: `fiedle400.__version__` equals `pyproject.toml` version; `fiedle400 --version` prints it; bump script cycle works. | ✅ Passing. |
 | **G4 Zero-dependency promise** | In a clean venv with no third-party packages, `python3 -m fiedle400 --help`, `info`, `sessions` and `download` import and run. `plot` prints an install hint and exits 1. | ✅ Verified in a clean venv: 107 tests run, 0 failures (plot tests skip). |
-| **G5 Binary build** *(local only)* | `pyinstaller fiedle400.spec` succeeds, **and the built artifact runs a device-touching command** (`info`, then `sessions`) with a real PO-400 attached; for Windows, the installed binary from the installer. `--version`/`--help` alone are not enough: a binary that starts but cannot load the `hid` extension passes them (this happened before `0ab3bf0`). CI runners have no oximeter, so this gate can only run on psytrap's machines; CI only proves the build succeeds. | ✅ `fiedle400-setup.exe` from CI, freshly installed on the Windows 8.1 laptop at `0.1.11`: `info`/`sessions` against the real device both correct post-T1-T7 fix (107 records, 1m 47s; "not reported by the device" where the device genuinely gives nothing). Re-run on each RC build -- this run does not carry forward to the next version. |
-| **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on Linux with **both** backends (`hidraw` and `hid`); elsewhere with `hid` only (`hidraw` raises off Linux by design, and the Linux-only tests skip with a reason). Never run two live runs at once (a lock file serialises them). `fiedle400 selftest` runs the same core checks with no env var, for a quick one-off. | ✅ Linux `hidraw`: 5/5 pass at `0.1.11` (device detection, connect, handshake, RTC, sessions). Windows `hid`: 5/5 pass on the laptop (same run as G5). ⚠️ Linux `hid` backend: **new finding T8** (below) -- connects, but the session query returns a bare ACK instead of data on this machine's libusb-backed install; not yet root-caused. |
-| **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `fiedle400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | ✅ **Passed (psytrap, 2026-10-15).** Two real sessions (92 records/1m32s and 937 records/~15.5min) plotted and confirmed plausible: SpO2 92-99%, HR 49-81, real variation, no flat-line pattern. This is the **beta** criterion (§3f); with G7 passed and no other gate blocking, this release is ready to promote from alpha. |
+| **G5 Binary build** *(local only)* | `pyinstaller fiedle400.spec` succeeds, **and the built artifact runs a device-touching command** (`info`, then `sessions`) with a real PO-400 attached; for Windows, the installed binary from the installer. `--version`/`--help` alone are not enough: a binary that starts but cannot load the `hid` extension passes them (this happened before `0ab3bf0`). CI runners have no oximeter, so this gate can only run on psytrap's machines; CI only proves the build succeeds. | ✅ **Both platforms re-verified at `0.3.7` (psytrap, 2026-10-16).** Linux: PyInstaller in `.venv`, `info`/`sessions` correct against the real device (`hidraw`). Windows 8.1 laptop (reached over SSH): PyInstaller installed for `py -3.8`, built `dist\fiedle400.exe`, `info`/`sessions` both correct against the same real device (`hid` backend; clock honestly "not reported by the device" there too). Not yet done via the installer/`.iss`, only the raw PyInstaller build -- fine for this gate's purpose. |
+| **G6 Live hardware** *(mandatory, the analogue of RefDiff's live CDP invariant)* | `FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live` passes with a real PO-400 attached, on Linux with **both** backends (`hidraw` and `hid`); elsewhere with `hid` only (`hidraw` raises off Linux by design, and the Linux-only tests skip with a reason). Never run two live runs at once (a lock file serialises them). `fiedle400 selftest` runs the same core checks with no env var, for a quick one-off. | ✅ **Both platforms re-verified at `0.3.7` (psytrap, 2026-10-16).** Linux `hidraw`: `fiedle400 selftest` all 5 checks pass, clock query returns the exact bytes the patch predicted (`f2 00 00 02 07 00 0c 07`); `FIEDLE400_LIVE=1` suite 7/7 pass. `hid` backend on Linux still reproduces T8 exactly as documented -- unchanged, not a regression, expected per T8's "won't fix" call. Windows 8.1 laptop: `FIEDLE400_LIVE=1 py -3.8 -m unittest tests.test_device_live -v` -- 5/5 applicable tests pass (`hid` backend enumeration, connection, handshake, clock, sessions), 2 correctly skipped as Linux-only. |
+| **G7 Visual & data acknowledgment** | Record a short session **with a finger on the probe**, download it to `.spo2`, `.csv` and `.json`, run `fiedle400 plot`, and have the user confirm the PNG looks physiologically plausible. Per `.agents/rules/implausible_data_warning.md`, constant 95/64 or 99/95 values with probe-out flags fail this gate. | ✅ **Re-verified at `0.3.7` (psytrap, 2026-10-16).** Real stored session (160 records / 2m40s) downloaded from the device and plotted: SpO2 94-99% (avg 96.9), HR 63-86 bpm (avg 73.7), real variation, 0 dropouts, no probe-out pattern. `info` correctly reports the clock as "not reported by the device" against the live device, matching the patch's claim end-to-end. Prior pass: 2026-10-15 (92/937-record sessions, SpO2 92-99%, HR 49-81). |
 | **G8 Output location** | Per `AGENTS.md`, output goes to the current directory (or the configured workdir), never a hard-coded `output/`; help strings say the same. | ✅ The code always wrote to the cwd; only the help strings said `output/`. Fixed in `9647913`. |
+| **G10 GitHub CI green** *(psytrap, 2026-10-16)* | `tests.yml` (ubuntu/windows/macos, Python 3.11) must be green **on the exact commit being tagged**, not just "green at some point." Push the release commit first, wait for the Actions run to finish, and only tag after it passes -- a local-only pass of G1-G4 is not a substitute, since it only proves one OS/Python combination. If CI goes red after the commit is pushed, fix forward (a new commit) rather than tagging the red one. | ⬜ **Not yet run this cycle** -- nothing has been pushed yet. Next step after this commit lands locally. |
 
 > [!WARNING]
 > **Process gap, v0.2.17 / 0.3.0 cycle (psytrap, 2026-10-15): G5/G6 were
@@ -196,6 +197,8 @@ ever fires for the first time on real data, prints a loud alert
 report with the capture attached. Covered by
 `tests/test_cli_graceful.py::TestProbeOutAlert`. This doesn't fix T1 --
 it just guarantees the first real occurrence can't pass unnoticed.
+**Won't fix in the next release (psytrap, 2026-10-16):** ships with the
+alert-only mitigation above; not a blocker.
 
 **T8 (open):** the Linux `hid` (libusb) backend's unlock handshake and RTC
 read get no usable reply on this machine (`hidraw` is unaffected, and the
@@ -203,8 +206,10 @@ identical code works fine on the Windows laptop's `hid` backend). Likely
 needs a genuine USB re-enumeration to clear, not more elapsed time --
 untested, not remotely automatable. Low real-world severity: `hidraw` is
 the real Linux path; Windows and (unconfirmed) macOS use their native HID
-backends, not libusb. Repro: `fiedle400 selftest -b hid`. Full detail,
+backends, not libusb. Repro: `fiedle400 selftest -b hid` (since 0.3.7; `fiedle400 -b hid selftest` works in every version). Full detail,
 including the most recent re-confirmation: `CHANGELOG.md`.
+**Won't fix in the next release (psytrap, 2026-10-16):** `hidraw` remains
+the supported Linux backend; not a blocker.
 
 **Serial-stream device support: deliberately deferred, not a gap
 (psytrap, 2026-10-15).** This hardware unit only exercises the
@@ -227,25 +232,7 @@ count with everything past it being discardable padding, or something
 else -- needs a precisely stopwatch-timed recording to settle. Full
 discovery narrative and every ruled-out hypothesis: `CHANGELOG.md`.
 
-> [!WARNING]
-> **Process gap, v0.2.17 / 0.3.0 cycle (psytrap, 2026-10-15): G5/G6 were
-> not actually satisfied before shipping, and a same-day retroactive check
-> did not close it either.** The cycle was tagged and released on doc-only
-> changes without re-running the real-hardware gates first. A same-day
-> catch-up run (`info`/`sessions` against the real shipped binary, plus
-> `FIEDLE400_LIVE=1` tests) only proved: Linux `hidraw` connect, handshake,
-> RTC, and an *empty* session query all still work. It did **not** cover:
-> (a) **Windows** -- no run on the laptop happened this cycle at all, and
-> nothing here can substitute for one; (b) **real stored data** -- the
-> device currently holds zero sessions (erased by this session's own
-> Manual-mode testing), so `download` against an actual multi-record
-> session -- the part T6/T7/the storage decoder exist to protect -- was not
-> exercised, on either platform. G5/G6 for this cycle should be treated as
-> **not done**, not as retroactively passed. Closing this needs: a real
-> Manual *and* Auto-mode recording with actual data on the device, and a
-> run of `fiedle400 selftest` (or the fuller G5/G6 commands above) on both
-> Linux and the Windows laptop against that data -- not something that can
-> be completed from here alone.
+(The v0.2.17 / 0.3.0 process-gap warning is in §2, below the gate table.)
 ---
 
 ## 3e. TODO: recheck all tests for similar quirks (psytrap, 2026-10-15)
@@ -267,7 +254,7 @@ Broader than the environment-assumption audit above -- a pass over
 `tests/` for the usual smells (duplicated setup that should be a fixture,
 assertions too weak to catch the regression they're named for, tests that
 pass for the wrong reason, dead/unreachable test code, overfit mocks that
-would still pass after the real implementation broke). Not yet done.
+would still pass after the real implementation broke). **Delivered with the clean audit in patch 0014** (`handoff/clean-audit-response.md`).
 
 **TODO (psytrap, 2026-10-15): broader clean-code / clean-docs / clean-test /
 clean-release audit.** A full pass across the project, not limited to
@@ -284,7 +271,8 @@ clean-release audit.** A full pass across the project, not limited to
   (the kind of thing the `default_workflow_permissions` fix this session
   surfaced -- check for other drift between what's documented and what's
   actually configured).
-Not yet done.
+**Delivered in patch 0014** (`handoff/clean-audit-response.md`); the `PROTOCOL.md` /
+`analysis/*.md` pass followed separately (`handoff/docs-review-response.md`).
 
 ---
 
@@ -303,13 +291,68 @@ just for that promotion.
 
 ---
 
+## 3g. New TODOs (psytrap, 2026-10-16)
+
+- **Test the udev installer against an existing/stale config.**
+  `packaging/linux/fiedle400_setup-udev.sh` has only ever been run against a
+  clean `/etc/udev/rules.d/`. Not yet tested: running it when a rule file for
+  this VID/PID already exists -- from a prior `fiedle400` version, a manual
+  install, or a leftover `po400`-named rule from before the rename. Should
+  not duplicate or conflict; ideally detects and replaces the old rule. Not
+  yet done.
+- **Manual-mode real-hardware recording: optional release gate.** Add a new
+  gate (call it **G9**) that is explicitly *not* a blocker: before tagging,
+  ask whoever is running the release whether they can supply one real
+  Manual-mode recording (a capture or a `.spo2`/trace from the device in
+  Manual mode). If provided, use it to settle the open Manual-mode questions
+  in `PROTOCOL.md` §3.14 (M1-M7, `handoff/docs-review-response.md`). If not
+  provided, note it as skipped and ship anyway -- Manual mode isn't
+  implemented in `fiedle400` yet, so this never blocks a release, it only
+  improves the docs when the data happens to be available. Not yet done.
+- **Linux desktop icon.** `packaging/linux/install.sh` installs the binary
+  and `fiedle400_setup-udev.sh` sets up device access, but there's no
+  `.desktop` entry or icon for a GUI launcher/menu entry on Linux (Windows
+  gets a Start Menu shortcut via the installer; Linux currently doesn't have
+  an equivalent, matching entry). Not yet done.
+- **State plainly that "not reported by the device" may be a device bug, not
+  just an unimplemented feature.** The docs-review patch (0015) changed
+  several fields -- clock, firmware version, serial number, storage geometry
+  -- from a guessed/decoded value to an honest "not reported by the device."
+  That wording reads as "fiedle400 doesn't know how to ask," when the more
+  likely explanation for some of these (especially the clock, which never
+  changes across sessions and dates) is that **the device's firmware itself
+  has the bug** -- it may simply not implement what it advertises. Add an
+  explicit statement to this effect (`README.md` and/or `PROTOCOL.md` near
+  §3.3) so users and future contributors don't assume these are gaps in
+  `fiedle400` that more reverse-engineering would close. Not yet done.
+- **Interactive wizard: "download all" should ask for output format first.**
+  Today (`run_interactive_wizard`, `fiedle400/cli.py` ~line 790), after
+  picking sessions (including `[A]`/`[W]` "all") the wizard goes straight to
+  a "Save as [default: ...]" filename prompt; format is only chosen as a
+  side effect of typing `1`/`spo2`, `2`/`csv` or `3`/`json` *into* that same
+  prompt instead of a plain filename. Confirmed transcript (psytrap,
+  2026-10-16):
+  ```
+  Select action [W, 1-2, ranges, a, c, q; default: W]: w
+  Start Download Wizard to download all sessions? [Y/n]:
+  Save as [default: fiedle400_2026-10-16T083731_2026-10-16T084342.spo2]:
+  ```
+  Add a separate "Output format: [1] spo2 (default) [2] csv [3] json"
+  prompt **before** this "Save as" step (default: spo2, i.e. today's
+  behaviour unchanged if the user just presses Enter at both prompts), so
+  format and filename become two distinct, clearly labelled questions
+  instead of one prompt doing both jobs. Not yet done.
+
+---
+
 ## 4. Rollout Rings
 
 ### Ring 0: Local Release Candidate
 1. Land B1–B7 as separate commits; G1–G4 pass locally.
 2. **Phase 1:** `python3 scripts/bump_version.py patch` → `0.1.1`. Commit as `chore(release): v0.1.1`.
 3. Diff audit (§1), then G5–G7 on the user's machine.
-4. Tag: `git tag -a v0.1.1 -m "Release v0.1.1"`. The tag stays local until Ring 1.
+4. **G10:** push the commit to `master`, wait for `tests.yml` to go green on that exact commit.
+5. Tag: `git tag -a v0.1.1 -m "Release v0.1.1"`. The tag stays local until Ring 1.
 
 ### Ring 1: CI Build (dry run)
 1. Run `build-release.yml` via **workflow_dispatch** on `master` (no tag, so the release job is skipped).
@@ -345,6 +388,7 @@ for that.
 - [ ] G5: built binary runs `info` / `sessions` on the real device, Linux *and* Windows, against a session with actual stored data (not an empty device -- see the v0.2.17 process-gap warning in §3d)
 - [ ] G6: live device tests pass (Linux: `hidraw` and `hid`; Windows: `hid`)
 - [ ] G7: real-finger session downloaded and plotted; user acknowledged the plot
+- [ ] G10: release commit pushed; `tests.yml` green on that exact commit (ubuntu/windows/macos) before tagging
 - [ ] Ring 0: annotated tag created locally
 - [ ] Ring 1: workflow_dispatch dry run; all 3 binaries smoke-tested on their OS
 - [ ] Ring 2: push tag; GitHub Release published

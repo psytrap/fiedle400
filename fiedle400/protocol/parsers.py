@@ -7,24 +7,6 @@ from .models import DataPoint, SessionInfo, DeviceInfo
 from .decompression import decode_ed_subframes
 
 
-def parse_rtc_response(report_bytes: bytes) -> Optional[datetime]:
-    """Parses a 0xF2 RTC timestamp input report returned by PO-400 device."""
-    if len(report_bytes) >= 8 and report_bytes[0] in [0xF2, 0xF0]:
-        offset = 3 if report_bytes[0] == 0xF2 else 2
-        if offset + 6 <= len(report_bytes):
-            yr = 2000 + report_bytes[offset]
-            mo = max(1, min(12, report_bytes[offset + 1]))
-            dy = max(1, min(31, report_bytes[offset + 2]))
-            hr = min(23, report_bytes[offset + 3])
-            mi = min(59, report_bytes[offset + 4])
-            sc = min(59, report_bytes[offset + 5])
-            try:
-                return datetime(yr, mo, dy, hr, mi, sc)
-            except Exception:
-                return None
-    return None
-
-
 def parse_segment_metadata(report_bytes: bytes) -> Optional[Tuple[datetime, str]]:
     """Parses 0xEC segment index report for session start time and user name."""
     if len(report_bytes) >= 16 and report_bytes[0] == 0xEC:
@@ -371,10 +353,6 @@ class Parsers:
     @staticmethod
     def parse_device_info(report_bytes: bytes) -> DeviceInfo:
         return parse_device_info(report_bytes)
-
-    @staticmethod
-    def parse_rtc_time(report_bytes: bytes) -> Optional[datetime]:
-        return parse_rtc_response(report_bytes)
 
     @staticmethod
     def parse_serial(report_bytes: bytes) -> Tuple[Optional[str], Optional[str]]:

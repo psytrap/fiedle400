@@ -1,5 +1,6 @@
 """Unit tests for PO-400 interactive CLI wizard, range parsing, and ISO filename generation."""
 
+import io
 import os
 import unittest
 from datetime import datetime
@@ -111,6 +112,27 @@ class TestCliInteractive(unittest.TestCase):
         ret = run_interactive_wizard(args)
         self.assertEqual(ret, 0)
         mock_dev.close.assert_called()
+
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["q"])
+    def test_wizard_does_not_invent_unreported_device_details(self, mock_input, mock_engine_cls, mock_dev_cls):
+        """The real device reports no firmware version or serial (PROTOCOL.md §3.8): say so, don't print defaults."""
+        mock_dev_cls.return_value.connect.return_value = "/dev/hidraw_test"
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(hardware_id="50F", user_profile="user"),
+            "rtc_time_str": "not reported by the device",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine_cls.return_value = mock_engine
+
+        with patch("sys.stdout", new_callable=io.StringIO) as out:
+            self.assertEqual(run_interactive_wizard(MagicMock(device=None, verbose=0)), 0)
+        text = out.getvalue()
+        self.assertIn("Firmware Version      : not reported by the device | Serial: not reported by the device", text)
+        self.assertIn("Device Descriptor     : 50F", text)
+        self.assertNotIn("v2.0", text)
 
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.csv")
     @patch("fiedle400.cli.PulsoxHidDevice")

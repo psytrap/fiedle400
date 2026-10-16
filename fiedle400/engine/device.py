@@ -13,6 +13,9 @@ from ..protocol import (
 from .buffer import SerialByteStreamBuffer
 from .detector import SerialPacketDetector, DecodedPacket
 
+# The device answers the clock query, but with the same bytes every time (PROTOCOL.md §3.3).
+CLOCK_NOT_REPORTED = "not reported by the device"
+
 
 class SerialDeviceEngine:
     """High-level device controller managing streaming, packet detection, and session extraction."""
@@ -421,9 +424,8 @@ class SerialDeviceEngine:
         self.dev.write_report(Commands.read_time())
         time.sleep(0.15)
         events = self.read_packets(debug=debug)
-        rtc_ev = next((ev for ev in events if ev.packet_type == "RTC_RESPONSE"), None)
-        if rtc_ev and rtc_ev.timestamp:
-            rtc_time_str = rtc_ev.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+        if any(ev.packet_type == "RTC_RESPONSE" for ev in events):
+            rtc_time_str = CLOCK_NOT_REPORTED
 
         # Step 3: Query Info (0xAD)
         self.dev.write_report(Commands.build_hid(0xAD))
@@ -563,8 +565,12 @@ class SerialDeviceEngine:
                 self.dump_fp.close()
                 self.dump_fp = None
 
-    def read_rtc_time(self, debug: Union[bool, int] = 0) -> Optional[datetime]:
-        """Queries and returns active device RTC timestamp."""
+    def read_rtc_time(self, debug: Union[bool, int] = 0) -> Optional[bytes]:
+        """Sends the clock query and returns the raw 0xF2 reply, or None if none came.
+
+        The reply has been the same 8 bytes in every recording (PROTOCOL.md §3.3), so it
+        is returned as is rather than decoded into a time.
+        """
         c_read = Commands.read_time()
         if int(debug) >= 1:
             print(f"[DEBUG OUT] Serial Engine Read RTC: {c_read[:16].hex()}")
@@ -572,7 +578,7 @@ class SerialDeviceEngine:
         time.sleep(0.15)
         events = self.read_packets(debug=debug)
         rtc_ev = next((ev for ev in events if ev.packet_type == "RTC_RESPONSE"), None)
-        return rtc_ev.timestamp if rtc_ev else None
+        return rtc_ev.raw_payload if rtc_ev else None
 
     def set_rtc_time(self, target_dt: Optional[datetime] = None, debug: Union[bool, int] = 0) -> bool:
         """Sets device RTC timestamp."""

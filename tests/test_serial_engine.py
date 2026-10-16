@@ -101,7 +101,7 @@ class TestSerialEngine(unittest.TestCase):
         res = engine.read_device_info()
         self.assertIn("device_info", res)
         self.assertEqual(res["active_user_id"], 1)
-        self.assertEqual(res["rtc_time_str"], "2002-07-01 12:07:00")
+        self.assertEqual(res["rtc_time_str"], "not reported by the device")
         self.assertEqual(res["device_info"].firmware_version, "v2.0.0")
 
     def test_list_sessions_engine(self):
@@ -120,17 +120,13 @@ class TestSerialEngine(unittest.TestCase):
         self.assertEqual(sessions[0].session_id, 1)
         self.assertEqual(sessions[1].session_id, 2)
 
-    def test_read_rtc_time_engine(self):
+    def test_read_rtc_time_returns_the_raw_8_byte_reply(self):
+        """The recorded 0xF2 reply is 8 bytes and never changes (PROTOCOL.md §3.3): no time is decoded."""
         from fiedle400.serial_engine import SerialDeviceEngine
-        mock_dev = MockHidDevice(responses=[
-            bytes([0xF2, 0, 0, 26, 9, 5, 14, 25, 0] + [0] * 55),
-        ])
+        recorded = bytes.fromhex("f200000207000c07")
+        mock_dev = MockHidDevice(responses=[recorded + bytes(56)])
         engine = SerialDeviceEngine(mock_dev)
-        dt = engine.read_rtc_time()
-        self.assertIsNotNone(dt)
-        self.assertEqual(dt.year, 2026)
-        self.assertEqual(dt.month, 9)
-        self.assertEqual(dt.day, 5)
+        self.assertEqual(engine.read_rtc_time(), recorded)
 
     def test_unlock_handshake_engine(self):
         from fiedle400.serial_engine import SerialDeviceEngine

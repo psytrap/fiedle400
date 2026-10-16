@@ -10,7 +10,8 @@ over-engineer.
 2. `PROTOCOL.md` (byte-level protocol). Its Manual-mode sections (§3.14 and the German
    mirror, `analysis/po400_bytemap_reference.md`) are unverified: flag problems there,
    do not silently rewrite them.
-3. `DESIGN.md` (architecture), `RELEASE_PLAN.md` (gates, open findings, version rules).
+3. `DESIGN.md` (architecture), `RELEASE_PLAN.md` (gates, open findings, version rules),
+   `CHANGELOG.md` (how each finding was found and fixed).
 4. The code. If code and docs disagree, say so and fix one; never leave both.
 
 ## Commands
@@ -29,8 +30,9 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
   or tooling. Stored sessions are the user's real data. The simulator refuses them.
 - `download`, `sessions`, `info`, `selftest` are read-only on the device.
 - A read's "page" argument is a **sample offset**; the `0xEC` header count is **raw 2 Hz
-  samples**; a record is the average of two raw samples. Finger-out is signalled by
-  SpO2 127 / pulse 255, not by a flag byte. (Details: PROTOCOL.md, DESIGN.md §3.)
+  samples**; a record is the average of two raw samples. In stored data, finger-out
+  is detected from out-of-range decoded values (the vendor's 127 / 255 sentinels), never from a
+  flag byte; no real recording has shown one yet (T1 is open). (Details: PROTOCOL.md §3.5, DESIGN.md §3.)
 - Failures end in one clear line and a nonzero exit code, not a traceback
   (`cli.run_guarded`). Missing optional pieces (matplotlib, `hid`) print an install hint.
 - The tool is `fiedle400`; the device stays "PO-400" in user text. `PO400_*` variables
@@ -38,6 +40,9 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 - The Linux backend (`hidraw`) uses the standard library only. Do not add dependencies
   without asking.
 - Never state a protocol fact you have not seen in a recording; mark hypotheses as such.
+- Never show a default or placeholder for a value the device did not send. Print "not
+  reported by the device" instead. The real PO-400 sends no firmware version or serial
+  number, and its clock reply (`0xF2`) is the same bytes every time.
 
 ## Tests
 
@@ -54,8 +59,14 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 ## Delivery
 
 - Work in the cloud copy; deliver `git`-applicable patches `changes/NNNN-short-name.patch`
-  (next free number). Local applies, tests, commits. One patch per request unless asked.
-- Version bumps only via `scripts/bump_version.py`, following RELEASE_PLAN §1.
+  (next free number). Local applies, tests, commits.
+- One patch per request. Findings and the fixes they call for go in that one patch, not in a
+  list of proposed patches. A follow-up to a patch that has not been applied yet is merged
+  into it instead of getting a new number.
+- Version bumps only via `scripts/bump_version.py`, following RELEASE_PLAN §1. A patch that
+  changes product code bumps the patch version.
+- `analysis/*.md` use CRLF line endings, and the German bytemap contains a NUL byte. Edit
+  them without converting line endings (in Python: `open(p, newline="")`).
 - Definition of done: suite green, pyflakes clean, docs touched by the change updated
   (README for user-visible behaviour, PROTOCOL.md for protocol facts, RELEASE_PLAN for
   findings/gates), no leftover debug prints.
@@ -64,8 +75,9 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 
 - **raw sample**: one 2 Hz device value. **record**: one exported second (two raw averaged).
 - **offset / page**: start position, in raw samples, of a `9D 04` read.
-- **T1..T8**: findings in RELEASE_PLAN §3d. **G1..G7**: release gates.
-- **handoff/**: briefs from the local side to the cloud, answered there.
+- **T1..T8**: findings; current status in RELEASE_PLAN §3d, full history in CHANGELOG.md. **G1..G8**: release gates (RELEASE_PLAN §2).
+- **handoff/**: briefs from the local side to the cloud. The cloud answers each with
+  `handoff/<topic>-response.md` inside the patch it delivers.
 
 # Workspace Rules
 

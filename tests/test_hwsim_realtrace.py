@@ -230,7 +230,7 @@ class TestDownloadPastTheEnd(RealFlow):
 class TestInfo(RealFlow):
     def test_clock_and_user_come_from_recorded_replies(self):
         res = self.engine.read_device_info()
-        self.assertEqual(res["rtc_time_str"], "2002-07-01 12:07:00")
+        self.assertEqual(res["rtc_time_str"], "not reported by the device")
         self.assertEqual(res["device_info"].user_profile, "user")
         self.assert_fully_answered()
 
@@ -257,7 +257,7 @@ class TestInfo(RealFlow):
         lines = self.info_lines()
         self.assertEqual(lines["Device Model Descriptor"], "50F")
         self.assertEqual(lines["User Profile String"], "user")
-        self.assertEqual(lines["Device RTC Timestamp"], "2002-07-01 12:07:00")
+        self.assertEqual(lines["Device Clock"], "not reported by the device")
 
     def test_the_probe_recording_shows_80_00_is_also_only_acknowledged(self):
         (group,) = probe_trace().responses((0x80,))

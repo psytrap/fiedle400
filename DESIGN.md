@@ -27,7 +27,7 @@ as `.SpO2`, CSV or JSON (and optionally a PNG plot). The package is
 | `cli.py` | argparse, one `command_*` handler per subcommand, interactive wizard when started without arguments, `run_guarded` (any unexpected error → one-line message, exit 1; Ctrl+C → 130; `FIEDLE400_DEBUG=1` re-raises). Contains no protocol knowledge. |
 | `hid_driver.py` | Finding and opening the device. `LinuxHidrawBackend` (`/dev/hidraw*`, stdlib only, default on Linux) and `HidBackend` (`import hid`, default on Windows and macOS). Also `find_pulsox_hid_devices` (sysfs scan). |
 | `protocol/commands.py` | Builds outbound 64-byte reports (`0x7D 0x81 …`, checksummed). |
-| `protocol/parsers.py` | Decodes inbound reports (session index `0xEC`, clock `0xF2`, hardware ids, …) into `models`. |
+| `protocol/parsers.py` | Decodes inbound reports (session index `0xEC`, hardware ids, …) into `models`. |
 | `protocol/decompression.py` | Decodes the 30-byte `0xED` storage frames (MSB mask bytes, run/escape coding) into SpO2 and pulse values. |
 | `protocol/models.py`, `checksums.py`, `hardware.py` | Dataclasses (`SessionInfo`, `DecodedPacket`, …), checksum helpers, USB constants. |
 | `engine/buffer.py` | Byte-stream buffer for serial-style reports. |
@@ -51,7 +51,8 @@ as `.SpO2`, CSV or JSON (and optionally a PNG plot). The package is
    asks again at offset `2 * records_so_far` and stops when a reply adds
    nothing.
 4. `SerialPacketDetector` validates each frame (7-bit checksum) and decodes
-   it; out-of-range values (SpO2 127, pulse 255) mark a finger-out second.
+   it; out-of-range decoded values (SpO2 outside 1..100, pulse outside 1..254) mark a finger-out
+   second. No real recording has contained one yet (T1, RELEASE_PLAN §3d).
    Corrupt frames are counted and reported, never silently dropped.
 5. Records are merged into dicts (timestamp, SpO2, pulse, flags) and handed to
    `export`.
@@ -85,5 +86,6 @@ no user config, no `FIEDLE400_*`/`PO400_*` variables (use `hwsim.scrub_env`).
 - Windows and macOS use the `hid` backend. The PyPI name is a trap: the code
   uses `hid.Device` (PyPI `hid`) and falls back to `hid.device()` (PyPI
   `hidapi`); CI and the frozen binary install `hidapi`.
-- The device clock is wrong out of the box (reads 2002-07-01); stored sessions
-  carry their own timestamps.
+- The device does not report its clock: the `0xF2` reply is the same fixed bytes in every
+  recording, so it is not decoded; `read-time` prints it raw (PROTOCOL.md §3.3). Stored
+  sessions carry their own, correct timestamps.

@@ -12,5 +12,5 @@ Both still run as standalone scripts, e.g. `python3 tests/capture_tools/decode_p
 
 `record_exchange.py` is different: it talks to a real device (read-only, destructive commands are refused)
 and writes the CLI's command/reply traffic as a trace that `tests/hwsim.py` can replay.
-`--probe-firmware` and `--probe-offsets` add the read-only questions the normal flows never ask (see RELEASE_PLAN.md 3d, T4 and T6).
+`--probe-firmware` and `--probe-offsets` add the read-only questions the normal flows never ask (see CHANGELOG.md, findings T4 and T6).
 The committed recording is `tests/fixtures/cli-exchange.trace.json`.

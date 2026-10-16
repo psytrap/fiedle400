@@ -17,7 +17,7 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
   - **Switchable**: Pass `--backend hid` on Linux to develop and test cross-platform logic locally.
 - **Interactive Wizard (`fiedle400`)**: Running without arguments opens a guided menu to inspect device status, download session recordings, and manage device memory.
 - **Device Info Reader (`fiedle400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries the hardware model descriptor (e.g. `50F`), firmware version, serial number, user profile string, and storage geometry -- printing "not reported by the device" rather than a guess for whatever the device does not actually answer.
-- **Real-Time Clock Read & Write (`fiedle400 read-time` / `fiedle400 set-time`)**: Reads hardware RTC clock (`0x82`) and synchronizes device RTC clock (`0x83`) with PC system time.
+- **Real-Time Clock Read & Write (`fiedle400 read-time` / `fiedle400 set-time`)**: Sends the clock read (`0x82`) and set (`0x83`) commands. On the PO-400 the clock reply is the same fixed bytes every time, so `read-time` prints that reply and says the clock is not reported, and `set-time` is not verified (PROTOCOL.md §3.3). Stored sessions carry their own correct timestamps.
 - **Session Index Lister (`fiedle400 sessions`)**: Queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
 - **Session Data Downloader (`fiedle400 download`)**: Extracts stored recordings from device memory into CSV or JSON format in a 100% non-destructive manner.
 - **Device Memory Clear (`fiedle400 clear`)**: Deletes stored recording sessions from device flash memory (`0xAA`).

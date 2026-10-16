@@ -52,16 +52,16 @@ class SerialPacketDetector:
                 ))
                 continue
 
-            # 2. Check for RTC Readback Response (0xF2)
+            # 2. Check for the clock reply (0xF2). 8 bytes, the last is the checksum.
+            # Every recording shows the same bytes (PROTOCOL.md §3.3), so no time is decoded.
             if buf[0] == 0xF2:
-                if len(buf) < 10:
+                if len(buf) < 8:
                     break  # Wait for remaining bytes in next report
-                chunk = stream_buf.consume(10)
-                dt = Parsers.parse_rtc_time(chunk)
+                chunk = stream_buf.consume(8)
                 events.append(DecodedPacket(
                     packet_type="RTC_RESPONSE",
-                    timestamp=dt or base_timestamp,
-                    status_str="ok" if dt else "invalid",
+                    timestamp=base_timestamp,
+                    status_str="ok",
                     raw_payload=bytes(chunk),
                 ))
                 continue

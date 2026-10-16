@@ -129,7 +129,7 @@ class TestDownload(FlowCase):
 class TestInfo(FlowCase):
     def test_clock_and_user_come_from_recorded_replies(self):
         res = self.engine.read_device_info()
-        self.assertEqual(res["rtc_time_str"], "2002-07-01 12:07:00")
+        self.assertEqual(res["rtc_time_str"], "not reported by the device")
         self.assertEqual(res["device_info"].user_profile, "user")
         self.assert_fully_answered()
 
@@ -191,10 +191,27 @@ class TestSelftest(FlowCase):
                 mock.patch.object(SerialDeviceEngine, "read_device_info",
                                    return_value={"device_info": info}), \
                 mock.patch.object(SerialDeviceEngine, "read_rtc_time",
-                                   return_value="2002-07-01 12:07:00"), \
+                                   return_value=bytes.fromhex("f200000207000c07")), \
                 mock.patch.object(SerialDeviceEngine, "list_sessions",
                                    return_value=[object()]):
             rc, out, err = run_cli(["--backend", "hid", "selftest"], self.fake_module)
+        self.assertEqual(rc, 0, out + err)
+        self.assertIn("All checks passed", out)
+        self.assertNotIn("❌", out)  # no failure marker anywhere
+
+    def test_backend_flag_also_works_after_the_subcommand(self):
+        """`fiedle400 selftest -b hid` used to fail with "unrecognized arguments"; it takes -b like the others."""
+        info = mock.MagicMock()
+        info.hardware_id = "50F"
+        with mock.patch("fiedle400.hid_driver.find_pulsox_hid_devices",
+                         return_value=[("/dev/hidraw0", "", True)]), \
+                mock.patch.object(SerialDeviceEngine, "read_device_info",
+                                   return_value={"device_info": info}), \
+                mock.patch.object(SerialDeviceEngine, "read_rtc_time",
+                                   return_value=bytes.fromhex("f200000207000c07")), \
+                mock.patch.object(SerialDeviceEngine, "list_sessions",
+                                   return_value=[object()]):
+            rc, out, err = run_cli(["selftest", "-b", "hid"], self.fake_module)
         self.assertEqual(rc, 0, out + err)
         self.assertIn("All checks passed", out)
         self.assertNotIn("❌", out)  # no failure marker anywhere

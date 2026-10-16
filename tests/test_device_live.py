@@ -24,7 +24,6 @@ import sys
 import tempfile
 import time
 import unittest
-from datetime import datetime
 
 try:
     import fcntl
@@ -245,15 +244,18 @@ class TestLiveDevice(unittest.TestCase):
             dev.close()
 
     def test_05_rtc_clock_read(self):
-        """Verifies reading hardware Real-Time Clock (RTC) from device."""
+        """The clock query gets the 8-byte 0xF2 reply seen in every recording (PROTOCOL.md §3.3).
+
+        If this fails because the bytes differ, the device does report its clock after
+        all: record the exchange and update PROTOCOL.md before decoding anything.
+        """
         dev = PulsoxHidDevice()
         dev.connect()
         try:
             engine = SerialDeviceEngine(dev)
-            rtc_dt = engine.read_rtc_time(debug=0)
-            self.assertIsNotNone(rtc_dt, "Failed to read RTC time from device.")
-            self.assertIsInstance(rtc_dt, datetime)
-            self.assertTrue(rtc_dt.year >= 2000, f"Implausible RTC year: {rtc_dt.year}")
+            reply = engine.read_rtc_time(debug=0)
+            self.assertIsNotNone(reply, "No reply to the clock query.")
+            self.assertEqual(reply, bytes.fromhex("f200000207000c07"), reply.hex(" "))
         finally:
             dev.close()
 

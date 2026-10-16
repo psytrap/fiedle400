@@ -355,8 +355,12 @@ def command_clear(args):
 
 
 def command_read_time(args):
-    """Handler for 'read-time' subcommand to read active device RTC timestamp using SerialDeviceEngine."""
-    print("Connecting to Pulsox PO-400 to read Real-Time Clock (RTC)...")
+    """Handler for 'read-time': sends the clock query and shows the device's reply.
+
+    The PO-400 has answered with the same 8 bytes in every recording (PROTOCOL.md §3.3),
+    so the reply is shown raw instead of being decoded into a time.
+    """
+    print("Connecting to Pulsox PO-400 to read its clock...")
     try:
         dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
         node_path = dev.connect()
@@ -367,14 +371,14 @@ def command_read_time(args):
 
     engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        rtc_dt = engine.read_rtc_time(debug=getattr(args, "verbose", 0))
+        reply = engine.read_rtc_time(debug=getattr(args, "verbose", 0))
 
-        if rtc_dt:
-            ts_str = rtc_dt.strftime("%Y-%m-%d %H:%M:%S")
-            print(f"\n🕒 Device RTC Clock Timestamp: {ts_str}")
-            print(f"   Command format: python3 -m fiedle400.cli set-time \"{ts_str}\"")
+        if reply:
+            print("\n🕒 Device clock: not reported by the device.")
+            print(f"   The PO-400 answers the clock query with the same bytes every time: {reply.hex(' ')}")
+            print("   Session start times come from the session header instead; use 'set-time' to set the clock.")
         else:
-            print("\n🕒 Device RTC Clock Timestamp: Unreported or Default Crystal Clock")
+            print("\n🕒 Device clock: no reply to the clock query.")
 
     except KeyboardInterrupt:
         print("\nRead RTC interrupted by user.")
@@ -478,7 +482,7 @@ def command_selftest(args) -> int:
     engine = serial_engine.SerialDeviceEngine(dev)
     try:
         check("Handshake + device info", lambda: engine.read_device_info(debug=0)["device_info"].hardware_id)
-        check("RTC read", lambda: engine.read_rtc_time(debug=0))
+        check("Clock query answered", lambda: (engine.read_rtc_time(debug=0) or b"").hex(" "))
         check("Session index", lambda: f"{len(engine.list_sessions(debug=0))} session(s)")
     finally:
         dev.close()
@@ -564,7 +568,7 @@ def command_info(args):
     print(f"  Serial Number          : {sn_str}")
     print(f"  User Profile String    : {up_str}")
     print(f"  Active Session User ID : User #{active_user_id}")
-    print(f"  Device RTC Timestamp   : {rtc_time_str}")
+    print(f"  Device Clock           : {rtc_time_str}")
     print(f"  Storage Memory Geometry: {geom_str}")
     print("==================================================\n")
 
@@ -706,11 +710,13 @@ def run_interactive_wizard(args) -> int:
             info = dev_res.get("device_info", protocol.DeviceInfo())
             rtc_str = dev_res.get("rtc_time_str", "N/A")
 
-            fw_str = info.firmware_version if info.firmware_version else "v2.0"
-            sn_str = info.serial_number if info.serial_number else "50F"
-            up_str = info.user_profile if info.user_profile else "user"
+            not_reported = "not reported by the device"
+            model_str = info.hardware_id or not_reported
+            fw_str = info.firmware_version or not_reported
+            sn_str = info.serial_number or not_reported
+            up_str = info.user_profile or not_reported
 
-            print(f"[✓] Device Descriptor     : CMS-50F (Model: {sn_str})")
+            print(f"[✓] Device Descriptor     : {model_str}")
             print(f"[✓] Firmware Version      : {fw_str} | Serial: {sn_str}")
             print(f"[✓] Device Clock (RTC)    : {rtc_str}")
             print(f"[✓] User Profile String   : {up_str}")
@@ -922,7 +928,7 @@ def main(argv: Optional[List[str]] = None):
     parser_plot.add_argument("--dpi", type=int, default=150, help="Resolution in DPI (default: 150).")
     parser_plot.set_defaults(func=command_plot)
 
-    for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det]:
+    for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det, parser_selftest]:
         p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=argparse.SUPPRESS, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
 
     args = parser.parse_args(argv)

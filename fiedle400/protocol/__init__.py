@@ -57,7 +57,6 @@ from .commands import (
 
 from .parsers import (
     Parsers,
-    parse_rtc_response,
     parse_segment_metadata,
     parse_serial_response,
     parse_storage_architecture_response,
@@ -124,7 +123,6 @@ __all__ = [
     "build_read_time_command",
     # Parsers
     "Parsers",
-    "parse_rtc_response",
     "parse_segment_metadata",
     "parse_serial_response",
     "parse_storage_architecture_response",

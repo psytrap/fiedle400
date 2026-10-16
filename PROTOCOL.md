@@ -12,8 +12,10 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 3. **14-Bit Integer Packing (7-bit Little-Endian)**:
    `value_14 = byte[0] | (byte[1] << 7)`
 4. **28-Bit Integer Packing (Raw Sample Count in 0xEC Header)**:
-   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` -- counts raw 2 Hz half-second samples, **not** seconds or 1 Hz records (confirmed: psytrap, 2026-10-15; see §3.2 and §3.5.3, and RELEASE_PLAN.md T3). Real duration/record count = `value_28 // 2`.
+   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` -- counts raw 2 Hz half-second samples, **not** seconds or 1 Hz records (confirmed: psytrap, 2026-10-15; see §3.2, §3.5 "Delta-Nibble Decompression" step 3, and CHANGELOG.md T3). Records (= seconds) = `(value_28 + 1) // 2`: an odd count keeps its last raw sample as a record of its own (the vendor capture's header says 243 and the session has 122 records, the 122 rows in `analysis/bum400_20260906_100516.md` §6, which `fiedle400` reproduces exactly).
 5. **USB HID Report Size**: Outbound and inbound reports are 64 bytes fixed-length (`REPORT_SIZE = 64`), zero-padded.
+6. **Two request framings, both accepted**: the vendor tool sends requests bare (`9C 01 1D`, zero-padded); `fiedle400` wraps most of them as `7D 81 <opcode> <args>` padded with `0x80` (`commands.build_hid_command`). The device answers both the same way (compare `analysis/bum400_20260906_100516.pcap` with `tests/fixtures/cli-exchange.trace.json`). Both tools send `0x82` and the `0x9D` storage commands bare.
+7. **Replies are self-delimiting frames**: each reply has its own length (see §2.2) and ends with a checksum over the bytes before it (rule 2). The checksum is the reliable end marker: trailing zeros can be part of a frame (`FE 07 00 00 05`).
 
 ---
 
@@ -25,46 +27,60 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 > - **`MSB = 1` (`0x80..0xFF`)**: **Opcode / Control Character** — All host request opcodes, device response markers, frame sync headers, and in-stream control escapes strictly have Bit 7 set.
 > - **`MSB = 0` (`0x00..0x7F`)**: **Data Payload** — All parameters, counters, checksums, and in-stream payload bytes are restricted to 7 bits (masked with `0x7F`) to prevent accidental collisions with opcodes or frame boundaries.
 
+**Evidence column.** *Vendor* = the vendor tool's own traffic in `analysis/bum400_20260906_100516.pcap`;
+*CLI* = `fiedle400`'s traffic with the real device in `tests/fixtures/cli-exchange.trace.json` and
+`tests/fixtures/probe.trace.json`; *RE only* = taken from the `SpO2.exe` disassembly and never seen on
+the wire. Bytes are shown without the `7D 81` prefix and padding (§1.6). A row marked *RE only* is a
+hypothesis until a recording shows it.
+
 ### 2.1 Outbound Host Request Commands
-| Opcode | Name | Host Request (Hex) | Expected Response | Description |
-| :---: | :--- | :--- | :---: | :--- |
-| **0xA7 + 0xA2** | `UNLOCK_HANDSHAKE` | `7D 81 A7 80...` & `7D 81 A2 80...` | `0xF0` | Unlocks MCU state machine (ACK `F0 70`) |
-| **0x9C [0x80]** | `SESSION_RESET` | `7D 81 9C 80 00 1C` | `0xF0` / `0xEC` | Resets session iterator to slot 0 |
-| **0x9C [0x01]** | `QUERY_SESSIONS` | `9C 01 1D` | `0xEC` | Queries session metadata header for slot 1 |
-| **0x82** | `READ_RTC` | `82 02` | `0xF2` | Reads device clock (YY/MM/DD HH:MM:SS) |
-| **0x83** | `SET_RTC` | `83 [YY MM DD HH MM SS 33 06] [chk]` | `0xF2` / `0xF0` | Synchronizes device Real-Time Clock |
-| **0x9B [0x00]** | `DATA_STREAM_QUERY` | `9B 00 1B` (Start) / `9B 7F 1A` (Stop) | `0xEB` | Controls live streaming (6-byte frames) |
-| **0x9D [0x02]** | `STORAGE_INIT` | `9D 02 7F 7F 7F 00 00 1C` | `0xF0` | Initializes flash read buffers |
-| **0x9D [0x04 0x01]** | `READ_SPO2_BLOCK` | `9D 04 01 01 01 00 00 00 24` | `0xED` | Requests SpO2 series block |
-| **0x9D [0x04 0x02]** | `READ_PULSE_BLOCK` | `9D 04 02 01 01 00 00 00 25` | `0xED` | Requests Pulse Rate series block |
-| **0x9D [0x02]** | `SEGMENT_ACK` | `9D 02 7F 7F 7F 00 00 1C` | `0xF0` | Non-destructive session download acknowledge |
-| **0x81 / 0xAD** | `QUERY_DEVICE_INFO` | `81 01` / `7D 81 AD 80...` | `0xF1` | Hardware model descriptor (`"50F"`) |
-| **0x80 / 0x81** | `FIRMWARE_QUERY` | `80 00` / `81 01` | `0xCF` | Firmware version descriptor string |
-| **0x8E [0x03]** | `SERIAL_PROFILE_QUERY` | `8E 03 11` (User), `8E 06 14`, `8E 07 15` | `0xFE` | User profile name and serial number |
-| **0x8F / 0x9F** | `FLASH_GEOMETRY_QUERY` | `8F 04 00 13` | `0xEF` | Flash topology & block size |
-| **0x90 [0x06]** | `USER_METADATA_QUERY` | `90 06 16` | `0xE0` | Alarm thresholds (SpO2 High/Low, PR High/Low) |
-| **0x94** | `FLASH_SECTOR_QUERY` | `94 14` | `0xD4` | Flash sector layout parameters |
-| **0xA5** | `SESSION_SELECT` | `7D 81 A5 [id] [chk]` | `0xF0` | Selects session index (serial-stream devices) |
-| **0xA6** | `SESSION_DOWNLOAD` | `7D 81 A6 [chk]` | `0xEB` | Starts stream download (serial-stream devices) |
-| **0xAA / 0x91** | `FLASH_CLEAR` | `7D 81 AA...` / `91 01 12` | `0xF0` | Flash erase / User erase (Destructive) |
+| Opcode | Name | Host Request (Hex) | Reply seen | Evidence | Description |
+| :---: | :--- | :--- | :---: | :--- | :--- |
+| **0xA7 + 0xA2** | `UNLOCK_HANDSHAKE` | `7D 81 A7 80×6 7D 81 A2` (one write, §3.1) | `F0 70` | Vendor, CLI | Unlocks the MCU state machine |
+| **0x9C [0x80]** | `SESSION_RESET` | `9C 80 00` | `F0 70` | CLI only | Resets the session iterator (the vendor tool never sends it) |
+| **0x9C [0x01]** | `QUERY_SESSIONS` | `9C 01 1D` | `0xEC` | Vendor, CLI | Session header for slot 1 (§3.2) |
+| **0x82** | `READ_RTC` | `82 02` | `0xF2` | Vendor, CLI | The reply is the same 8 bytes in every recording (§3.3) |
+| **0x83** | `SET_RTC` | `83 YY MM DD HH MM SS 33 06 [chk]` | `F3 00 73` | Vendor | Sets the device clock (§3.3) |
+| **0x9B [0x00]** | `DATA_STREAM_QUERY` | `9B 00 1B` (start) / `9B 7F 1A` (stop) | `0xEB` / `EB 7F 6A` | Vendor | Live stream (§3.4). The vendor tool also sends `9B 01 1C` right after a start; meaning unknown |
+| **0x9D [0x02]** | `STORAGE_INIT` / `SEGMENT_ACK` | `9D 02 7F 7F 7F 00 00 1C` | none | Vendor, CLI | Sent before and after a download; no recording shows a reply (§3.5) |
+| **0x9D [0x04 0x01]** | `READ_SPO2_BLOCK` | `9D 04 01 01 01 [off lo] [off hi] 00 [chk]` | `0xED` | Vendor, CLI | SpO2 series from a raw-sample offset (§3.5) |
+| **0x9D [0x04 0x02]** | `READ_PULSE_BLOCK` | `9D 04 02 01 01 [off lo] [off hi] 00 [chk]` | `0xED` | Vendor, CLI | Pulse series from a raw-sample offset (§3.5) |
+| **0x9D [0x7F]** | `STORAGE_FINALIZE` | `9D 7F 7F 7F 7F 00 00 19` | not identified | Vendor | Sent three times after the download; `fiedle400` has a builder but never sends it |
+| **0x81** | `QUERY_DEVICE_INFO` | `81 01` | `0xF1` | Vendor, CLI | Hardware model descriptor `"50F"` (§3.6) |
+| **0xAD** | (device info, variant) | `AD` | `F0 70` | CLI | Bare ACK on this device (T7 note before §3.6) |
+| **0x80** | `FIRMWARE_QUERY` | `80 00` | `F0 70` | Vendor, CLI | Bare ACK on this device; the documented `0xCF` reply is *RE only* (§3.7) |
+| **0x8E** | `SERIAL_PROFILE_QUERY` | `8E 03 11`, `8E 06 14`, `8E 07 15` | `0xFE` | Vendor (03, 06, 07), CLI (03) | Profile string and two short replies (§3.8) |
+| **0x9F** | `FLASH_GEOMETRY_QUERY` | `9F 1F` | `0xEF` | Vendor | Flash geometry; field meaning unverified (§3.9) |
+| **0x8F** | (unknown) | `8F 04 00 13` | `FF 00 7F` | Vendor | Earlier drafts listed this as the geometry query; the device answers it with an `0xFF` frame |
+| **0x9E** | (geometry, variant) | `9E 40 04` | `F0 70` | CLI | What `fiedle400 info` sends today; bare ACK |
+| **0x90 [0x06]** | `USER_METADATA_QUERY` | `90 06 16` | `0xE0` | Vendor | 15-byte reply; the alarm-threshold field map is *RE only* (§3.11) |
+| **0x94** | `FLASH_SECTOR_QUERY` | `94 14` | | *RE only* | Not in any recording (§3.10) |
+| **0x9A** | (unknown) | `9A 1A` | not identified | Vendor | Last command of the vendor download; `analysis/bum400_20260906_100516.md` calls it "back to live mode" (unverified) |
+| **0xA5** | `SESSION_SELECT` | `A5 [id] [chk]` | none | CLI (tested) | Serial-stream devices; this firmware does not answer (§3.12) |
+| **0xA6** | `SESSION_DOWNLOAD` | `A6 [chk]` | none | CLI (tested) | Serial-stream devices; this firmware does not answer (§3.12) |
+| **0xAA / 0x91** | `FLASH_CLEAR` | `AA 00×6 [chk]` / `91 01 12` | | *RE only* | **Destructive** (§3.13) |
+
+The Manual-mode commands (`0xA0`, `0xA3`, standalone `0xA2`, `0xA7 00/01`) are documented separately in §3.14.
 
 ### 2.2 Inbound Device Responses
-| Response Header | Name | Payload Length | Triggering Command | Description |
-| :---: | :--- | :---: | :---: | :--- |
-| **`0xF0`** | `COMMAND_ACK` | 2 B (HID-aligned) | `0xA7`, `0xA2`, `0x9D 0x02`, `0x83` | Acknowledgment report. Byte 1 = `0x70` indicates success / MCU unlocked. |
-| **`0xEC`** | `SESSION_INDEX` | 21 B (HID-aligned) | `0x9C [0x01]` | Session metadata index: User ID, Session ID, Start Date/Time, 28-bit Sample Count, Profile Name. |
-| **`0xED`** | `STORAGE_SUBFRAME` | 30 B (stream)* | `0x9D 0x04 [0x01/0x02]` | Stored session data: 14-bit sequence, 3 MSB masks (`m0..m2`), 21 B delta-nibbles. |
-| **`0xEB`** | `LIVE_STREAM` | 6 B (HID-aligned, up to 3×) | `0x9B [0x00]` / `0xA6` | Real-time streaming sample sub-chunks: Status flags, PPG waveform bar height, Pulse Rate BPM, SpO2 %. |
-| **`0xF2`** | `RTC_REPORT` | 8 B (HID-aligned) | `0x82`, `0x83` | Real-Time Clock date and time: Year, Month, Day, Hour, Minute, Second, Checksum. |
-| **`0xF1`** | `DEVICE_INFO` | 10 B (HID-aligned) | `0xAD`, `0x81` | Hardware model descriptor ASCII string (e.g. `"50F     "`). |
-| **`0xCF` / `0x81`** | `FIRMWARE_INFO` | 10 B (HID-aligned) | `0x80`, `0x81` | Firmware version descriptor ASCII string (e.g. `"V3.1    "`). |
-| **`0xFE`** | `PROFILE_INFO` | 11 B (HID-aligned) | `0x8E` | User profile ASCII string (`"   user "`) or serial number string. |
-| **`0xEF`** | `FLASH_GEOMETRY` | 8 B (HID-aligned) | `0x8F`, `0x9F` | Flash memory geometry: sector count, block size (14-bit LE), capacity. |
-| **`0xD4`** | `FLASH_SECTOR` | 18 B (HID-aligned) | `0x94` | Flash sector layout: total blocks, block pages, sector allocation bitmask. |
-| **`0xE0`** | `USER_METADATA` | 7 B (HID-aligned) | `0x90 [0x06]` | User alarm thresholds: SpO2 Low/High (%), PR Low/High (BPM). |
+| Response Header | Name | Frame length | Triggering Command | Evidence | Description |
+| :---: | :--- | :---: | :---: | :--- | :--- |
+| **`0xF0`** | `COMMAND_ACK` | 2 B | handshake, `9C 80`, `0xAD`, `0x80`, `0x9E` | Vendor, CLI | `F0 70`. Also the reply to several queries the device does not support (T7 note before §3.6). |
+| **`0xEC`** | `SESSION_INDEX` | 21 B | `9C 01` | Vendor, CLI | Session header: start date/time, 28-bit raw sample count, user name, checksum (§3.2). |
+| **`0xED`** | `STORAGE_SUBFRAME` | 30 B (stream)* | `9D 04 [01/02]` | Vendor, CLI | Stored data: 14-bit sequence, 3 MSB masks (`m0..m2`), 21 data bytes, checksum (§3.5). |
+| **`0xEB`** | `LIVE_STREAM` | 6 B / 8 B / 3 B | `9B 00` | Vendor | Live stream; the three lengths and the field map are discussed in §3.4. |
+| **`0xF2`** | `RTC_REPORT` | 8 B | `82 02` | Vendor, CLI | Same bytes in every recording, see §3.3. |
+| **`0xF3`** | (set-clock reply) | 3 B | `83 …` | Vendor | `F3 00 73`. |
+| **`0xF1`** | `DEVICE_INFO` | 10 B | `81 01` | Vendor, CLI | Hardware model descriptor ASCII string (`"50F     "`). |
+| **`0xCF`** | `FIRMWARE_INFO` | 10 B | `80 00` | *RE only* | Never seen: this device answers `80 00` with `F0 70`. |
+| **`0xFE`** | `PROFILE_INFO` | 10 / 7 / 5 B | `8E 03` / `8E 06` / `8E 07` | Vendor, CLI | Length depends on the sub-index (§3.8). |
+| **`0xEF`** | `FLASH_GEOMETRY` | 8 B | `9F 1F` | Vendor | Flash geometry, field meaning unverified (§3.9). |
+| **`0xFF`** | (unknown) | 3 B | `8F 04 00` | Vendor | `FF 00 7F`. |
+| **`0xD4`** | `FLASH_SECTOR` | 18 B | `0x94` | *RE only* | Flash sector layout. |
+| **`0xE0`** | `USER_METADATA` | 15 B | `90 06` | Vendor | Recorded reply does not fit the 7-byte alarm-threshold map (§3.11). |
 
 \*) **Framing & Alignment**:
-- **HID-aligned**: Message starts strictly at Byte 0 of the 64-byte USB report; remaining bytes are zero-padded (`0x00`).
+- Every reply is a frame of its own length that ends with its 7-bit checksum (§1.7). Most replies start at byte 0 of a 64-byte report and the rest is zero; several frames can share one report (in the vendor capture an `0xE0` reply and an `0xEB` frame arrive in the same report).
 - **Continuous Stream (`0xED 0x04`)**: Stored session subframes are streamed continuously as unpadded 30-byte chunks across 64-byte USB HID report boundaries.
 
 ---
@@ -105,9 +121,10 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
 | `0x01` | Status | `0x70` | `0x70` = Success / MCU unlocked |
 | `0x02..0x3F` | Padding | `0x00...` | Zero padding |
 
-Not re-verified byte-for-byte live in this pass (the subsequent `0xA0`
-request succeeded without one being read back, so the handshake works
-functionally either way); carried over from the earlier draft.
+Confirmed by the vendor capture (`analysis/bum400_20260906_100516.pcap`): the device answers the
+combined write with `F0 70`, as above. `fiedle400`'s own recordings of the identical write carry no
+reply (the next command works either way); on the Linux `hid` backend the missing reply is part of
+finding T8 (CHANGELOG.md).
 
 ---
 
@@ -120,6 +137,10 @@ functionally either way); carried over from the earlier draft.
 | `0x01` | Sub-command | `0x80` | `0x80` = Reset iterator to start |
 | `0x02` | Checksum | `0x1C` | `(0x9C + 0x80) % 128 = 0x1C` |
 
+On the wire this exists only as `fiedle400`'s own `7D 81 9C 80 00` (no checksum byte; the device
+answers `F0 70`, `tests/fixtures/cli-exchange.trace.json`). The vendor tool never sends it, so the
+checksum form above is unrecorded.
+
 #### QUERY_SESSIONS Request
 | Offset | Field | Value | Notes |
 | :--- | :--- | :--- | :--- |
@@ -127,22 +148,28 @@ functionally either way); carried over from the earlier draft.
 | `0x01` | User / Slot ID | `0x01` | User 1 (Slot 1) |
 | `0x02` | Checksum | `0x1D` | `(0x9C + 0x01) % 128 = 0x1D` |
 
-#### Device Response: Session Header (`0xEC`, 64 Bytes)
+#### Device Response: Session Header (`0xEC`, 21 Bytes)
 | Offset | Field | Format | Description |
 | :--- | :--- | :--- | :--- |
 | `0x00` | Header Opcode | `0xEC` | Session metadata packet identifier |
 | `0x01` | Flags | Bitmask | Bit 6 (`0x40`): Data ready (1 = valid session). Bits 0..3: User slot ID |
-| `0x02` | Total Segments | `uint8` | Total stored segments count |
-| `0x03` | Segment Index | `uint8` | 1-based segment number |
+| `0x02` | Total Segments | `uint8` | Total stored segments count (per the `SpO2.exe` disassembly; `fiedle400` reads this byte as the user id) |
+| `0x03` | Segment Index | `uint8` | 1-based segment number (`fiedle400` reads it as the session id). Every recording has `01 01`, so neither reading is confirmed |
 | `0x04` | Year | `uint8` | Years since 2000 (`26` = 2026) |
 | `0x05` | Month | `1..12` | Month |
 | `0x06` | Day | `1..31` | Day of month |
 | `0x07` | Hour | `0..23` | Start hour |
 | `0x08` | Minute | `0..59` | Start minute |
 | `0x09` | Second | `0..59` | Start second |
-| `0x0A..0x0D` | Raw Sample Count | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. **Not seconds.** Counts raw 2 Hz half-second samples (confirmed: psytrap, 2026-10-15; previously mislabelled here as "1 Hz records", see RELEASE_PLAN.md T3). `duration_sec = raw_count // 2`. |
-| `0x0E..0x1D` | Username | ASCII | Null-terminated username string (e.g. `"user"`) |
-| `0x1E..0x3F` | Padding | `0x00...` | Reserved zero padding |
+| `0x0A..0x0D` | Raw Sample Count | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. **Not seconds.** Counts raw 2 Hz half-second samples (confirmed: psytrap, 2026-10-15; previously mislabelled here as "1 Hz records", see CHANGELOG.md T3). `duration_sec = (raw_count + 1) // 2` (§1.4). |
+| `0x0E..0x13` | Username | ASCII | `"user"` + `00 00` in every recording |
+| `0x14` | Checksum | `0..127` | `sum(bytes[0..0x13]) % 128` (`0x42` in the vendor capture, `0x03` in the CLI recording) |
+| `0x15..0x3F` | Padding | `0x00...` | Zero padding |
+
+Corrected 2026-10-16 against both recordings: earlier drafts gave this as a 64-byte frame with a
+16-byte username at `0x0E..0x1D`. The real frame is 21 bytes, matching §2.2:
+`EC 40 01 01 1A 09 06 0A 00 2E 73 01 00 00 75 73 65 72 00 00 42` (vendor capture; 2026-09-06
+10:00:46, 243 raw samples).
 
 ---
 
@@ -180,6 +207,23 @@ functionally either way); carried over from the earlier draft.
 | `0x06` | Second | `0..59` | Second |
 | `0x07` | Checksum | `0..127` | `sum(bytes[0..6]) % 128` |
 
+> [!WARNING]
+> **The `0xF2` reply does not carry the current time on this device.** It is the same 8 bytes,
+> `F2 00 00 02 07 00 0C 07`, in every recording: the vendor capture (2026-09-06, read before *and*
+> after a `SET_RTC` that the device acknowledged with `F3 00 73`) and both CLI recordings
+> (2026-10-15). With the field map above that would be year 0, month 0, which is no date at all.
+> Up to 0.3.6, `fiedle400`'s parser read it from byte 3 instead, which turned the same bytes into
+> 2002-07-01 12:07 (the minutes came from the checksum byte); `read-time` and `info` showed that
+> date. Since 0.3.7 the reply is not decoded: `read-time` prints it raw and `info` says the clock
+> is not reported. The stored session
+> headers carry correct start times, so the device keeps time internally; it just does not report
+> it here. The field map above is from the disassembly and unconfirmed.
+>
+> The vendor's `SET_RTC` matches the table exactly (`83 1A 09 06 0A 05 18 33 06 0C`, checksum
+> verified). `fiedle400 set-time` sends a different layout (`83 YY MM DD HH MI SS [chk] 01 34`,
+> checksum `0x133 - sum`, `commands.build_set_time_command`) that is not in any recording, and
+> `read-time` sends `82 02 00 00 00 00 00 84` where the vendor sends `82 02`.
+
 ---
 
 ### 3.4 DATA_STREAM_QUERY (`0x9B`) & Live Streaming (`0xEB`)
@@ -201,6 +245,16 @@ Packed consecutively in 64-byte HID input reports:
 | `0x03` | Pulse Rate | `0x00..0x7F` | `0..254` | Pulse rate in BPM (`0xFF` = invalid); MSB is taken from `0x01` field (Bit 6) |
 | `0x04` | SpO2 | `0x00..0x64` | `0..100` | Blood oxygen saturation % (`0x7F` = invalid / searching) |
 | `0x05` | Checksum | `0x00..0x7F` | `0..127` | `sum(bytes[0..4]) % 128` |
+
+> [!NOTE]
+> **The only live-stream recording does not confirm this table.** The vendor capture (no finger
+> on the probe) holds three `0xEB` frame shapes, each with a valid checksum at its own end:
+> `EB 00 04 40 30 5F` (6 B, the bulk of the stream), `EB 01 06 7F 7F 7F 00 6F` (8 B, about every
+> 20th report) and `EB 7F 6A` (3 B, the reply to `9B 7F 1A`). The length follows byte 1, so byte 1
+> looks like a frame type rather than the status bitfield above. `fiedle400`'s live parser
+> (`parsers.parse_hid_chunks`) already treats it that way (`0` = pleth, `1` = pulse and SpO2). A
+> recording with a finger on the probe is needed before either reading is trusted. `fiedle400`
+> stops the stream with `7D 81 9B 80 00`; the vendor tool uses `9B 7F 1A`.
 
 ---
 
@@ -224,10 +278,16 @@ Packed consecutively in 64-byte HID input reports:
 #### Command Parameters
 | Command | Mode `[0x01]` | Type `[0x02]` | User `[0x03]` | Seg `[0x04]` | Offset `[0x05..0x06]` | Checksum `[0x08]` | Description |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| `STORAGE_INIT` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` | Initializes Flash read buffers |
-| `READ_SPO2_BLOCK` | `0x04` | `0x01` | `0x01` | `0x01` | `0x00 0x00` | `0x24` | Reads SpO2 flash series |
-| `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | `0x00 0x00` | `0x25` | Reads Pulse Rate flash series |
-| `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` | Acknowledges session retrieval |
+| `STORAGE_INIT` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` *at `[0x07]`* | Sent before the download; no reply |
+| `READ_SPO2_BLOCK` | `0x04` | `0x01` | `0x01` | `0x01` | offset | `0x24` at offset 0 | Reads SpO2 flash series |
+| `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | offset | `0x25` at offset 0 | Reads Pulse Rate flash series |
+| `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` *at `[0x07]`* | Same bytes as `STORAGE_INIT`, sent after the download; no reply |
+| `STORAGE_FINALIZE` | `0x7F` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x19` *at `[0x07]`* | Vendor tool only, three times after the download; reply not identified |
+
+The `0x02`/`0x7F` commands are **8 bytes** in the vendor capture (`9D 02 7F 7F 7F 00 00 1C`): no
+reserved byte, checksum at `[0x07]`. `fiedle400` sends a 9-byte variant with the reserved `0x00`
+(`9D 02 7F 7F 7F 00 00 00 1C`, `commands.build_session_data_command`). Neither gets a reply, and a
+download works after both, so the difference has no visible effect so far.
 
 > [!IMPORTANT]
 > **The offset is a raw-sample sliding window, not a page index** (confirmed: psytrap, 2026-10-15,
@@ -236,21 +296,29 @@ Packed consecutively in 64-byte HID input reports:
 > for every `i`, on both series. A client that requests offsets `0, 1, 2, ...` and concatenates the
 > replies as if they were successive pages receives overlapping, re-shifted data, not new samples --
 > this is exactly how `fiedle400`'s own download logic padded a 107-second (214-raw-sample, see §3.2)
-> session out to 214 "records" before the bug was found (RELEASE_PLAN.md §3d, T6). The correct read is a
-> single request at offset 0 for the whole stored series; advancing the offset is for resuming a
-> partial read, not paging through additional data.
+> session out to 214 "records" before the bug was found (CHANGELOG.md T6). The correct read starts at
+> offset 0 and, if a reply ends before the stored data does, continues at the offset where that reply
+> ended; it never steps the offset 1, 2, 3, ... as if it were a page number.
 
 > **Boundary probe (psytrap's laptop, 2026-10-15, `tests/fixtures/probe.trace.json`, one 214-sample session).**
 > SpO2 reads at offsets 0, 1, 2, 50, 107, 150, 213, 214, 215, 300 show that every reply runs from the offset
 > **to the end of the stored data** (214, 213, 212, 164, 107, 64 and 1 values; all equal to `window(0)[k:]`).
 > At offset == stored samples (214) the device sends one frame of `0xFF` filler (`ED 04 01 00 00 7B 7F 7F ...`,
-> which decodes to the `0xFF 0xFF` terminator, no samples); beyond it (215, 300) it sends **nothing**. How a
-> session longer than one reply (more than the 6 frames seen so far) is split is still unrecorded; until then
-> `fiedle400` continues at offset `2 * records_so_far`, so a split reply is read correctly, and stops on a
-> reply that adds no record (the end marker, or silence).
-> The short final frame of a reply has all three MSB masks set (`7F`), so mask byte `m2` is `0x7F` there;
-> it is *not* a status flag (RELEASE_PLAN.md §3d, T1). Finger-out shows up as out-of-range *values* (SpO2 127,
-> pulse 255), see `analysis/bum400_20260906_100516.md` §4.
+> which decodes to the `0xFF 0xFF` terminator, no samples); beyond it (215, 300) it sends **nothing**.
+> `fiedle400` continues at offset `2 * records_so_far` and stops on a reply that adds no record (the end
+> marker, or silence). That rule held on a real 937-record session that needed several replies (psytrap,
+> 2026-10-15, CHANGELOG.md T6); how many samples one reply holds at most is not in any recording in this
+> repository.
+> **Mask bytes of a reply's last frame.** The bytes after the end of the data are padding that
+> reassembles to `0xFF` (wire `0x7F` with its mask bit set), so the last frame's masks have a bit set for
+> each padding byte; how many depends on where the data ends: `70 7F 7F` and `78 7F 7F` in the CLI recordings, `00 00 60` in the vendor capture. Either way
+> `m2` is a mask byte, *not* a status flag (CHANGELOG.md T1).
+> **Finger-out is not yet seen in any storage recording.** The `SpO2.exe` disassembly
+> (`analysis/bum400_20260906_100516.md` §A.5) maps a *decoded* SpO2 outside 1..100 to `0x7F` (127) and a
+> pulse outside 1..254 to `0xFF` (255) in its own records; those are the host's sentinels (they are also
+> the `.SpO2` file's, §4), not proven wire values. `fiedle400` applies the same range check to the decoded
+> values. What the device actually stores for a finger-out second is open (CHANGELOG.md T1,
+> RELEASE_PLAN.md §3d).
 
 #### Device Response: Stored Data Sub-Frame (`0xED`, 30 Bytes each)
 
@@ -313,14 +381,15 @@ for msb, byte in zip(msb_bits, data_bytes):
      behaviour (psytrap, 2026-10-15), not a decode approximation. It is why the session header's raw
      sample count (field `0x0A..0x0D` in §3.2) is exactly double the real recording duration and the
      real 1 Hz record count.
-4. **End-of-Data Sentinel**: A subframe with `mode = 0x00`, `seq = 0`, and masks containing `0x7F` indicates an uninitialized flash segment and signals immediate termination.
+4. **End-of-Data Sentinel**: A subframe with `mode = 0x00`, `seq = 0`, and masks containing `0x7F` indicates an uninitialized flash segment and signals immediate termination (from the disassembly; not in any recording). The end marker that *is* recorded looks different: a read at offset == stored samples returns `ED 04 01 00 00 7B 7F 7F 7F 7F 0F 7F ...` (mode `0x04`, seq 0), whose first two data bytes reassemble to the `0xFF 0xFF` terminator (`tests/fixtures/probe.trace.json`).
 
 ---
 
 > [!IMPORTANT]
 > **A query below can be answered with a bare `COMMAND_ACK` (`0xF0 0x70`, see §2.2) instead of its
 > documented response** (confirmed: psytrap, 2026-10-15, on a real device for the `0xAD` and `9E 40 04`
-> variants of these queries; RELEASE_PLAN.md §3d, T7). This is not a framing error -- it is a valid,
+> variants of these queries, CHANGELOG.md T7; `80 00` likewise, in the vendor capture and
+> `tests/fixtures/probe.trace.json`). This is not a framing error -- it is a valid,
 > differently-shaped reply, and a client must check the response's own opcode byte before parsing it as
 > the expected structure. Code that assumes the documented opcode and blindly parses whatever arrives
 > will misread the ACK's status byte as field data, or pick up an unrelated response left over from a
@@ -331,7 +400,7 @@ for msb, byte in zip(msb_bits, data_bytes):
 ### 3.6 QUERY_DEVICE_INFO (`0x81` / `0xAD`)
 
 #### Request (`0x81`)
-`[0x81, 0x01]` (Checksum: `0x01`)
+`[0x81, 0x01]` (Checksum: `0x01`). `0xAD`, listed with it in earlier drafts, gets only `F0 70`.
 
 #### Device Response (`0xF1`, 10 Bytes)
 | Offset | Field | Format | Notes |
@@ -354,6 +423,10 @@ for msb, byte in zip(msb_bits, data_bytes):
 | `0x01..0x08` | Version String | ASCII | `"V3.1    "` |
 | `0x09` | Checksum | `0..127` | `sum(bytes[0..8]) % 128` |
 
+**Never observed.** This device answers `80 00` with a bare `F0 70`, three times in the vendor capture
+and once in `tests/fixtures/probe.trace.json`, so it reports no firmware version over this
+protocol. The `0xCF` map and the `"V3.1"` example come from the disassembly only.
+
 ---
 
 ### 3.8 SERIAL_PROFILE_QUERY (`0x8E`)
@@ -365,20 +438,29 @@ for msb, byte in zip(msb_bits, data_bytes):
 | `0x06` | `8E 06 14` | Profile query |
 | `0x07` | `8E 07 15` | Serial number query |
 
-#### Device Response (`0xFE`, 11 Bytes)
-| Offset | Field | Format | Notes |
-| :--- | :--- | :--- | :--- |
-| `0x00` | Opcode | `0xFE` | Profile response |
-| `0x01` | Sub-Index Echo | `uint8` | Confirms requested index |
-| `0x02..0x09` | Text String | ASCII | Username or serial number string |
-| `0x0A` | Checksum | `0..127` | `sum(bytes[0..9]) % 128` |
+#### Device Response (`0xFE`)
+The length depends on the sub-index. Recorded replies (vendor capture; `03` also in the CLI recordings):
+
+| Request | Reply | Length | Content |
+| :--- | :--- | :---: | :--- |
+| `8E 03 11` | `FE 03 20 20 20 75 73 65 72 20` | 10 B | Sub-index echo, 7-character text `"   user"`, checksum `0x20` at `0x09` |
+| `8E 06 14` | `FE 06 07 00 00 00 0B` | 7 B | Sub-index echo, `07 00 00 00`, checksum; meaning unknown |
+| `8E 07 15` | `FE 07 00 00 05` | 5 B | Sub-index echo, `00 00`, checksum: **no serial number text** on this device |
+
+Earlier drafts gave one 11-byte layout with an 8-character string at `0x02..0x09` and the checksum at
+`0x0A`; no recorded reply has that shape. The vendor tool sends all three before it downloads, and the
+session it then downloads is intact, so these are queries, not erase commands (compare the different
+claim in `analysis/bum400_20260906_100516.md` §A.6, which is unverified).
 
 ---
 
-### 3.9 FLASH_GEOMETRY_QUERY (`0x8F`)
+### 3.9 FLASH_GEOMETRY_QUERY (`0x9F`)
 
-#### Request (`0x8F`)
-`[0x8F, 0x04, 0x00, 0x13]` (Checksum: `0x13`)
+#### Request (`0x9F`)
+`[0x9F, 0x1F]` (Checksum: `0x1F`). This is the request the vendor tool sends (three times) and the one
+the `0xEF` reply follows. Earlier drafts gave `[0x8F, 0x04, 0x00, 0x13]` here; the vendor sends that too,
+but the device answers it with `FF 00 7F`, not `0xEF`. `fiedle400 info` sends `9E 40 04`, which gets
+`F0 70`.
 
 #### Device Response (`0xEF`, 8 Bytes)
 | Offset | Field | Format | Notes |
@@ -389,12 +471,16 @@ for msb, byte in zip(msb_bits, data_bytes):
 | `0x04..0x06` | Capacity | 21-bit LE | Total capacity |
 | `0x07` | Checksum | `0..127` | `sum(bytes[0..6]) % 128` |
 
+The only recorded reply is `EF 00 01 40 00 00 00 30`. Read with this map it gives 0 sectors, a block
+size of `0x01 | 0x40 << 7` = 8193 and zero capacity, which fits neither 64 nor 256; the field meanings
+are unconfirmed.
+
 ---
 
 ### 3.10 FLASH_SECTOR_QUERY (`0x94`)
 
 #### Request (`0x94`)
-`[0x94, 0x14]` (Checksum: `0x14`)
+`[0x94, 0x14]` (Checksum: `0x14`). Not in any recording; this section is from the disassembly only.
 
 #### Device Response (`0xD4`, 18 Bytes)
 | Offset | Field | Format | Notes |
@@ -423,6 +509,10 @@ for msb, byte in zip(msb_bits, data_bytes):
 | `0x05` | PR High Limit | `25..250 BPM` | Upper Pulse Rate alarm limit |
 | `0x06` | Checksum | `0..127` | `sum(bytes[0..5]) % 128` |
 
+The recorded reply (vendor capture) is 15 bytes, checksum at `0x0E`:
+`E0 06 01 00 01 00 00 52 1F 00 1A 4E 1F 00 60`. Bytes `0x02..0x05` (`01 00 01 00`) are not plausible
+alarm limits, so the map above is unconfirmed.
+
 ---
 
 ### 3.12 SESSION_SELECT (`0xA5`) & SESSION_DOWNLOAD (`0xA6`)
@@ -431,6 +521,9 @@ Used on serial-stream device models:
 - **Select Session**: `[0x7D, 0x81, 0xA5, session_id, chk]`
 - **Start Download**: `[0x7D, 0x81, 0xA6, 0x00, chk]`
 - **Response**: Device returns `0xF0 0x70` ACK or begins streaming `0xEB` frames.
+
+Tested on this (flash-storage) PO-400 for session ids 1-3: neither command gets any reply, not even an
+ACK (CHANGELOG.md, "Manual-mode protocol"). Serial-stream devices are untested.
 
 ---
 
@@ -444,6 +537,16 @@ Used on serial-stream device models:
 - **Full Erase Request**: `[0x7D, 0x81, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28]`
 - **User Erase Request**: `[0x91, 0x01, 0x12]` (User 1)
 - **Response**: `[0xF0, 0x70]` upon completion.
+
+None of this is in a recording (nobody has captured an erase on purpose). Three things to know:
+- Per the disassembly (`analysis/bum400_20260906_100516.md` §A.6), the unmodified vendor `SpO2.exe`
+  sends `0x91`..`0x96` automatically **after every download**, which erases the device. The vendor
+  capture in this repository was made with a patched copy that drops those commands.
+- `fiedle400 clear` (`engine/device.py`) sends other bytes than the ones above: `0xAF`, then
+  `0xAB 01 [id]` for one session, or `0xAA 80 80`, `0xAB 80 80`, `0xAC 80 80` for all, each with the
+  `7D 81` prefix. None of these is documented or recorded; treat `clear` as unverified.
+- Switching the device between Auto and Manual recording mode on the device itself erases its memory
+  (CHANGELOG.md, "Manual-mode protocol").
 
 ---
 
@@ -757,6 +860,7 @@ For the exhaustive specification, byte offsets, and reference code, see **[SPO2_
 | `0x0004` | `uint32_le` | Format version (`0x00000001` / `1`) |
 | `0x0008` – `0x0357` | `848 B` | Zero padding (`0x00`) |
 | `0x0358` | `uint32_le` | Channel / Mode Flag (`0x00000001` / `1`) |
+| `0x035C` – `0x035F` | `4 B` | Zero padding (`0x00`) |
 | `0x0360` – `0x0365` | `6 B` | Protocol tag `"BLE\0"` (UTF-16LE: `42 00 4C 00 45 00`) |
 | `0x0366` – `0x041F` | `186 B` | Zero padding (`0x00`) |
 | `0x0420` | `uint32_le` | Start Year |
