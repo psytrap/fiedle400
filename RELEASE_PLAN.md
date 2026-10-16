@@ -395,6 +395,13 @@ release notes.
   if accepted, open it in the system's default image viewer -- `xdg-open` on
   Linux, `os.startfile` on Windows, `open` on macOS (each already a stdlib/
   OS-provided mechanism, no new dependency). Not yet done.
+- **TODO (psytrap, 2026-10-16): add a link to the project page in the
+  wizard and `--help`.** Neither `run_interactive_wizard`'s header nor
+  `main()`'s `argparse` description/epilog currently point anywhere --
+  someone who only has the binary (no README) has no way to find
+  `https://github.com/psytrap/fiedle400` for updates, docs, or filing a
+  bug (the `_probe_out_alert` message already does this for one specific
+  case; this would make it general). Not yet done.
 
 ---
 
