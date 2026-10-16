@@ -210,6 +210,13 @@ backends, not libusb. Repro: `fiedle400 selftest -b hid` (since 0.3.7; `fiedle40
 including the most recent re-confirmation: `CHANGELOG.md`.
 **Won't fix in the next release (psytrap, 2026-10-16):** `hidraw` remains
 the supported Linux backend; not a blocker.
+**New evidence, same day:** `fiedle400 selftest`'s new automatic
+both-backend probe (added this session) has shown `hid` both reproducing
+T8 (bare ACK, no data) *and*, after the device was unplugged and
+reconnected a few times in between, passing cleanly -- all 5 checks,
+matching `hidraw` exactly. Consistent with, not yet confirmation of, the
+"needs a genuine USB re-enumeration" theory; still not reliably
+reproducible on demand, so still open, still not a blocker.
 
 **Serial-stream device support: deliberately deferred, not a gap
 (psytrap, 2026-10-15).** This hardware unit only exercises the
@@ -370,6 +377,12 @@ just for that promotion.
   mock can't -- e.g. console encoding quirks, Windows-specific `readline`
   behaviour. Not yet done; no known bug motivating it today, just a gap in
   how faithfully the test doubles for a real terminal.
+- **TODO (psytrap, 2026-10-16): wizard's `png` path should offer to open the
+  image.** After `run_interactive_wizard` renders the plot (`fiedle400/cli.py`,
+  the `want_plot` block), ask "Open the plot now? [Y/n]" (default yes) and,
+  if accepted, open it in the system's default image viewer -- `xdg-open` on
+  Linux, `os.startfile` on Windows, `open` on macOS (each already a stdlib/
+  OS-provided mechanism, no new dependency). Not yet done.
 
 ---
 

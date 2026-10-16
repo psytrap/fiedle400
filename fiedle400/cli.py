@@ -25,7 +25,7 @@ except ImportError:
 
 from fiedle400 import __version__, config, console, export, protocol, serial_engine
 from fiedle400.protocol import Commands, Parsers
-from fiedle400.hid_driver import PulsoxHidDevice, resolve_default_backend
+from fiedle400.hid_driver import PulsoxHidDevice
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
@@ -426,19 +426,8 @@ def command_set_time(args):
     return 0
 
 
-def command_selftest(args) -> int:
-    """Handler for 'selftest': a quick, read-only hardware check with no env var needed.
-
-    Running this subcommand IS the explicit signal that a hardware check is wanted --
-    unlike the FIEDLE400_LIVE-gated unittest suite (tests/test_device_live.py), which
-    must stay silent by default so `python -m unittest discover` is deterministic
-    whether or not a device happens to be plugged in. This command exists so a
-    deliberate, one-off real-hardware check does not need that incantation.
-
-    Strictly read-only: detection, connect, handshake, RTC read, session listing.
-    No data is written to the device and no session is downloaded.
-    """
-    backend = getattr(args, "backend", None) or resolve_default_backend()
+def _run_backend_checks(backend: str, dev_path_arg: Optional[str]) -> list:
+    """Runs the selftest check set against one backend. Returns a (label, ok, detail) list."""
     checks = []  # (label, ok, detail)
 
     def check(label, fn):
@@ -458,8 +447,6 @@ def command_selftest(args) -> int:
         checks.append((label, True, detail))
         return detail
 
-    print(f"Running selftest on backend '{backend}'...\n")
-
     if sys.platform.startswith("linux"):
         def _detect():
             from fiedle400.hid_driver import find_pulsox_hid_devices
@@ -475,11 +462,10 @@ def command_selftest(args) -> int:
             return dev_path
         check("Device detected (sysfs)", _detect)
 
-    dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=backend)
+    dev = PulsoxHidDevice(dev_path=dev_path_arg, backend=backend)
     node_path = check("Connect", lambda: dev.connect())
     if node_path is None:
-        _print_selftest_results(checks)
-        return 1
+        return checks
 
     engine = serial_engine.SerialDeviceEngine(dev)
     try:
@@ -489,8 +475,43 @@ def command_selftest(args) -> int:
     finally:
         dev.close()
 
-    ok = _print_selftest_results(checks)
-    return 0 if ok else 1
+    return checks
+
+
+def command_selftest(args) -> int:
+    """Handler for 'selftest': a quick, read-only hardware check with no env var needed.
+
+    Running this subcommand IS the explicit signal that a hardware check is wanted --
+    unlike the FIEDLE400_LIVE-gated unittest suite (tests/test_device_live.py), which
+    must stay silent by default so `python -m unittest discover` is deterministic
+    whether or not a device happens to be plugged in. This command exists so a
+    deliberate, one-off real-hardware check does not need that incantation.
+
+    Strictly read-only: detection, connect, handshake, RTC read, session listing.
+    No data is written to the device and no session is downloaded.
+
+    When no `-b/--backend` is given, every backend this platform can attempt
+    (`hid_driver.available_backends()`) is checked in one run -- no need to
+    re-invoke this command once per backend to see the full picture. Only the
+    primary backend's result decides the exit code: a known-flaky secondary
+    backend (e.g. RELEASE_PLAN.md T8) is shown, not hidden, but does not turn
+    an otherwise-healthy device into a reported failure.
+    """
+    from fiedle400.hid_driver import available_backends
+
+    explicit_backend = getattr(args, "backend", None)
+    dev_path_arg = getattr(args, "device", None)
+    backends = [explicit_backend] if explicit_backend else available_backends()
+
+    print(f"Running selftest on backend '{backends[0]}'...\n")
+    primary_checks = _run_backend_checks(backends[0], dev_path_arg)
+    primary_ok = _print_selftest_results(primary_checks)
+
+    for backend in backends[1:]:
+        print(f"\nAlso probing backend '{backend}' (informational -- does not affect the result above):\n")
+        _print_selftest_results(_run_backend_checks(backend, dev_path_arg))
+
+    return 0 if primary_ok else 1
 
 
 def _print_selftest_results(checks) -> bool:
@@ -956,7 +977,7 @@ def main(argv: Optional[List[str]] = None):
     parser_det.set_defaults(func=command_detect)
 
     # Subcommand: selftest
-    parser_selftest = subparsers.add_parser("selftest", help="Read-only hardware check: detection, connect, handshake, RTC, sessions. No FIEDLE400_LIVE needed -- running this command is the explicit signal.")
+    parser_selftest = subparsers.add_parser("selftest", help="Read-only hardware check: detection, connect, handshake, RTC, sessions. No FIEDLE400_LIVE needed -- running this command is the explicit signal. Checks every backend this platform supports unless -b picks one.")
     parser_selftest.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_selftest.set_defaults(func=command_selftest)
 

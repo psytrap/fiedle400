@@ -24,13 +24,26 @@ DEV_ROOT = "/dev"
 
 def resolve_default_backend() -> str:
     """Returns the default backend based on the host operating system.
-    
+
     Linux defaults to 'hidraw' (zero dependencies).
     Windows and macOS default to 'hid'.
     """
     if sys.platform.startswith("linux"):
         return "hidraw"
     return "hid"
+
+
+def available_backends() -> List[str]:
+    """Every backend this platform can attempt, default first.
+
+    Linux can attempt both ('hidraw' then 'hid'); everywhere else only 'hid'
+    exists ('hidraw' raises by design off Linux). Used so a one-command check
+    (`fiedle400 selftest`) can cover every backend without the caller having
+    to manually re-run it once per backend with `-b`.
+    """
+    if sys.platform.startswith("linux"):
+        return ["hidraw", "hid"]
+    return ["hid"]
 
 
 def find_pulsox_hid_devices() -> List[Tuple[str, str, bool]]:
