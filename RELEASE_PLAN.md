@@ -402,6 +402,21 @@ release notes.
   `https://github.com/psytrap/fiedle400` for updates, docs, or filing a
   bug (the `_probe_out_alert` message already does this for one specific
   case; this would make it general). Not yet done.
+- **TODO (psytrap, 2026-10-16): test the macOS install experience in CI,
+  not just that the binary runs.** `build-release.yml`'s macOS smoke test
+  (`Smoke Test the Built Binary`) runs `release/bin --version/--help/config`
+  in the **same job that just built it** -- that binary was never
+  downloaded, so it never picked up the `com.apple.quarantine` extended
+  attribute Gatekeeper attaches to anything fetched over the network. A
+  real user downloading `fiedle400-macos-arm64` from the Release page will
+  likely hit "cannot be opened because it is from an unidentified
+  developer" and need `xattr -d com.apple.quarantine` or right-click→Open
+  -- none of that is exercised today. Add a step (after `Package Release
+  Asset`, or as a separate job depending on an uploaded artifact) that
+  actually downloads the packaged asset and runs it as fetched, so a
+  Gatekeeper regression would be caught. Not yet done; this is macOS's
+  *only* gate (RELEASE_PLAN.md D2, no hardware to test by hand), so it's
+  worth closing this gap specifically.
 
 ---
 
