@@ -112,10 +112,6 @@ class TestProbeOutAlert(unittest.TestCase):
         self.assertIsNone(cli._probe_out_alert(records))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestOpenInViewer(unittest.TestCase):
     """_open_in_viewer uses the OS's own opener and never raises."""
 
@@ -160,3 +156,7 @@ class TestHelpShowsProjectPage(unittest.TestCase):
             cli.main(["--help"])
         self.assertEqual(cm.exception.code, 0)
         self.assertIn("https://github.com/psytrap/fiedle400", out.getvalue())
+
+
+if __name__ == "__main__":
+    unittest.main()
