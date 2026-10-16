@@ -84,9 +84,17 @@ non-root HID access, worth reading top to bottom before running it as root
 if it reports the device as "found but not readable/writable", it names that
 script as the fix rather than trying to elevate on its own.
 
-Uninstall with `./install.sh --uninstall` (removes the binary; the udev rules
-stay, since removing those also needs root -- the script's own output tells
-you the two commands for that).
+#### Uninstall on Linux
+
+| What | How to remove it |
+|---|---|
+| Standalone binary and desktop launcher | `./install.sh --uninstall` (from the extracted release folder). Removes `~/.local/bin/fiedle400` and `~/.local/share/applications/fiedle400.desktop`. |
+| Saved settings | The same command asks, for each, before removing `~/.config/fiedle400/` (and `~/.config/po400/`, if you used the tool before it was renamed). Default is to keep them. Without the script: `rm -rf ~/.config/fiedle400 ~/.config/po400`. |
+| Device-access (udev) rules | Needs root, so the script only prints it: `sudo rm -f /etc/udev/rules.d/99-pulsox*.rules && sudo udevadm control --reload-rules && sudo udevadm trigger` |
+| Installed with pip or pipx | `pip uninstall fiedle400` or `pipx uninstall fiedle400`. Settings and udev rules as above. |
+| Recordings | Never removed. They are in your working folder (`fiedle400 config` shows it; the launcher uses `~/Documents/fiedle400`). |
+
+(`$XDG_CONFIG_HOME` replaces `~/.config` in the settings paths if you set it.)
 
 #### Running from source instead
 

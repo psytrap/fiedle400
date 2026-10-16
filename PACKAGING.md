@@ -24,7 +24,7 @@ Binaries are unsigned (RELEASE_PLAN D1); the release notes explain SmartScreen.
 ## Linux
 
 - `install.sh` copies the binary to `~/.local/bin` and warns if that is not on `PATH`.
-  `install.sh --uninstall` removes it.
+  `install.sh --uninstall` removes it and asks before removing the saved settings.
 - Device access needs a one-time root step: `sudo ./fiedle400_setup-udev.sh`. It writes
   the `99-pulsox*.rules` files in `/etc/udev/rules.d/` (USB `28e9:028a`) and nothing else.
   Verify afterwards with `fiedle400 selftest`.

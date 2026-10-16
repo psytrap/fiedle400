@@ -5,7 +5,8 @@
 # Usage, run from the directory containing the downloaded binary and this
 # script (both ship together in the Linux release asset):
 #   ./install.sh              install (binary, PATH note, desktop launcher)
-#   ./install.sh --uninstall  remove ~/.local/bin/fiedle400 and the launcher
+#   ./install.sh --uninstall  remove ~/.local/bin/fiedle400 and the launcher, and
+#                             offer to remove the saved settings (asks first)
 #
 # Device access (udev rules) is a SEPARATE, deliberately root-requiring step:
 # see fiedle400_setup-udev.sh, shipped alongside this script. install.sh does
@@ -13,6 +14,7 @@
 
 set -eu
 
+CONFIG_BASE="${XDG_CONFIG_HOME:-$HOME/.config}"
 BIN_DIR="$HOME/.local/bin"
 APPS_DIR="$HOME/.local/share/applications"
 DESKTOP_FILE="$APPS_DIR/fiedle400.desktop"
@@ -31,6 +33,21 @@ if [ "${1:-}" = "--uninstall" ]; then
         echo "Removed $DESKTOP_FILE"
         command -v update-desktop-database >/dev/null 2>&1 && \
             update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
+    fi
+    # Saved settings (and po400's, from before the rename). Recordings in
+    # $WORK_DIR are never touched: they are your data.
+    for dir in "$CONFIG_BASE/fiedle400" "$CONFIG_BASE/po400"; do
+        [ -d "$dir" ] || continue
+        printf "Remove saved settings %s? [y/N]: " "$dir"
+        read -r ans || ans="n"
+        case "$ans" in
+            y|Y|yes|Yes) rm -rf "$dir"; echo "Removed $dir" ;;
+            *) echo "Kept $dir" ;;
+        esac
+    done
+    if [ -d "$WORK_DIR" ]; then
+        echo "Your recordings in $WORK_DIR were not touched; delete that folder"
+        echo "yourself if you no longer need them."
     fi
     echo "The udev rules from fiedle400_setup-udev.sh are not removed by this"
     echo "script (they need root, same as installing them). To remove them:"
