@@ -9,16 +9,25 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
 ---
 
 ## Features
-- **Dual-Backend Driver**:
-  - **Linux Default (`hidraw`)**: 100% standard library Python. Communicates directly with `/dev/hidraw*` device nodes with **zero external dependencies** (`pip install` is NOT required).
-  - **Windows & macOS Default (`hid`)**: Cross-platform driver via `import hid` library (automatically included as a dependency when installing on Windows or macOS).
-  - **Switchable**: Pass `--backend hid` on Linux to develop and test cross-platform logic locally.
-- **Interactive Wizard (`fiedle400`)**: Running without arguments opens a guided menu to inspect device status, download session recordings, and manage device memory. The download flow asks for an output format (spo2/csv/json/png) before the filename; choosing `png` renders a chart directly (needs matplotlib -- see below) without keeping the raw data file -- if rendering fails, the data is saved as `.spo2` instead so nothing is lost.
-- **Device Info Reader (`fiedle400 info`)**: Auto-detects connected PO-400 USB HID devices (`VID 0x28E9`, `PID 0x028A`), queries the hardware model descriptor (e.g. `50F`), firmware version, serial number, user profile string, and storage geometry -- printing "not reported by the device" rather than a guess for whatever the device does not actually answer.
-- **Real-Time Clock Read & Write (`fiedle400 read-time` / `fiedle400 set-time`)**: Sends the clock read (`0x82`) and set (`0x83`) commands. On the PO-400 the clock reply is the same fixed bytes every time, so `read-time` prints that reply and says the clock is not reported, and `set-time` is not verified (PROTOCOL.md §3.3). Stored sessions carry their own correct timestamps. This and the other "not reported by the device" fields below are most likely bugs or unfinished features in the device's own firmware (the vendor's own software has the identical gap), not something more reverse-engineering would uncover -- see the PROTOCOL.md §3.3 warning.
-- **Session Index Lister (`fiedle400 sessions`)**: Queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
-- **Session Data Downloader (`fiedle400 download`)**: Extracts stored recordings from device memory into CSV or JSON format in a 100% non-destructive manner.
-- **Device Memory Clear (`fiedle400 clear`)**: Deletes stored recording sessions from device flash memory (`0xAA`).
+
+**Driver**
+- **Dual-backend**: Linux defaults to `hidraw` -- 100% standard library, zero external dependencies (`pip install` is NOT required). Windows and macOS default to `hid` (`import hid`, pulled in automatically on those platforms). Pass `--backend hid` on Linux to develop and test the cross-platform path locally.
+
+**Everyday use**
+- **Interactive wizard (`fiedle400`, no arguments)**: a guided menu to inspect device status, download sessions, and manage device memory. The download flow asks for an output format (`spo2`/`csv`/`json`/`png`) as its own prompt before the filename; choosing `png` renders a chart directly (needs matplotlib -- see below) without keeping the raw data file, falling back to saving it as `.spo2` if rendering fails so nothing is lost.
+- **`fiedle400 selftest`**: a one-command, read-only hardware check (detection, connect, handshake, clock, sessions) against the real device -- no env var needed, unlike the test suite's opt-in live tests; running this command is itself the signal that a check is wanted. Automatically probes every backend this platform supports (e.g. both `hidraw` and `hid` on Linux) in one run; only the primary backend's result affects the exit code, so a known-flaky secondary backend never masks an otherwise-healthy device.
+- **`fiedle400 info`**: auto-detects the connected PO-400 (`VID 0x28E9`, `PID 0x028A`) and reports its hardware model, firmware version, serial number, user profile, and storage geometry -- printing "not reported by the device" rather than guessing at whatever it doesn't actually answer (most likely a device firmware limitation, not something more reverse-engineering would fix -- see `PROTOCOL.md` §3.3).
+- **`fiedle400 sessions`**: lists every recorded session in device memory from the stored index table.
+- **`fiedle400 download`**: extracts stored recordings to `.spo2`, `.csv`, or `.json`, non-destructively (device memory is untouched unless you separately choose to clear it).
+- **`fiedle400 plot`**: renders a `.spo2`/`.csv`/`.json` recording into a dual-axis SpO2 + heart-rate PNG chart (needs matplotlib: `pip install matplotlib` or `pip install fiedle400[plot]`; the stdlib-only commands above work without it).
+- **`fiedle400 clear`**: deletes stored sessions from device flash memory -- the only destructive command, confirmed by default.
+
+**Clock**
+- **`fiedle400 read-time` / `fiedle400 set-time`**: sends the clock read (`0x82`) / set (`0x83`) commands. The PO-400's clock reply never varies, so `read-time` shows it raw and says the clock isn't reported rather than decoding it into a fabricated date; `set-time` is unverified against real hardware. Stored sessions carry their own correct timestamps regardless.
+
+**Other**
+- **`fiedle400 config`**: shows or changes where recordings are saved.
+- **`fiedle400 detect`**: a live, low-level view of the raw USB HID packet stream as the device sends it -- a debugging tool, not needed for normal use.
 
 ---
 
