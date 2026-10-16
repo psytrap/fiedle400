@@ -30,13 +30,19 @@ The bump strategy is taken from the RefDiff plan and adapted to a Python package
 
 ## 2. Pre-Flight Quality Gates
 
-All gates must pass on the patch-bumped RC before tagging.
+All gates must pass on the patch-bumped RC before tagging. **Pre-flight is
+not complete until the commit is pushed and G10 (GitHub CI) has actually
+run on it (psytrap, 2026-10-16)** -- G1-G4 passing locally is necessary but
+not sufficient; "pre-flight done" means the exact commit is on GitHub and
+`tests.yml` has reported back, not just that local checks were green.
 
 ```bash
 python3 scripts/bump_version.py patch                      # Phase 1: once per cycle
 git diff --stat && git diff                                # Diff audit: zero debris
 python3 -m unittest discover -s tests -t . -v             # G1/G2: full mock suite
 python3 -m fiedle400 --version && python3 -m fiedle400 --help      # G4: stdlib-only smoke test (no matplotlib)
+git commit && git push                                      # required before G10 can run at all
+# G10: wait for tests.yml on this exact commit, then check its result
 pyinstaller fiedle400.spec && ./dist/fiedle400 --version && ./dist/fiedle400 info   # G5: built binary must reach the device (local only)
 FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live -v  # G6: live hardware, both backends (opt-in)
 fiedle400 selftest                                          # quick one-off hardware check, no env var needed
@@ -426,10 +432,11 @@ for that.
 - [ ] B1-B7 (or this cycle's blockers) landed as separate commits; G1-G4 green locally
 - [ ] Phase 1: `bump_version.py patch`, run **once** per cycle
 - [ ] Diff audit: `git diff --stat && git diff`, zero debris
+- [ ] **Pre-flight is not "done" until this commit is pushed and G10 has actually run and reported back** -- not optional, not just G1-G4 locally (psytrap, 2026-10-16)
 - [ ] G5: built binary runs `info` / `sessions` on the real device, Linux *and* Windows, against a session with actual stored data (not an empty device -- see the v0.2.17 process-gap warning in §3d)
 - [ ] G6: live device tests pass (Linux: `hidraw` and `hid`; Windows: `hid`)
 - [ ] G7: real-finger session downloaded and plotted; user acknowledged the plot
-- [ ] G10 (non-blocking): release commit pushed; `tests.yml` checked on that exact commit (ubuntu/windows/macos)
+- [ ] G10 (non-blocking **for tagging**, but required for pre-flight to count as complete): `tests.yml` checked on that exact commit (ubuntu/windows/macos)
 - [ ] Ring 0: annotated tag created locally
 - [ ] Ring 1: workflow_dispatch dry run; all 3 binaries smoke-tested on their OS
 - [ ] Ring 2: push tag; GitHub Release published
