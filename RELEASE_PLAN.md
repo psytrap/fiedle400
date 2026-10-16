@@ -418,6 +418,18 @@ release notes.
 1. Run `build-release.yml` via **workflow_dispatch** on `master` (no tag, so the release job is skipped).
 2. Download all three artifacts and smoke-test each on its own OS: `--version`, `--help`, `info` with the device attached (`info` now also prints the tool version and build). **This is the early-testing ring, the analogue of RefDiff's `common.js` harness.**
 
+**`0.3.9` (psytrap, 2026-10-16): done.** Dispatched against `bc383af`
+([run 38872729675](https://github.com/psytrap/fiedle400/actions/runs/38872729675)):
+all builds and the `test` job green on all three OSes; `Create GitHub
+Release` correctly `skipped` (the ref guard works -- no release published
+from a dry run). Linux (`fiedle400-linux-x64.tar.gz`, extracted): `--version`/
+`--help`/`info` all correct against the real device. Windows: both the
+portable `fiedle400-windows-x64.exe` and a real silent-installed-then-
+uninstalled `fiedle400-setup.exe` pass the same checks against the same
+device, no admin rights needed. macOS: no Mac available to smoke-test by
+hand; the `macos-latest` CI job (stdlib + matplotlib suite) passing is the
+only gate for it, same as every prior cycle (RELEASE_PLAN.md D2).
+
 ### Ring 2: Tagged GitHub Release
 1. `git push origin v0.1.1`. The workflow builds and publishes the GitHub Release.
 2. Release notes: what's new, udev rule, Windows `hid` note, checksums.
