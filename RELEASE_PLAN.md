@@ -389,19 +389,14 @@ release notes.
   mock can't -- e.g. console encoding quirks, Windows-specific `readline`
   behaviour. Not yet done; no known bug motivating it today, just a gap in
   how faithfully the test doubles for a real terminal.
-- **TODO (psytrap, 2026-10-16): wizard's `png` path should offer to open the
-  image.** After `run_interactive_wizard` renders the plot (`fiedle400/cli.py`,
-  the `want_plot` block), ask "Open the plot now? [Y/n]" (default yes) and,
-  if accepted, open it in the system's default image viewer -- `xdg-open` on
-  Linux, `os.startfile` on Windows, `open` on macOS (each already a stdlib/
-  OS-provided mechanism, no new dependency). Not yet done.
-- **TODO (psytrap, 2026-10-16): add a link to the project page in the
-  wizard and `--help`.** Neither `run_interactive_wizard`'s header nor
-  `main()`'s `argparse` description/epilog currently point anywhere --
-  someone who only has the binary (no README) has no way to find
-  `https://github.com/psytrap/fiedle400` for updates, docs, or filing a
-  bug (the `_probe_out_alert` message already does this for one specific
-  case; this would make it general). Not yet done.
+- **Wizard `png` path offers to open the image.** ✅ **Done (0.4.2).** After a
+  successful plot the wizard asks "Open the plot now? [Y/n]" (default yes) and
+  opens it with `os.startfile` (Windows), `open` (macOS) or `xdg-open` (Linux),
+  no new dependency (`cli._open_in_viewer`). If no viewer can be started it prints
+  the plot's path instead. Not tested against a real desktop (cloud: mocks only).
+- **Project page link in the wizard and `--help`.** ✅ **Done (0.4.2).**
+  `cli.PROJECT_URL` is shown under the wizard header and as the `--help`
+  epilog; the finger-out alert uses the same constant.
 - **TODO (psytrap, 2026-10-16): test the macOS install experience in CI,
   not just that the binary runs.** `build-release.yml`'s macOS smoke test
   (`Smoke Test the Built Binary`) runs `release/bin --version/--help/config`

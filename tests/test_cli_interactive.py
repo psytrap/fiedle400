@@ -1,5 +1,6 @@
 """Unit tests for PO-400 interactive CLI wizard, range parsing, and ISO filename generation."""
 
+import importlib.util
 import io
 import os
 import unittest
@@ -10,11 +11,7 @@ from unittest.mock import MagicMock, patch
 from fiedle400 import protocol
 from fiedle400.cli import generate_iso_filename, parse_session_selection, run_interactive_wizard
 
-try:
-    import fiedle400.plot  # noqa: F401
-    HAS_MATPLOTLIB = True
-except ImportError:
-    HAS_MATPLOTLIB = False
+HAS_MATPLOTLIB = importlib.util.find_spec("matplotlib") is not None
 
 
 class TestCliInteractive(unittest.TestCase):
@@ -174,12 +171,13 @@ class TestCliInteractive(unittest.TestCase):
         self.assertTrue(args_export[1].endswith(".spo2"))
 
     @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
+    @patch("fiedle400.cli._open_in_viewer", return_value=True)
     @patch("fiedle400.plot.plot_session", return_value="/tmp/test.png")
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1-2", "4", "", "y", "n"])
-    def test_wizard_download_format_png_generates_plot(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export, mock_plot):
+    @patch("builtins.input", side_effect=["1-2", "4", "", "", "y", "n"])
+    def test_wizard_download_format_png_generates_plot(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export, mock_plot, mock_open):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
         mock_dev_cls.return_value = mock_dev
@@ -210,6 +208,53 @@ class TestCliInteractive(unittest.TestCase):
         self.assertTrue(plot_kwargs["output_png"].endswith(".png"))
         # ... and the scratch file does not survive a successful plot.
         self.assertFalse(os.path.exists(tmp_path))
+        # Pressing Enter at "Open the plot now? [Y/n]" (default yes) opens the PNG.
+        mock_open.assert_called_once_with("/tmp/test.png")
+
+    def _run_png_wizard(self, open_answer, opener_result=True):
+        """Runs the wizard's png path with a stubbed plot; returns (printed output, opener mock)."""
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        answers = iter(["1-2", "4", "", open_answer, "n", "q"])
+        prompts = []
+
+        def fake_input(prompt=""):
+            prompts.append(prompt)
+            return next(answers)
+
+        buf = io.StringIO()
+        with patch("fiedle400.cli.PulsoxHidDevice"), \
+                patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=mock_engine), \
+                patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2"), \
+                patch("fiedle400.plot.plot_session", return_value="/tmp/test.png"), \
+                patch("fiedle400.cli._open_in_viewer", return_value=opener_result) as opener, \
+                patch("builtins.input", side_effect=fake_input), redirect_stdout(buf):
+            run_interactive_wizard(MagicMock(device=None, verbose=0))
+        return buf.getvalue() + "".join(prompts), opener
+
+    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
+    def test_wizard_png_does_not_open_the_plot_when_declined(self):
+        out, opener = self._run_png_wizard("n")
+        self.assertIn("Open the plot now?", out)
+        opener.assert_not_called()
+
+    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
+    def test_wizard_png_names_the_file_when_no_viewer_can_be_opened(self):
+        out, opener = self._run_png_wizard("y", opener_result=False)
+        opener.assert_called_once_with("/tmp/test.png")
+        self.assertIn("Could not open a viewer; the plot is at: /tmp/test.png", out)
+
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["q"])
+    def test_wizard_header_shows_the_project_page(self, mock_input, mock_engine_cls, mock_dev_cls):
+        mock_engine_cls.return_value.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
+        mock_engine_cls.return_value.list_sessions.return_value = self.sessions
+        with patch("sys.stdout", new_callable=io.StringIO) as out:
+            run_interactive_wizard(MagicMock(device=None, verbose=0))
+        self.assertIn("https://github.com/psytrap/fiedle400", out.getvalue())
 
     @patch("fiedle400.cli.shutil.copy")
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")

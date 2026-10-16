@@ -12,6 +12,7 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -28,6 +29,8 @@ from fiedle400.protocol import Commands, Parsers
 from fiedle400.hid_driver import PulsoxHidDevice
 
 ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
+PROJECT_URL = "https://github.com/psytrap/fiedle400"
 
 # ASCII stand-ins for the symbols this CLI prints, used only on consoles whose
 # encoding cannot represent them (see _configure_output_encoding).
@@ -89,6 +92,26 @@ def tool_version_line() -> str:
     """Tool version plus the runtime it runs on, for reports users paste into bug reports."""
     build = "standalone binary" if getattr(sys, "frozen", False) else f"Python {platform.python_version()}"
     return f"{__version__} ({build}, {platform.system()} {platform.release()}, {platform.machine()})"
+
+
+def _open_in_viewer(path: str) -> bool:
+    """Open a file in the system's default viewer. Returns False if that did not work.
+
+    Uses what each OS already ships: os.startfile (Windows), `open` (macOS) and
+    `xdg-open` (Linux). Never raises, so a missing viewer cannot lose a download.
+    """
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)  # type: ignore[attr-defined]
+            return True
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
+        if shutil.which(opener) is None:
+            return False
+        subprocess.Popen([opener, path], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except OSError:
+        return False
 
 
 def clean_input(prompt: str = "") -> str:
@@ -199,7 +222,7 @@ def _probe_out_alert(records: List[dict]) -> Optional[str]:
         "storage-path sentinel (SpO2 127 / pulse 255). This specific code path "
         "(RELEASE_PLAN.md T1) has never been confirmed against real hardware "
         "before -- please open a bug report at "
-        "https://github.com/psytrap/fiedle400/issues with this download's "
+        f"{PROJECT_URL}/issues with this download's "
         "saved file attached, so this can finally be verified.\n"
         + "=" * 70
     )
@@ -708,6 +731,7 @@ def run_interactive_wizard(args) -> int:
         print("\n============================================================")
         print("          PULOX PO-400 INTERACTIVE USER INTERFACE")
         print(f"          fiedle400 v{__version__}".rstrip())
+        print(f"          {PROJECT_URL}")
         print("============================================================")
 
         print("\nConnecting to device...")
@@ -869,6 +893,9 @@ def run_interactive_wizard(args) -> int:
                         from fiedle400 import plot
                         plot_path = plot.plot_session(filepath=tmp_path, output_png=out_fn)
                         print(f"\n📊 Successfully plotted {len(all_records):,} records across {len(selected_sessions)} session(s): {plot_path}")
+                        if clean_input("Open the plot now? [Y/n]: ").lower() in ("", "y", "yes"):
+                            if not _open_in_viewer(str(plot_path)):
+                                print(f"   Could not open a viewer; the plot is at: {plot_path}")
                     except ImportError as e:
                         if getattr(e, "name", None) != "matplotlib":
                             raise
@@ -920,6 +947,7 @@ def main(argv: Optional[List[str]] = None):
     parser = argparse.ArgumentParser(
         prog="fiedle400",
         description="CLI tool to query device information and extract recordings from Pulsox PO-400 USB HID pulse oximeter.",
+        epilog=f"Project page, documentation and bug reports: {PROJECT_URL}",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
