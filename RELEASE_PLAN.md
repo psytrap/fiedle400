@@ -3,7 +3,7 @@
 > **Scope:** First tagged release of the `fiedle400` CLI (GitHub Release with Linux, Windows and macOS binaries)
 > **Cadence:** Two-Phase Version Bump (Patch Pre-Flight • Minor Post-Shipment), adapted from the RefDiff rollout plan
 > **Baseline:** see `fiedle400/__init__.py` for the current version (patch-bumped freely per §1's rule; no git tags exist yet)
-> **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B7 resolved. The `fiedle400` rename (§3b, patch 0010) has landed. All findings T1-T7 (§3d) are **fixed in patch 0013 and verified against the real device** -- not just the simulator: `sessions`/`download` on the real PO-400 now correctly show 107 records / 1m 47s (was 214 / 4m 03s), and `info` honestly reports fields the device never answers instead of inventing them. A new finding, T8, was found afterward (Linux `hid`/libusb backend). `fiedle400 selftest` (new) gives a one-command, read-only hardware check with no env var needed. Nothing has been tagged or released.
+> **Status:** Strategy approved by psytrap (2026-10-15). All blockers B1–B7 resolved. The `fiedle400` rename (§3b, patch 0010) has landed. Findings T2-T7 (§3d) are **fixed in patch 0013 and verified against the real device** -- not just the simulator: `sessions`/`download` on the real PO-400 now correctly show 107 records / 1m 47s (was 214 / 4m 03s), and `info` honestly reports fields the device never answers instead of inventing them. **T1 is marked unfixed** (2026-10-16): its synthetic-only coverage doesn't count as a real-hardware fix; a loud runtime alert now covers its first real occurrence instead. A new finding, T8, was found afterward (Linux `hid`/libusb backend). `fiedle400 selftest` (new) gives a one-command, read-only hardware check with no env var needed. Nothing has been tagged or released.
 > **Workflow:** Changes are made and unit/mock-tested in the cloud copy (`/mnt/project-files/po400`); psytrap applies the patches locally, runs the live gates (G5–G7) and pushes to the private remote `github.com/psytrap/fiedle400`, where CI (`tests.yml`) runs on every push and PR.
 
 ---
@@ -175,14 +175,27 @@ Manual-mode protocol discovery story (how `0xA0`/`0xD0`, `0xA2`/`0xD2`,
 the way, and the delta-decode investigation) now live there. This section
 keeps only current, live status.
 
-**T1-T7:** fixed in patch 0013, verified on the real device (`sessions`/
-`download` correct, `info` honest about unanswered fields). T1's
-finger-out sentinel path (SpO2 127 / pulse 255) is still untested against
-real hardware -- no real recording has hit a finger-out moment yet, and
-there's an unconfirmed hypothesis that the device's own recording stops
-rather than continuing with probe-out-flagged samples when the finger
-comes off, which would make this path unreachable via the storage
-protocol regardless of the decoder.
+**T2-T7:** fixed in patch 0013, verified on the real device (`sessions`/
+`download` correct, `info` honest about unanswered fields).
+
+**T1: marked unfixed (psytrap, 2026-10-16), downgraded from "fixed in
+patch 0013."** The sentinel decode (SpO2 127 / pulse 255 -> `probe-out`)
+is implemented and passes synthetic tests, but has **never once fired
+against real hardware** -- no real recording has hit a finger-out moment
+yet. Code that has only ever been exercised by hand-built test frames
+does not count as fixed here, regardless of how confident the synthetic
+coverage looks. There's also an unconfirmed hypothesis that the device's
+own recording stops rather than continuing with probe-out-flagged samples
+when the finger comes off, which would make this path structurally
+unreachable via the storage protocol regardless of the decoder -- in
+which case "fixed" may not even be a meaningful status for it.
+**Mitigation added (2026-10-16):** `fiedle400 download` now scans every
+downloaded record for the literal `probe-out` sentinel flag and, if it
+ever fires for the first time on real data, prints a loud alert
+(`fiedle400/cli.py:_probe_out_alert`) asking whoever sees it to file a bug
+report with the capture attached. Covered by
+`tests/test_cli_graceful.py::TestProbeOutAlert`. This doesn't fix T1 --
+it just guarantees the first real occurrence can't pass unnoticed.
 
 **T8 (open):** the Linux `hid` (libusb) backend's unlock handshake and RTC
 read get no usable reply on this machine (`hidraw` is unaffected, and the

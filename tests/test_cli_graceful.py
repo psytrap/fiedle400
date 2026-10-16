@@ -85,5 +85,32 @@ class TestPlotWithoutMatplotlib(unittest.TestCase):
         self.assertNotIn("plot_session", vars(fiedle400))  # lazy, resolved via __getattr__
 
 
+class TestProbeOutAlert(unittest.TestCase):
+    """RELEASE_PLAN.md T1's sentinel path has never been confirmed on real
+    hardware; this alert exists so a real occurrence is impossible to miss."""
+
+    def test_no_alert_when_no_probe_out_records(self):
+        records = [{"flags": "ok", "spo2": 98, "heart_rate": 72}]
+        self.assertIsNone(cli._probe_out_alert(records))
+
+    def test_alert_fires_on_sentinel_probe_out(self):
+        records = [
+            {"flags": "ok", "spo2": 98, "heart_rate": 72},
+            {"flags": "probe-out", "spo2": None, "heart_rate": None},
+        ]
+        alert = cli._probe_out_alert(records)
+        self.assertIsNotNone(alert)
+        self.assertIn("FINGER-OUT", alert)
+        self.assertIn("T1", alert)
+        self.assertIn("1 of 2", alert)
+
+    def test_legacy_combined_flag_does_not_fire_the_alert(self):
+        # The legacy flag-byte path ("probe-out,searching,low-perfusion") is a
+        # different, already-verified code path (T1's table entry) -- this
+        # alert is specifically about the sentinel-only "probe-out" string.
+        records = [{"flags": "probe-out,searching,low-perfusion", "spo2": None, "heart_rate": None}]
+        self.assertIsNone(cli._probe_out_alert(records))
+
+
 if __name__ == "__main__":
     unittest.main()

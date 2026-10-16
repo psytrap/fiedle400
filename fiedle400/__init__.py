@@ -1,6 +1,6 @@
 """Pulsox PO-400 USB HID Pulse Oximeter Package"""
 
-__version__ = "0.3.5"
+__version__ = "0.3.6"
 
 from .engine import (
     SerialByteStreamBuffer,

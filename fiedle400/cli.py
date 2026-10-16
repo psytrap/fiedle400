@@ -174,6 +174,35 @@ def command_detect(args) -> int:
     return 0
 
 
+def _probe_out_alert(records: List[dict]) -> Optional[str]:
+    """Builds a one-time alert message if any record carries the storage-path
+    finger-out sentinel (flags == "probe-out"), the exact signal RELEASE_PLAN.md
+    T1 fixed but has never been confirmed against real hardware -- synthetic
+    frames only so far. Returns None if no such record is present.
+
+    Deliberately checks for the literal string "probe-out" only, not any
+    status string containing it (e.g. legacy "probe-out,searching,low-perfusion"
+    combos), since that legacy flag-byte path is separately already verified
+    on real hardware (T1's table entry) and this alert is specifically about
+    the previously-unverified sentinel path.
+    """
+    hits = sum(1 for r in records if r.get("flags") == "probe-out")
+    if not hits:
+        return None
+    return (
+        "\n" + "=" * 70 + "\n"
+        "FINGER-OUT (PROBE-OUT) DETECTED IN DOWNLOADED DATA\n"
+        + "=" * 70 + "\n"
+        f"{hits} of {len(records)} record(s) show a finger-out reading via the "
+        "storage-path sentinel (SpO2 127 / pulse 255). This specific code path "
+        "(RELEASE_PLAN.md T1) has never been confirmed against real hardware "
+        "before -- please open a bug report at "
+        "https://github.com/psytrap/fiedle400/issues with this download's "
+        "saved file attached, so this can finally be verified.\n"
+        + "=" * 70
+    )
+
+
 def _export_records_to_file(
     records: List[dict],
     output_filename: Optional[str] = None,
@@ -243,6 +272,9 @@ def command_download(args):
         total_records, args.output, args.format.lower(), output_dir=target_dir
     )
     print(f"✅ Saved all session recordings to: {saved_path}")
+    alert = _probe_out_alert(total_records)
+    if alert:
+        print(alert)
     if dump_path:
         print(f"🔍 Saved diagnostic raw HID frame dump to: {os.path.abspath(dump_path)}")
     return 0
