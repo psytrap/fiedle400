@@ -299,3 +299,35 @@ protocol side is documented and ready.
 > guessing at menu modes without that is not converging. Still blocks: T1's
 > real finger-out test, and the Auto/Manual question itself (open again,
 > not resolved either way)."
+
+---
+
+## Gate re-verification log (G5/G6, real hardware)
+
+Full history of G5/G6 hardware re-checks on both platforms, moved here to
+keep `RELEASE_PLAN.md`'s gate table current-state-only (2026-10-16).
+
+**`0.3.7` (psytrap, 2026-10-16), docs-review patch (0015):** Linux (`.venv`,
+`hidraw`): `info`/`sessions` correct against the real device. Windows 8.1
+laptop (reached over SSH): PyInstaller for `py -3.8`, `dist\fiedle400.exe
+info`/`sessions` both correct (`hid` backend; clock honestly "not reported
+by the device"). Windows installer/`.iss` not exercised, only the raw
+PyInstaller build -- fine for G5's purpose. `FIEDLE400_LIVE=1` suite: Linux
+7/7 pass (clock bytes match the patch's prediction exactly); Windows 5/5
+applicable pass, 2 correctly skipped as Linux-only.
+
+**`0.3.8` (psytrap, 2026-10-16), wizard/udev/desktop-launcher patch:** Linux
+rebuilt (43MB -- matplotlib now actually bundled; the `0.3.7`-era Linux
+builds that session were accidentally built from a `.venv` without
+matplotlib installed, so `plot` silently degraded, fixed here), `info`/
+`sessions` correct, `FIEDLE400_LIVE=1` suite 7/7 pass. Windows: repo
+re-synced to the laptop (it was stale at `0.1.10`), rebuilt, `info` correct,
+`FIEDLE400_LIVE=1` suite 5/5 applicable pass.
+
+**`0.3.9` (psytrap, 2026-10-16), `selftest` multi-backend probe:** Linux:
+rebuilt, `info`/`selftest` both correct -- `selftest`'s new automatic
+both-backend probe showed `hidraw` and (this run) `hid` both passing
+cleanly, after T8 had reproduced on `hid` moments earlier following a
+device unplug/replug (see RELEASE_PLAN.md T8). `FIEDLE400_LIVE=1` suite
+7/7 pass. Windows: re-synced, rebuilt, `info`/`selftest` correct,
+`FIEDLE400_LIVE=1` suite 5/5 applicable pass.
