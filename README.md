@@ -10,16 +10,18 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
 
 ## Features
 
+**Get your data off the device -- the main reason this tool exists**
+- **`fiedle400 download`**: extracts stored recordings to `.spo2`, `.csv`, or `.json`, non-destructively (device memory is untouched unless you separately choose to clear it).
+- **`fiedle400 plot`**: renders a `.spo2`/`.csv`/`.json` recording into a dual-axis SpO2 + heart-rate PNG chart (needs matplotlib: `pip install matplotlib` or `pip install fiedle400[plot]`; the stdlib-only commands below work without it).
+- **Interactive wizard (`fiedle400`, no arguments)**: the guided way to do both of the above in one pass -- a menu to inspect device status, download sessions, and manage device memory. The download flow asks for an output format (`spo2`/`csv`/`json`/`png`) as its own prompt before the filename; choosing `png` renders a chart directly without keeping the raw data file, falling back to saving it as `.spo2` if rendering fails so nothing is lost.
+
 **Driver**
 - **Dual-backend**: Linux defaults to `hidraw` -- 100% standard library, zero external dependencies (`pip install` is NOT required). Windows and macOS default to `hid` (`import hid`, pulled in automatically on those platforms). Pass `--backend hid` on Linux to develop and test the cross-platform path locally.
 
 **Everyday use**
-- **Interactive wizard (`fiedle400`, no arguments)**: a guided menu to inspect device status, download sessions, and manage device memory. The download flow asks for an output format (`spo2`/`csv`/`json`/`png`) as its own prompt before the filename; choosing `png` renders a chart directly (needs matplotlib -- see below) without keeping the raw data file, falling back to saving it as `.spo2` if rendering fails so nothing is lost.
 - **`fiedle400 selftest`**: a one-command, read-only hardware check (detection, connect, handshake, clock, sessions) against the real device -- no env var needed, unlike the test suite's opt-in live tests; running this command is itself the signal that a check is wanted. Automatically probes every backend this platform supports (e.g. both `hidraw` and `hid` on Linux) in one run; only the primary backend's result affects the exit code, so a known-flaky secondary backend never masks an otherwise-healthy device.
 - **`fiedle400 info`**: auto-detects the connected PO-400 (`VID 0x28E9`, `PID 0x028A`) and reports its hardware model, firmware version, serial number, user profile, and storage geometry -- printing "not reported by the device" rather than guessing at whatever it doesn't actually answer (most likely a device firmware limitation, not something more reverse-engineering would fix -- see `PROTOCOL.md` §3.3).
 - **`fiedle400 sessions`**: lists every recorded session in device memory from the stored index table.
-- **`fiedle400 download`**: extracts stored recordings to `.spo2`, `.csv`, or `.json`, non-destructively (device memory is untouched unless you separately choose to clear it).
-- **`fiedle400 plot`**: renders a `.spo2`/`.csv`/`.json` recording into a dual-axis SpO2 + heart-rate PNG chart (needs matplotlib: `pip install matplotlib` or `pip install fiedle400[plot]`; the stdlib-only commands above work without it).
 - **`fiedle400 clear`**: deletes stored sessions from device flash memory -- the only destructive command, confirmed by default.
 
 **Clock**
