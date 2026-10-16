@@ -3,11 +3,18 @@
 import io
 import os
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from fiedle400 import protocol
 from fiedle400.cli import generate_iso_filename, parse_session_selection, run_interactive_wizard
+
+try:
+    import fiedle400.plot  # noqa: F401
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
 
 
 class TestCliInteractive(unittest.TestCase):
@@ -137,7 +144,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.csv")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1-2", "", "y", "n"])
+    @patch("builtins.input", side_effect=["1-2", "", "", "y", "n"])
     def test_wizard_download_and_erase(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -166,6 +173,99 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(len(args_export[0]), 2)  # 2 sessions * 1 record each
         self.assertTrue(args_export[1].endswith(".spo2"))
 
+    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
+    @patch("fiedle400.plot.plot_session", return_value="/tmp/test.png")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["1-2", "4", "", "y", "n"])
+    def test_wizard_download_format_png_generates_plot(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export, mock_plot):
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        mock_engine_cls.return_value = mock_engine
+
+        args = MagicMock(device=None, verbose=0)
+        ret = run_interactive_wizard(args)
+        self.assertEqual(ret, 0)
+
+        # png format writes the data to a scratch file just to feed the plot ...
+        mock_export.assert_called_once()
+        self.assertEqual(mock_export.call_args[0][2], "spo2")
+        tmp_path = mock_export.call_args[0][1]
+        self.assertTrue(tmp_path.endswith(".spo2"))
+        # ... the plot is rendered from that same scratch file ...
+        mock_plot.assert_called_once()
+        plot_kwargs = mock_plot.call_args.kwargs
+        self.assertEqual(plot_kwargs["filepath"], tmp_path)
+        # ... "Save as" and the plot output stay .png, matching what was chosen ...
+        self.assertTrue(plot_kwargs["output_png"].endswith(".png"))
+        # ... and the scratch file does not survive a successful plot.
+        self.assertFalse(os.path.exists(tmp_path))
+
+    @patch("fiedle400.cli.shutil.copy")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
+    @patch("fiedle400.cli.PulsoxHidDevice")
+    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
+    @patch("builtins.input", side_effect=["1-2", "4", "", "y", "n"])
+    def test_wizard_download_format_png_without_matplotlib(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export, mock_copy):
+        import builtins as _builtins
+        import sys as _sys
+
+        real_import = _builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "matplotlib" or name.startswith("matplotlib."):
+                raise ModuleNotFoundError("No module named 'matplotlib'", name="matplotlib")
+            return real_import(name, *args, **kwargs)
+
+        import fiedle400
+        saved = {k: _sys.modules.pop(k) for k in list(_sys.modules) if k == "fiedle400.plot" or k.startswith("matplotlib")}
+        saved_attr = vars(fiedle400).pop("plot", None)
+
+        mock_dev = MagicMock()
+        mock_dev.connect.return_value = "/dev/hidraw_test"
+        mock_dev_cls.return_value = mock_dev
+
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {
+            "device_info": protocol.DeviceInfo(),
+            "rtc_time_str": "2026-09-06 12:00:00",
+        }
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        mock_engine_cls.return_value = mock_engine
+
+        buf = io.StringIO()
+        try:
+            with patch("builtins.__import__", side_effect=fake_import), redirect_stdout(buf):
+                args = MagicMock(device=None, verbose=0)
+                ret = run_interactive_wizard(args)
+        finally:
+            _sys.modules.pop("fiedle400.plot", None)
+            _sys.modules.update(saved)
+            if saved_attr is not None:
+                fiedle400.plot = saved_attr
+
+        self.assertEqual(ret, 0)
+        out = buf.getvalue()
+        self.assertIn("pip install matplotlib", out)
+        self.assertIn("Saved the data instead so it isn't lost", out)
+        mock_export.assert_called_once()  # the scratch save itself still succeeded
+        # Falls back to persisting the data (as .spo2, next to the requested .png)
+        # instead of losing the download when the plot can't be rendered.
+        mock_copy.assert_called_once()
+        fallback_fn = mock_copy.call_args[0][1]
+        self.assertTrue(fallback_fn.endswith(".spo2"))
+
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["c", "y", "n"])
@@ -190,7 +290,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["", "", "", "n", "n"])
+    @patch("builtins.input", side_effect=["", "", "", "", "n", "n"])
     def test_wizard_default_enter_downloads_all(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -306,7 +406,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("os.path.exists", side_effect=[True, False, False, False])
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1", "", "y", "n", "n"])
+    @patch("builtins.input", side_effect=["1", "", "", "y", "n", "n"])
     def test_wizard_overwrite_confirmed(self, mock_input, mock_engine_cls, mock_dev_cls, mock_exists, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -329,7 +429,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1", "", "n", "q", "q"])
+    @patch("builtins.input", side_effect=["1", "", "", "n", "q", "q"])
     def test_wizard_overwrite_cancelled(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -356,7 +456,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test_1.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1", "", "n", "", "n", "n"])
+    @patch("builtins.input", side_effect=["1", "", "", "n", "", "n", "n"])
     def test_wizard_overwrite_accepts_suggested_suffix(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"

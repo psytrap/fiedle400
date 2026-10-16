@@ -4,8 +4,8 @@
 #
 # Usage, run from the directory containing the downloaded binary and this
 # script (both ship together in the Linux release asset):
-#   ./install.sh              install
-#   ./install.sh --uninstall  remove ~/.local/bin/fiedle400
+#   ./install.sh              install (binary, PATH note, desktop launcher)
+#   ./install.sh --uninstall  remove ~/.local/bin/fiedle400 and the launcher
 #
 # Device access (udev rules) is a SEPARATE, deliberately root-requiring step:
 # see fiedle400_setup-udev.sh, shipped alongside this script. install.sh does
@@ -14,6 +14,9 @@
 set -eu
 
 BIN_DIR="$HOME/.local/bin"
+APPS_DIR="$HOME/.local/share/applications"
+DESKTOP_FILE="$APPS_DIR/fiedle400.desktop"
+WORK_DIR="$HOME/Documents/fiedle400"
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 
 if [ "${1:-}" = "--uninstall" ]; then
@@ -22,6 +25,12 @@ if [ "${1:-}" = "--uninstall" ]; then
         echo "Removed $BIN_DIR/fiedle400"
     else
         echo "Nothing to remove: $BIN_DIR/fiedle400 does not exist."
+    fi
+    if [ -f "$DESKTOP_FILE" ]; then
+        rm -f "$DESKTOP_FILE"
+        echo "Removed $DESKTOP_FILE"
+        command -v update-desktop-database >/dev/null 2>&1 && \
+            update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
     fi
     echo "The udev rules from fiedle400_setup-udev.sh are not removed by this"
     echo "script (they need root, same as installing them). To remove them:"
@@ -53,6 +62,24 @@ case ":$PATH:" in
         echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
         ;;
 esac
+
+mkdir -p "$APPS_DIR" "$WORK_DIR"
+cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=fiedle400
+Comment=Pulsox PO-400 pulse oximeter: download and plot recordings
+Exec=$BIN_DIR/fiedle400
+Path=$WORK_DIR
+Icon=utilities-system-monitor
+Terminal=true
+Categories=Utility;
+EOF
+chmod +x "$DESKTOP_FILE"
+echo "Installed desktop launcher: $DESKTOP_FILE (opens a terminal in $WORK_DIR)"
+command -v update-desktop-database >/dev/null 2>&1 && \
+    update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
 
 UDEV_SCRIPT="$HERE/fiedle400_setup-udev.sh"
 echo

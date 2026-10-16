@@ -219,6 +219,13 @@ Corrected 2026-10-16 against both recordings: earlier drafts gave this as a 64-b
 > headers carry correct start times, so the device keeps time internally; it just does not report
 > it here. The field map above is from the disassembly and unconfirmed.
 >
+> **This is most likely a bug or an unfinished feature in the device's own firmware, not a gap in
+> `fiedle400`'s reverse-engineering.** The vendor's own `SpO2.exe` has the identical problem (that's
+> where `F2 00 00 02 07 00 0C 07` was first captured from), and the reply never varies across two
+> recordings made over a month apart, through a clock-set in between -- a working RTC readback
+> would not do that. Treat "not reported" here as a statement about the hardware, not an invitation
+> to look for a smarter way to decode these same eight bytes.
+>
 > The vendor's `SET_RTC` matches the table exactly (`83 1A 09 06 0A 05 18 33 06 0C`, checksum
 > verified). `fiedle400 set-time` sends a different layout (`83 YY MM DD HH MI SS [chk] 01 34`,
 > checksum `0x133 - sum`, `commands.build_set_time_command`) that is not in any recording, and

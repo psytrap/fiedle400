@@ -293,13 +293,19 @@ just for that promotion.
 
 ## 3g. New TODOs (psytrap, 2026-10-16)
 
-- **Test the udev installer against an existing/stale config.**
-  `packaging/linux/fiedle400_setup-udev.sh` has only ever been run against a
-  clean `/etc/udev/rules.d/`. Not yet tested: running it when a rule file for
-  this VID/PID already exists -- from a prior `fiedle400` version, a manual
-  install, or a leftover `po400`-named rule from before the rename. Should
-  not duplicate or conflict; ideally detects and replaces the old rule. Not
-  yet done.
+- **Test the udev installer against an existing/stale config.** ✅ **Done
+  (psytrap, 2026-10-16).** Tested via a simulated `RULES_DIR` (no real root
+  or system files touched): refuses without root, is idempotent on an
+  unchanged rule, and correctly detected a differing rule (wrong
+  `MODE`/`GROUP`, simulating a stale install). Per psytrap, silently
+  overwriting was wrong -- `write_rule()` now shows the existing vs. new
+  content and asks `Overwrite? [y/N]` before touching a file that already
+  exists with different content; declining leaves it untouched and warns the
+  device may not work until it's resolved. A same-content file is still
+  skipped silently ("Already up to date") since there's nothing to decide.
+  (A differently-*named* leftover file, e.g. an old `99-po400.rules`, is
+  simply not touched either way -- it was never going to conflict since
+  udev applies all matching rules, just noise to clean up by hand.)
 - **Manual-mode real-hardware recording: optional release gate.** Add a new
   gate (call it **G9**) that is explicitly *not* a blocker: before tagging,
   ask whoever is running the release whether they can supply one real
@@ -309,22 +315,28 @@ just for that promotion.
   provided, note it as skipped and ship anyway -- Manual mode isn't
   implemented in `fiedle400` yet, so this never blocks a release, it only
   improves the docs when the data happens to be available. Not yet done.
-- **Linux desktop icon.** `packaging/linux/install.sh` installs the binary
-  and `fiedle400_setup-udev.sh` sets up device access, but there's no
-  `.desktop` entry or icon for a GUI launcher/menu entry on Linux (Windows
-  gets a Start Menu shortcut via the installer; Linux currently doesn't have
-  an equivalent, matching entry). Not yet done.
+- **Linux desktop icon.** ✅ **Done (psytrap, 2026-10-16).** No custom icon
+  artwork exists anywhere in the project for *either* platform (the Windows
+  shortcut just uses PyInstaller's default EXE icon), so this is a
+  generic-icon terminal launcher, not matching artwork -- a real icon is a
+  separate, future task. `install.sh` now writes
+  `~/.local/share/applications/fiedle400.desktop` (`Icon=utilities-system-monitor`,
+  a stock icon that reads as a pulse/activity graph -- per psytrap's request
+  for "something that looks like a measurement"; `Terminal=true` since this
+  is a console app). Per psytrap's question about the working directory:
+  the Desktop Entry spec's `Path=` key takes a literal path, no `$HOME`
+  expansion at launch time, so `install.sh` resolves and creates
+  `~/Documents/fiedle400` at install time and bakes that in -- mirrors the
+  Windows installer's `WorkingDir: {userdocs}\PO-400` pattern, so recordings
+  land in one predictable folder instead of the home directory root.
+  Verified: installed for real, `desktop-file-validate` passes clean,
+  `--uninstall` removes it too.
 - **State plainly that "not reported by the device" may be a device bug, not
-  just an unimplemented feature.** The docs-review patch (0015) changed
-  several fields -- clock, firmware version, serial number, storage geometry
-  -- from a guessed/decoded value to an honest "not reported by the device."
-  That wording reads as "fiedle400 doesn't know how to ask," when the more
-  likely explanation for some of these (especially the clock, which never
-  changes across sessions and dates) is that **the device's firmware itself
-  has the bug** -- it may simply not implement what it advertises. Add an
-  explicit statement to this effect (`README.md` and/or `PROTOCOL.md` near
-  §3.3) so users and future contributors don't assume these are gaps in
-  `fiedle400` that more reverse-engineering would close. Not yet done.
+  just an unimplemented feature.** ✅ **Done (psytrap, 2026-10-16).** Added
+  to `PROTOCOL.md` §3.3 (the full argument: vendor's own software has the
+  identical gap, and the reply never varies across recordings a month apart
+  through a clock-set in between) and a shorter pointer in `README.md` next
+  to the clock feature bullet.
 - **Interactive wizard: "download all" should ask for output format first.**
   Today (`run_interactive_wizard`, `fiedle400/cli.py` ~line 790), after
   picking sessions (including `[A]`/`[W]` "all") the wizard goes straight to
@@ -341,7 +353,23 @@ just for that promotion.
   prompt **before** this "Save as" step (default: spo2, i.e. today's
   behaviour unchanged if the user just presses Enter at both prompts), so
   format and filename become two distinct, clearly labelled questions
-  instead of one prompt doing both jobs. Not yet done.
+  instead of one prompt doing both jobs. ✅ **Done (psytrap, 2026-10-16),**
+  `fiedle400/cli.py` `run_interactive_wizard`; also made the action-selection
+  prompt itself more visible (`>>> Select action [...]`, on its own line
+  below the menu box) per psytrap's request. `tests/test_cli_interactive.py`
+  updated for the extra prompt; 259 tests pass.
+- **TODO: check for better options than mocking `builtins.input` in the
+  Windows CI job.** `tests/test_cli_interactive.py` drives the interactive
+  wizard by patching `builtins.input` with a canned `side_effect` list --
+  confirmed (psytrap, 2026-10-16) this is pure Python mocking with no real
+  stdin/console involved, so it behaves identically on all three `tests.yml`
+  runners (`ubuntu-latest`, `windows-latest`, `macos-latest`) and isn't
+  actually testing anything Windows-console-specific about the wizard's
+  interactive behaviour. Worth a look at whether a more realistic approach
+  (a real pty / real subprocess with piped stdin) would catch bugs the
+  mock can't -- e.g. console encoding quirks, Windows-specific `readline`
+  behaviour. Not yet done; no known bug motivating it today, just a gap in
+  how faithfully the test doubles for a real terminal.
 
 ---
 

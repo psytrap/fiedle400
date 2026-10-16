@@ -7,6 +7,9 @@
 #   - download or run anything else,
 #   - touch any file outside /etc/udev/rules.d/,
 #   - modify the fiedle400 binary or its settings.
+# If a rule file it would write already exists with DIFFERENT content (an
+# older fiedle400 version, a manual edit, or an unrelated rule for this
+# device), it asks before overwriting -- it never clobbers silently.
 #
 # Usage:
 #   sudo ./fiedle400_setup-udev.sh
@@ -30,9 +33,20 @@ RULES_DIR="/etc/udev/rules.d"
 write_rule() {
     path="$RULES_DIR/$1"
     content="$2"
-    if [ -f "$path" ] && [ "$(cat "$path")" = "$content" ]; then
-        echo "Already up to date: $path"
-        return
+    if [ -f "$path" ]; then
+        if [ "$(cat "$path")" = "$content" ]; then
+            echo "Already up to date: $path"
+            return
+        fi
+        echo "Existing rule differs: $path"
+        echo "  current: $(cat "$path")"
+        echo "  new:     $content"
+        printf "Overwrite? [y/N]: "
+        read -r ans || ans="n"
+        case "$ans" in
+            y|Y|yes|Yes) ;;
+            *) echo "Skipped: $path (left unchanged -- the PO-400 may not work until this is resolved)"; return ;;
+        esac
     fi
     printf '%s\n' "$content" > "$path"
     echo "Wrote: $path"

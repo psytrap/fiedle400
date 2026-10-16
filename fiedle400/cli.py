@@ -11,7 +11,9 @@ import codecs
 import os
 import platform
 import re
+import shutil
 import sys
+import tempfile
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -753,9 +755,9 @@ def run_interactive_wizard(args) -> int:
             print("  [A]   Download all sessions (a or all)")
             print("  [C]   Clear / erase device flash memory")
             print("  [Q]   Quit")
-            print("------------------------------------------------------------")
+            print("------------------------------------------------------------\n")
 
-            choice = clean_input(f"Select action [W, 1-{len(sessions)}, ranges, a, c, q; default: W]: ")
+            choice = clean_input(">>> Select action [default: W]: ")
             if not choice or choice.lower() in ("w", "wizard"):
                 confirm_wizard = clean_input("\nStart Download Wizard to download all sessions? [Y/n]: ").lower()
                 if confirm_wizard not in ("", "y", "yes"):
@@ -787,18 +789,27 @@ def run_interactive_wizard(args) -> int:
                     print(f"[!] {ve}")
                     continue
 
-            default_fn = generate_iso_filename(selected_sessions, ext="spo2")
+            print("\nOutput format:")
+            print("  [1]   spo2 (default)")
+            print("  [2]   csv")
+            print("  [3]   json")
+            print("  [4]   png (plot) -- renders a chart, does not save the raw data")
+            _fmt_map = {"": "spo2", "1": "spo2", "spo2": "spo2",
+                        "2": "csv", "csv": "csv",
+                        "3": "json", "json": "json",
+                        "4": "png", "png": "png"}
+            fmt_input = clean_input("Select format [1-4; default: 1]: ").strip().lower()
+            fmt_choice = _fmt_map.get(fmt_input)
+            while fmt_choice is None:
+                fmt_input = clean_input(f"[!] Unknown format '{fmt_input}'. Enter 1, 2, 3 or 4: ").strip().lower()
+                fmt_choice = _fmt_map.get(fmt_input)
+
+            want_plot = fmt_choice == "png"
+            save_fmt = "spo2" if want_plot else fmt_choice
+
+            default_fn = generate_iso_filename(selected_sessions, ext=fmt_choice)
             fn_input = clean_input(f"\nSave as [default: {default_fn}]: ")
-            if not fn_input:
-                out_fn = default_fn
-            elif fn_input in ("1", "spo2"):
-                out_fn = generate_iso_filename(selected_sessions, ext="spo2")
-            elif fn_input in ("2", "csv"):
-                out_fn = generate_iso_filename(selected_sessions, ext="csv")
-            elif fn_input in ("3", "json"):
-                out_fn = generate_iso_filename(selected_sessions, ext="json")
-            else:
-                out_fn = fn_input
+            out_fn = fn_input if fn_input else default_fn
 
             # Overwrite protection if target file already exists
             file_confirmed = True
@@ -823,8 +834,41 @@ def run_interactive_wizard(args) -> int:
                 recs = engine.download_session(s, debug=verbose_level)
                 all_records.extend(recs)
 
-            saved_path = _export_records_to_file(all_records, out_fn)
-            print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
+            if want_plot:
+                # No .spo2 is kept on success -- only the plot. The data is
+                # written to a scratch file just to feed plot_session, then
+                # discarded; if plotting fails, that scratch copy is kept
+                # instead (renamed next to the requested plot) so a failed
+                # render never means a lost download.
+                tmp_fd, tmp_path = tempfile.mkstemp(suffix=".spo2")
+                os.close(tmp_fd)
+                try:
+                    _export_records_to_file(all_records, tmp_path, "spo2")
+                    try:
+                        from fiedle400 import plot
+                        plot_path = plot.plot_session(filepath=tmp_path, output_png=out_fn)
+                        print(f"\n📊 Successfully plotted {len(all_records):,} records across {len(selected_sessions)} session(s): {plot_path}")
+                    except ImportError as e:
+                        if getattr(e, "name", None) != "matplotlib":
+                            raise
+                        fallback_fn = f"{os.path.splitext(out_fn)[0]}.spo2"
+                        shutil.copy(tmp_path, fallback_fn)
+                        print("❌ Plotting needs matplotlib, which is not installed.")
+                        print("   Install it with: pip install matplotlib   (or: pip install fiedle400[plot])")
+                        print(f"   Saved the data instead so it isn't lost: {fallback_fn}")
+                    except Exception as e:
+                        fallback_fn = f"{os.path.splitext(out_fn)[0]}.spo2"
+                        shutil.copy(tmp_path, fallback_fn)
+                        print(f"❌ Error generating plot: {e}")
+                        print(f"   Saved the data instead so it isn't lost: {fallback_fn}")
+                finally:
+                    try:
+                        os.remove(tmp_path)
+                    except OSError:
+                        pass
+            else:
+                saved_path = _export_records_to_file(all_records, out_fn, save_fmt)
+                print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
 
             # Offer flash erase with default = YES
             erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()
