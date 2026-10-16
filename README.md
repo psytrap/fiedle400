@@ -1,12 +1,10 @@
 # Pulsox PO-400 CLI Tool (`fiedle400`)
 
-A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID.
+A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID. Runs on **Windows and Linux**, verified against real hardware on both (macOS support is present but not yet verified).
 
 > **Status: alpha.** It works against real hardware, but is still under test. See [RELEASE_PLAN.md](RELEASE_PLAN.md).
 
 For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protocol see [PROTOCOL.md](PROTOCOL.md).
-
-> **Renamed from `po400`.** The tool is now `fiedle400`; the device is still the PO-400. Saved settings are copied over on first run, and the old `PO400_*` environment variables still work.
 
 ---
 
@@ -21,6 +19,36 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
 - **Session Index Lister (`fiedle400 sessions`)**: Queries session metadata index table (`0x9C` / `0xEC`), listing all recorded offline sessions in device memory.
 - **Session Data Downloader (`fiedle400 download`)**: Extracts stored recordings from device memory into CSV or JSON format in a 100% non-destructive manner.
 - **Device Memory Clear (`fiedle400 clear`)**: Deletes stored recording sessions from device flash memory (`0xAA`).
+
+---
+
+## Running on Windows
+
+### 1. Install the standalone binary
+
+Download `fiedle400-setup.exe` from the [GitHub Release](https://github.com/psytrap/fiedle400/releases) and run it --
+no admin rights needed, installs per-user to `%LOCALAPPDATA%\Programs\fiedle400`.
+Launch it from the Start Menu entry (opens the interactive wizard directly;
+there is no console to type into) or the Explorer right-click "Open fiedle400
+here" entry. Verified on Windows 8.1 and newer with a real device attached.
+
+Device access needs no setup on Windows: the PO-400 binds to the stock HID
+class driver automatically (no Zadig, no manual driver step).
+
+#### Running from source instead
+
+- Python 3.11+
+- `hid` library: `pip install hid` (CI and the release binary use the `hidapi` package, which also provides `import hid`)
+
+```cmd
+REM Windows batch wrapper
+fiedle400.bat --help
+fiedle400.bat info
+
+REM Or via the Python module directly
+python -m fiedle400 --help
+python -m fiedle400 info
+```
 
 ---
 
@@ -84,36 +112,6 @@ backend your `hid` module uses, look at the path it reports -- `/dev/hidraw*`
 means hidraw, a bus path like `1-7.4.4:1.0` means libusb:
 ```bash
 python3 -c "import hid; print(hid.enumerate(0x28E9, 0x028A)[0]['path'])"
-```
-
----
-
-## Running on Windows
-
-### 1. Install the standalone binary
-
-Download `fiedle400-setup.exe` from the [GitHub Release](https://github.com/psytrap/fiedle400/releases) and run it --
-no admin rights needed, installs per-user to `%LOCALAPPDATA%\Programs\fiedle400`.
-Launch it from the Start Menu entry (opens the interactive wizard directly;
-there is no console to type into) or the Explorer right-click "Open fiedle400
-here" entry. Verified on Windows 8.1 and newer with a real device attached.
-
-Device access needs no setup on Windows: the PO-400 binds to the stock HID
-class driver automatically (no Zadig, no manual driver step).
-
-#### Running from source instead
-
-- Python 3.11+
-- `hid` library: `pip install hid` (CI and the release binary use the `hidapi` package, which also provides `import hid`)
-
-```cmd
-REM Windows batch wrapper
-fiedle400.bat --help
-fiedle400.bat info
-
-REM Or via the Python module directly
-python -m fiedle400 --help
-python -m fiedle400 info
 ```
 
 ---
@@ -183,7 +181,7 @@ Run the complete test suite (all tests use mocks and require 0 external dependen
 python3 -m unittest discover -s tests
 ```
 The suite must give the same result on any machine: it does not touch real hardware, the real
-`/dev` or `/sys`, your saved settings, or `FIEDLE400_*`/`PO400_*` variables.
+`/dev` or `/sys`, your saved settings, or `FIEDLE400_*` variables.
 
 The hardware tests in `tests/test_device_live.py` are opt-in, so the default run gives
 the same result whether or not a device is attached. With a PO-400 plugged in:
