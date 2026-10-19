@@ -61,6 +61,63 @@ Downloading never modifies the device. `clear` is the only destructive
 command; it needs confirmation (or `-y`) and must never be run by tests
 against real hardware.
 
+### 3a. Worked example: one real download, start to finish
+
+The steps above as *bytes*, for a fast recap without re-reading
+`PROTOCOL.md` cold. Chains real, already-verified wire data (sources
+cited per step); invents nothing.
+
+1. **Unlock.** One 64-byte write: `7D 81 A7` + six `0x80` key bytes,
+   then immediately `7D 81 A2` (the storage-negotiation half), padded
+   with `0x80` to 64 bytes total -- not two separate writes, and not
+   `0x00` padding (PROTOCOL.md §3.1; a real test using the wrong
+   padding/split got silence from the device). Reply: `F0 70`
+   (`COMMAND_ACK`).
+
+2. **Query the session index.** Request `9C 01` (opcode, user slot 1;
+   checksum `0x1D` would be `(0x9C + 0x01) % 128`, though real traffic
+   omits it -- PROTOCOL.md §3.2). The device answers with a 21-byte
+   `0xEC` frame; a real one from the vendor capture:
+   `EC 40 01 01 1A 09 06 0A 00 2E 73 01 00 00 75 73 65 72 00 00 42`.
+   Decoded: flags `0x40` (data ready), date `1A 09 06` = 2026-09-06,
+   time `0A 00 2E` = 10:00:46, raw sample count `73 01 00 00` (28-bit
+   LE) = 243 -- **raw 2 Hz samples, not seconds**, so this session is
+   `(243 + 1) // 2` = 122 one-second records (PROTOCOL.md §1.4,
+   CHANGELOG.md T3).
+
+3. **Read the SpO2 series.** Request `9D 04 01 01 01 [offset] 00 [chk]`
+   -- mode "read block", type `0x01` (SpO2), offset starting at 0. The
+   device replies with a stream of 30-byte `0xED` subframes until the
+   stored data runs out. A real boundary probe (`tests/fixtures/probe.trace.json`,
+   one 214-raw-sample session) showed the offset is a **sliding
+   window into the whole series, not a page number**: requesting
+   offset `k` returns `window(0)[k:]`, so the correct read starts at
+   0 and continues at `offset = 2 * records_so_far` -- stepping it
+   like a page index instead is exactly the bug that made a
+   107-second session download as 214 padded, overlapping "records"
+   (PROTOCOL.md §3.5, CHANGELOG.md T6). At `offset == stored_samples`
+   the device sends one filler frame decoding to the `0xFF 0xFF`
+   terminator; past that, nothing.
+
+4. **Read the pulse series.** Same shape, type `0x02`.
+
+5. **Decode each `0xED` frame.** Reassemble the 21 compressed data
+   bytes (`0x08..0x1C`, each masked to 7 bits) with their separated
+   MSBs (`0x05..0x07`, 7 bits each): `byte[i] = (msb_i << 7) | payload[i]`
+   (PROTOCOL.md §3.5). Each reassembled byte holds two delta nibbles.
+   A decoded value outside 1..100 (SpO2) or 1..254 (pulse) marks a
+   finger-out second -- a code path that has never actually fired
+   against real hardware yet (T1; `fiedle400` now prints a loud
+   runtime alert the first time it does, `cli._probe_out_alert`).
+
+6. **Merge and export.** SpO2 and pulse records pair up by sequence
+   index into `{timestamp, spo2, heart_rate, flags}` dicts and go to
+   `export.export_records` as `.spo2`/`.csv`/`.json`.
+
+Nothing above touches the Manual-mode protocol (`0xA0`/`0xD2`/`0xD3`/`0xD8`)
+-- that's a separate, not-yet-implemented path; see PROTOCOL.md §3.14
+and CHANGELOG.md for its own worked example.
+
 ## 4. Tests
 
 Unit and simulator tests run anywhere with `python -m unittest discover -s tests`

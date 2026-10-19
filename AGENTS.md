@@ -69,7 +69,8 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
   them without converting line endings (in Python: `open(p, newline="")`).
 - Definition of done: suite green, pyflakes clean, docs touched by the change updated
   (README for user-visible behaviour, PROTOCOL.md for protocol facts, RELEASE_PLAN for
-  findings/gates), no leftover debug prints.
+  findings/gates), no leftover debug prints. For a periodic deeper pass (before a
+  release, or after a batch of patches), see `.agents/rules/code-review-standards.md`.
 
 ## Glossary
 
