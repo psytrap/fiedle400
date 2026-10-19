@@ -94,16 +94,87 @@ def tool_version_line() -> str:
     return f"{__version__} ({build}, {platform.system()} {platform.release()}, {platform.machine()})"
 
 
+_LINUX_DESKTOP_DIRS = (
+    os.path.expanduser("~/.local/share/applications"),
+    "/usr/share/applications",
+    "/var/lib/snapd/desktop/applications",
+)
+
+
+def _resolve_linux_browser_argv(path: str):
+    """Resolves the real default *web browser* on Linux via `xdg-settings`
+    and returns the argv to open `path` with it, or None if that fails for
+    any reason (caller falls back to plain `xdg-open`).
+
+    `xdg-open <file>.html` consults the text/html MIME association
+    (`xdg-mime query default text/html`), which is a separate setting from
+    "default browser" (`xdg-settings default-web-browser`, used for http/https
+    links) and can drift from it independently -- e.g. a file manager's
+    "Open With... Always use this" on one .html file rewrites only the MIME
+    association, not the browser setting. On a system where that drifted to
+    a mail client (observed: Thunderbird, which does not even declare
+    text/html in its own .desktop file -- something else set it), plain
+    `xdg-open` on the generated viewer silently opened a mail compose window
+    instead of a browser. Asking for the browser specifically sidesteps that
+    class of drift regardless of what text/html currently points to.
+    """
+    try:
+        result = subprocess.run(
+            ["xdg-settings", "get", "default-web-browser"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    desktop_file = result.stdout.strip()
+    if not desktop_file:
+        return None
+
+    for directory in _LINUX_DESKTOP_DIRS:
+        full_path = os.path.join(directory, desktop_file)
+        if not os.path.isfile(full_path):
+            continue
+        try:
+            with open(full_path, encoding="utf-8") as f:
+                for line in f:
+                    if not line.startswith("Exec="):
+                        continue
+                    # Desktop-entry field codes (%u, %f, %U, %F, ...) are
+                    # exactly two characters starting with '%'; drop them,
+                    # keeping any other fixed arguments the entry specifies.
+                    parts = [
+                        p for p in line[len("Exec="):].strip().split()
+                        if not (len(p) == 2 and p[0] == "%")
+                    ]
+                    if parts:
+                        return parts + [path]
+        except OSError:
+            continue
+    return None
+
+
 def _open_in_viewer(path: str) -> bool:
     """Open a file in the system's default viewer. Returns False if that did not work.
 
-    Uses what each OS already ships: os.startfile (Windows), `open` (macOS) and
-    `xdg-open` (Linux). Never raises, so a missing viewer cannot lose a download.
+    Uses what each OS already ships: os.startfile (Windows), `open` (macOS) and,
+    on Linux, the real default browser resolved via `xdg-settings` when possible
+    (see _resolve_linux_browser_argv), falling back to plain `xdg-open`. Never
+    raises, so a missing viewer cannot lose a download.
     """
     try:
         if sys.platform.startswith("win"):
             os.startfile(path)  # type: ignore[attr-defined]
             return True
+        if sys.platform != "darwin":
+            browser_argv = _resolve_linux_browser_argv(path)
+            if browser_argv:
+                try:
+                    subprocess.Popen(browser_argv, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return True
+                except OSError:
+                    pass  # fall through to plain xdg-open below
         opener = "open" if sys.platform == "darwin" else "xdg-open"
         if shutil.which(opener) is None:
             return False
@@ -114,15 +185,58 @@ def _open_in_viewer(path: str) -> bool:
         return False
 
 
+def _viewer_tmp_dir(saved_path: str) -> str:
+    """Where the HTML viewer's disposable temp file gets written: the same
+    folder as `saved_path`, the .spo2 file just saved there.
+
+    Reusing that folder, rather than a dedicated one, sidesteps two real
+    constraints found live against an actual snap Firefox install (not
+    assumed): a strictly-confined snap/flatpak browser gets its own
+    isolated, private /tmp via its mount namespace, so a file written to
+    the host's /tmp (tempfile.mkstemp()'s default) is invisible to it even
+    though opening it reports success ("File not found" every time); and
+    a snap's "home" interface grants the rest of $HOME but typically
+    excludes hidden dot-directories, so e.g. ~/.config/fiedle400/... got
+    "Access to the file was denied" too. The save folder is wherever the
+    user already chose to keep their data -- not a system path, not
+    hidden -- so it was never going to hit either problem; using it
+    instead of inventing a new directory also means one less place for
+    files to accumulate.
+
+    `saved_path` with no directory component (a bare filename, saved
+    relative to the cwd) resolves to the current directory explicitly,
+    not an empty string.
+
+    The filename inside this directory is still a random
+    tempfile.mkstemp() name, not a fixed one -- only the directory
+    changed. Platform note: the file is still *removed* the same way on
+    every platform (a short sleep, then os.remove in a try/except) -- but
+    that removal is not equally reliable everywhere. Linux lets a file be
+    unlinked while another process still has it open (the browser keeps
+    reading via its existing handle); Windows generally does not, unless
+    the browser explicitly opened the file with share-delete access. So on
+    a slow Windows machine where the browser is still loading past the
+    sleep window, cleanup can silently fail (already handled -- the
+    try/except just leaves the file) rather than always succeeding the
+    way it does on Linux. An occasional leftover file sitting right next
+    to the user's own recording is a minor cost, not a bug to chase.
+    """
+    directory = os.path.dirname(os.path.abspath(saved_path))
+    return directory or os.getcwd()
+
+
 def _open_spo2_viewer(records: list, saved_path: str) -> None:
     """Builds the HTML viewer for `records`, opens it, and cleans up the
     generated temp file afterward (T-005) -- the browser is given a moment
     to read the file before it's removed; `saved_path` is the already-saved
     .spo2 file this falls back to pointing at if opening the viewer fails.
+    See _viewer_tmp_dir for why the file goes where it does.
     """
     from fiedle400 import spo2_viewer
     html = spo2_viewer.build_viewer_html(records)
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".html")
+    viewer_dir = _viewer_tmp_dir(saved_path)
+    os.makedirs(viewer_dir, exist_ok=True)
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".html", dir=viewer_dir)
     os.close(tmp_fd)
     try:
         with open(tmp_path, "w", encoding="utf-8") as f:
