@@ -70,6 +70,45 @@ Each record represents 1 second of continuous measurement. Each record is exactl
 2. **OSCAR (Open Source CPAP Analysis Reporter)**:
    - Imports `.SpO2` files via the **Oximetry Import Wizard**.
    - Aligns 1 Hz oximetry data against CPAP flow and pressure data using the header timestamp.
+   - **Verified against OSCAR's actual source** (2026-10-19,
+     `gitlab.com/CPAPreporter/oscar-code`, `oscar/SleepLib/loader_plugins/cms50f37_loader.cpp`,
+     `CMS50F37Loader::readSpoRFile`) rather than taken on description alone. OSCAR's own project
+     explicitly states PO-400 compatibility: "other companies, such as Pulox, simply rebadge
+     Contec CMS50's under new names, such as the Pulox PO-200, PO-300, PO-400. These should also
+     work" (`oximeterimport.cpp`). What its reader actually does, byte for byte:
+     - Reads a `uint16` at `0x0000` and treats it as a **dynamic skip-to offset**, not a validated
+       magic constant -- it never checks the value equals `856`, it just jumps there. This file's
+       own value of `856` (`0x358`) works by construction, but OSCAR imposes no format-ID check
+       of its own, so this field's role as a fixed "magic" is this project's own convention
+       (matched by `SpO2.exe`'s validation at `0x4E2277`), not something OSCAR verifies.
+     - Checks exactly one byte, `data[0x358] == 1`, then blindly skips 200 more bytes
+       (`0x358` to `0x0420`) without reading or validating anything inside -- including the
+       claimed `"BLE\0"` tag at `0x0360`. That tag's presence is unverified by OSCAR; it may
+       still be accurate from other analysis, but OSCAR gives no independent confirmation of it.
+     - Reads year/month/day/hour/minute/second as six consecutive `uint32`s starting at `0x0420`,
+       then the sample count as a `uint32` at `0x0438` -- both **confirmed to match this
+       document's layout exactly**.
+     - Does **not** hardcode 2 bytes per record. It derives `bytes_per_record = remainder /
+       samples` from the actual file size, and explicitly anticipates a 4-byte variant for some
+       devices ("CMS50I .spo2 data have 4 digits, a 16bit, followed by spo2 then pulse"). This
+       file's own writer (`fiedle400/export.py`) always emits exactly 2 bytes/record, so this
+       doesn't affect `fiedle400`'s own output, but it means OSCAR's `.spo2` support is broader
+       than a fixed 2-byte record.
+   - **Two real discrepancies found, affecting how `fiedle400`'s own records are recognized:**
+     - **Sentinel check is an AND, not independent per-field.** OSCAR only treats a record as
+       probe-out when `SpO2 byte == 0x7F` **and** `Pulse byte == 0xFF` simultaneously
+       (`if ((o2 == 0x7f) && (pr == 0xff))`) -- it does not treat either sentinel alone as
+       sufficient. This document's §4 describes each field's sentinel independently. If
+       `fiedle400` ever wrote a record where only one channel decoded as invalid (SpO2 = `0x7F`
+       but Pulse = a real, valid value, or vice versa), OSCAR would import the invalid channel's
+       sentinel as a literal, impossible reading (e.g. a `127%` SpO2 point on the chart) instead
+       of blanking it. `export.py` currently computes `s_byte`/`h_byte` on independent per-channel
+       conditions (lines 94-95), so this mixed state is possible in principle, though not observed
+       in any real capture so far. Not yet fixed -- see the ticket this finding was filed as.
+     - **`0x00` is not a recognized sentinel in OSCAR's reader at all.** It is passed through
+       literally as the value `0`; OSCAR has no special case for it. This document's §4 claiming
+       `0x00` as an alternate sentinel for either field describes `fiedle400`'s/this spec's own
+       convention, not something OSCAR's actual importer checks for.
 
 3. **`fiedle400` CLI & Python Library**:
    - Native export support: `--format spo2` / `-f spo2` (default format).
