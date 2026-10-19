@@ -47,6 +47,17 @@ Manual-mode protocol discovery, PROTOCOL.md §3.15) is the concrete way
 to ground this rather than guessing at what "spo2 assistant docs as
 reference" should mean.
 
+**Added, 2026-10-19 (deferred from T-005):** T-005 settled on a
+one-shot temp-file HTML approach -- generate, open, clean up after the
+browser's had a chance to load it. If this viewer becomes a standing
+feature (used often enough that users want to reopen a past recording
+without re-running the wizard, bookmark it, or similar), that
+mechanism itself should be re-evaluated as part of this ticket, not
+patched piecemeal later: e.g. a persistent viewer directory instead of
+a cleaned-up temp file, or a "recent recordings" list in the template.
+Not a commitment to build any of that -- just where that reconsideration
+belongs when it comes up.
+
 ---
 
 ## Criteria

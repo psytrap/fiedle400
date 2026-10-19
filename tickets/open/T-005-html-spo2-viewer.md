@@ -75,15 +75,16 @@ removal is explicitly blocked on this reaching parity, so this viewer
 does need to actually chart SpO2 + heart-rate, not just dump raw
 bytes).
 
-## Still open for whoever executes this
-
-- Where the template itself lives in the packaged binary (a PyInstaller
-  resource vs. embedded as a Python string constant -- the latter
-  avoids any resource-path resolution complexity across platforms).
-- Exact temp-file lifecycle: left on disk for the user to reopen later,
-  or cleaned up -- leaning toward leaving it (matches "recordings are
-  never touched/removed automatically" elsewhere in this project), but
-  not decided.
+**Decided, 2026-10-19:**
+- **Template storage: a Python string constant, for now.** Avoids any
+  resource-path resolution complexity across platforms. psytrap: may
+  be re-evaluated later (e.g. if the template grows large enough that
+  a separate bundled file becomes worth the packaging complexity).
+- **Temp-file lifecycle: cleaned up after the browser's had a chance
+  to load it**, not left on disk. The deeper design of this (exact
+  cleanup timing/mechanism, and whether the HTML approach stays a
+  one-shot temp file at all once this becomes a standing feature) is
+  deferred to T-007 -- see the note added there, not re-litigated here.
 
 ---
 
