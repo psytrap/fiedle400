@@ -20,7 +20,7 @@ _TEMPLATE = """<!doctype html>
   #legend { margin-bottom: 0.5em; font-size: 0.9em; display: flex; align-items: center; gap: 1.5em; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.4em; }
   #resetZoom { display: none; font-size: 0.85em; color: #2b6cb0; cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; }
-  #chartWrap { position: relative; max-width: 1400px; }
+  #chartWrap { position: relative; }
   canvas { background: #fff; border: 1px solid #ddd; display: block; width: 100%; }
   #tooltip {
     position: absolute; display: none; pointer-events: none;
