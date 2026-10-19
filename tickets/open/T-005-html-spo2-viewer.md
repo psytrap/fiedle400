@@ -33,27 +33,53 @@ for the OS-native opener). This ticket is the same idea, but:
   opening a browser is heavier/more intrusive than opening an image
   viewer, or because the HTML viewer is new/unproven.
 
-Open questions for whoever executes this (not decided here):
-- What does the HTML viewer actually need to do -- parse the binary
-  `.spo2` format client-side (JS reimplementing `SPO2_FORMAT.md`'s
-  byte layout) and render a chart, or is it a thin wrapper that expects
-  pre-converted JSON/CSV?
-- Where does it live -- bundled as a static asset shipped with the
-  binary (consistent with the zero-extra-dependency philosophy for the
-  non-plot commands), opened via the same `_open_in_viewer` mechanism
-  the PNG path already uses (a browser is also "the system's default
-  viewer" for an `.html` file via `xdg-open`/`open`/`os.startfile`)?
-- Does this duplicate or replace `fiedle400 plot` (which already needs
-  matplotlib) -- or is the point specifically to view `.spo2` *without*
-  that dependency?
+## Decided (psytrap, 2026-10-19, discussed before execution)
+
+**Static, not generated-per-export.** One HTML file bundled with the
+tool (consistent with the zero-extra-dependency philosophy for the
+non-plot commands), not a fresh file written out per download. The
+wizard opens this bundled page and points it at the specific `.spo2`
+file just downloaded -- "po400 wizard opens bundled static html +
+dynamic spo2."
+
+**Known technical wrinkle, not yet resolved:** browsers (Chrome
+especially) block a `file://` page from reading *other* local files
+via `fetch`/XHR for security reasons, so passing the `.spo2` path in a
+URL and having the page auto-load it may simply not work across
+browsers. The robust fallback: a plain `<input type="file">` picker in
+the static page itself -- the user grants access via the native file
+dialog, which always works regardless of browser security policy. The
+wizard can still make this painless by printing the exact file path
+right before opening the page, so the user knows exactly what to pick.
+Whoever executes this should try the auto-load-via-path convenience
+first but must not depend on it -- the file-picker path needs to work
+unconditionally.
+
+Parse-client-side-vs-pre-converted-JSON and the `plot`/matplotlib
+relationship are still open (see T-006 -- `plot` removal is explicitly
+blocked on this reaching parity, so this viewer does need to actually
+chart SpO2 + heart-rate, not just dump raw bytes).
+
+## Still open for whoever executes this
+
+- Parse the binary `.spo2` format client-side (JS reimplementing
+  `SPO2_FORMAT.md`'s byte layout), or read a CSV/JSON export instead --
+  client-side binary parsing avoids needing any pre-conversion step at
+  all, which fits "static page, not generated per export" better.
+- Where exactly does the bundled asset live in the packaged binary
+  (PyInstaller resource vs. a file written next to the binary on
+  install) -- opened via the same `_open_in_viewer` mechanism the PNG
+  path already uses (a browser is also "the system's default viewer"
+  for an `.html` file via `xdg-open`/`open`/`os.startfile`).
 
 ---
 
 ## Criteria
 
-- [ ] An HTML file exists that can read and display a `.spo2`
-      recording (exact rendering fidelity vs. `fiedle400 plot`'s PNG
-      not yet specified -- decide on execution).
+- [ ] One static, bundled HTML file (not generated per export) exists
+      that can read and display a `.spo2` recording -- works via a
+      file picker unconditionally, auto-load-via-path as a bonus if
+      the browser allows it, not a requirement.
 - [ ] Wizard's download flow, when the chosen format is `spo2`, asks
       "Open it now? [y/N]" -- **default no**, opposite of the existing
       PNG-open prompt's default yes.
