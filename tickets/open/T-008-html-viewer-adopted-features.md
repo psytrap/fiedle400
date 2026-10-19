@@ -80,6 +80,45 @@ data, live view, PI and colour/language are skipped).
       threshold), re-confirm once the remaining items are added.
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
+**Added, 2026-10-19 (psytrap): T-007's evaluation only read `SpO2.exe`'s
+strings, never the vendor's own PDF manual.** Found and read it
+(`manual.pulseoximeter.org/SPO2_Assistant_Manual.pdf`, "CONTEC SpO2
+Assistant User Manual", 2010-05-27, 26 pages) -- not previously checked.
+Two concrete corrections to T-007's reasoning, not just new trivia:
+
+- **Item 5 (desaturation events/index), marked Defer because "the vendor's
+  detection algorithm ... is not in the strings and is a hypothesis if we
+  guess it": that blocker is false.** The manual (§5.4.4.2, §5.4.7.3)
+  gives the full algorithm and default parameters precisely: an event is
+  a SpO2 drop of >= 4% (configurable, "Percent Drop For Event") lasting
+  >= 10s ("Minimum Event Duration"); `Index(1/hr)` = event count per hour;
+  `Adjusted Index(1/hr)` = event count per hour of *effective* time
+  (excluding `Artifact(%)`, the excluded/zero-value fraction);
+  `Avg Low SpO2(%)` = average of each event's minimum SpO2. A parallel
+  pulse-rate event uses >= 6 bpm change ("Rate Change For Event") for
+  >= 8s. This is no longer "a hypothesis if we guess it" -- it's
+  published. Doesn't by itself flip the verdict to Adopt (item 5's other
+  stated reason -- "a diagnostic-looking number from a hobby tool" --
+  still stands on its own and wasn't addressed by finding the manual),
+  but the specific blocker cited is gone; worth revisiting with that in
+  mind rather than citing "unknown algorithm" again.
+- **Item 6 ("Basal SpO2"), marked Defer because "meaning not stated
+  anywhere we can see": also resolved.** The manual defines it plainly:
+  "the average value of SpO2 total" -- i.e. just the mean SpO2 across the
+  whole recording, already equivalent to what v0.4.13 already shows as
+  "SpO2 avg". No separate feature needed; the label was the only unknown,
+  and it's just a synonym for what's shipped.
+
+**New candidate feature T-007's table has no row for at all: manual
+"Exclude data"** (§5.4.2). Drag-select a region directly on the trend
+chart to mark it excluded from all analysis/statistics (shown hatched;
+`Undo Current` / `Undo All` to reverse) -- a user correcting for a visible
+artifact (movement, a brief re-seat of the probe) they noticed, not
+automatic detection, and distinct from item 9's deferred "shade
+finger-out automatically". Not evaluated, not adopted here -- flagging
+for whoever next touches the viewer or T-007-style evaluations to
+explicitly adopt/defer/skip with a reason, same as every other candidate.
+
 ---
 
 ## Execution Notes
