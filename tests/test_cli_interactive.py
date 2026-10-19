@@ -141,7 +141,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.csv")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1-2", "", "", "y", "n"])
+    @patch("builtins.input", side_effect=["1-2", "", "", "n", "y", "n"])
     def test_wizard_download_and_erase(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -256,6 +256,48 @@ class TestCliInteractive(unittest.TestCase):
             run_interactive_wizard(MagicMock(device=None, verbose=0))
         self.assertIn("https://github.com/psytrap/fiedle400", out.getvalue())
 
+    def _run_spo2_viewer_wizard(self, viewer_answer, opener_result=True):
+        """Runs the wizard's spo2 path with a stubbed viewer opener; returns (printed output, opener mock)."""
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        answers = iter(["1", "", "", viewer_answer, "n", "n"])
+        prompts = []
+
+        def fake_input(prompt=""):
+            prompts.append(prompt)
+            return next(answers)
+
+        buf = io.StringIO()
+        with patch("fiedle400.cli.PulsoxHidDevice"), \
+                patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=mock_engine), \
+                patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2"), \
+                patch("fiedle400.cli.time.sleep"), \
+                patch("fiedle400.cli._open_in_viewer", return_value=opener_result) as opener, \
+                patch("builtins.input", side_effect=fake_input), redirect_stdout(buf):
+            ret = run_interactive_wizard(MagicMock(device=None, verbose=0))
+        self.assertEqual(ret, 0)
+        return buf.getvalue() + "".join(prompts), opener
+
+    def test_wizard_does_not_open_the_spo2_viewer_by_default(self):
+        # Pressing Enter at "Open it in the HTML viewer now? [y/N]" declines (default no).
+        out, opener = self._run_spo2_viewer_wizard("")
+        self.assertIn("Open it in the HTML viewer now?", out)
+        opener.assert_not_called()
+
+    def test_wizard_opens_the_spo2_viewer_when_accepted(self):
+        out, opener = self._run_spo2_viewer_wizard("y")
+        opener.assert_called_once()
+        opened_path = opener.call_args[0][0]
+        self.assertTrue(opened_path.endswith(".html"))
+        self.assertFalse(os.path.exists(opened_path))  # cleaned up after opening
+
+    def test_wizard_names_the_saved_file_when_no_viewer_can_be_opened(self):
+        out, opener = self._run_spo2_viewer_wizard("y", opener_result=False)
+        opener.assert_called_once()
+        self.assertIn("Could not open a viewer; the data is still at: /tmp/test.spo2", out)
+
     @patch("fiedle400.cli.shutil.copy")
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
@@ -335,7 +377,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["", "", "", "", "n", "n"])
+    @patch("builtins.input", side_effect=["", "", "", "", "n", "n", "n"])
     def test_wizard_default_enter_downloads_all(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -451,7 +493,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("os.path.exists", side_effect=[True, False, False, False])
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1", "", "", "y", "n", "n"])
+    @patch("builtins.input", side_effect=["1", "", "", "y", "n", "n", "n"])
     def test_wizard_overwrite_confirmed(self, mock_input, mock_engine_cls, mock_dev_cls, mock_exists, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"
@@ -501,7 +543,7 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test_1.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1", "", "", "n", "", "n", "n"])
+    @patch("builtins.input", side_effect=["1", "", "", "n", "", "n", "n", "n"])
     def test_wizard_overwrite_accepts_suggested_suffix(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
         mock_dev = MagicMock()
         mock_dev.connect.return_value = "/dev/hidraw_test"

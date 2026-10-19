@@ -1,0 +1,64 @@
+"""The self-contained HTML .spo2 viewer (T-005): one bundled template, the
+specific recording's records injected as inline JSON at build time."""
+
+import json
+import os
+import sys
+import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from fiedle400 import spo2_viewer  # noqa: E402
+
+
+class TestBuildViewerHtml(unittest.TestCase):
+    def test_injects_records_as_parseable_json(self):
+        records = [
+            {"timestamp": "2026-10-19T10:00:00", "spo2": 98, "heart_rate": 65, "flags": "ok"},
+            {"timestamp": "2026-10-19T10:00:01", "spo2": None, "heart_rate": None, "flags": "probe-out"},
+        ]
+        html = spo2_viewer.build_viewer_html(records)
+        self.assertIn('id="spo2-data"', html)
+
+        start = html.index('<script id="spo2-data" type="application/json">') + len(
+            '<script id="spo2-data" type="application/json">'
+        )
+        end = html.index("</script>", start)
+        payload = json.loads(html[start:end])
+
+        self.assertEqual(len(payload), 2)
+        self.assertEqual(payload[0]["spo2"], 98)
+        self.assertEqual(payload[0]["heart_rate"], 65)
+        self.assertIsNone(payload[1]["spo2"])
+
+    def test_drops_fields_the_template_does_not_use(self):
+        records = [{"timestamp": "t", "spo2": 1, "heart_rate": 2, "flags": "ok", "session_id": 99, "block_id": 3}]
+        html = spo2_viewer.build_viewer_html(records)
+        self.assertNotIn("session_id", html)
+        self.assertNotIn("block_id", html)
+
+    def test_escapes_less_than_so_script_tag_cannot_be_closed_early(self):
+        # No real field contains "</script>", but the escaping must hold even if one did.
+        # Escaping just the leading "<" is sufficient: the browser's HTML parser only
+        # recognizes a closing tag starting with a literal "<", so "\u003c/script>" is inert.
+        records = [{"timestamp": "</script><script>evil()</script>", "spo2": 1, "heart_rate": 1, "flags": "ok"}]
+        html = spo2_viewer.build_viewer_html(records)
+        start = html.index('<script id="spo2-data" type="application/json">') + len(
+            '<script id="spo2-data" type="application/json">'
+        )
+        end = html.index("</script>", start)
+        data_blob = html[start:end]
+        self.assertNotIn("</script", data_blob.lower())
+        self.assertIn("\\u003c/script>\\u003cscript>evil()\\u003c/script>", data_blob)
+
+    def test_empty_recording_still_produces_valid_html(self):
+        html = spo2_viewer.build_viewer_html([])
+        self.assertIn("<html>", html)
+        start = html.index('<script id="spo2-data" type="application/json">') + len(
+            '<script id="spo2-data" type="application/json">'
+        )
+        end = html.index("</script>", start)
+        self.assertEqual(json.loads(html[start:end]), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

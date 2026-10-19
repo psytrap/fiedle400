@@ -114,6 +114,30 @@ def _open_in_viewer(path: str) -> bool:
         return False
 
 
+def _open_spo2_viewer(records: list, saved_path: str) -> None:
+    """Builds the HTML viewer for `records`, opens it, and cleans up the
+    generated temp file afterward (T-005) -- the browser is given a moment
+    to read the file before it's removed; `saved_path` is the already-saved
+    .spo2 file this falls back to pointing at if opening the viewer fails.
+    """
+    from fiedle400 import spo2_viewer
+    html = spo2_viewer.build_viewer_html(records)
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".html")
+    os.close(tmp_fd)
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(html)
+        if _open_in_viewer(tmp_path):
+            time.sleep(2)  # let the browser read the file before it's removed
+        else:
+            print(f"   Could not open a viewer; the data is still at: {saved_path}")
+    finally:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+
+
 def clean_input(prompt: str = "") -> str:
     """Wrapper around built-in input() that strips ANSI escape sequences and non-printable control chars."""
     raw = input(prompt)
@@ -917,6 +941,9 @@ def run_interactive_wizard(args) -> int:
             else:
                 saved_path = _export_records_to_file(all_records, out_fn, save_fmt)
                 print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
+                if save_fmt == "spo2":
+                    if clean_input("Open it in the HTML viewer now? [y/N]: ").lower() in ("y", "yes"):
+                        _open_spo2_viewer(all_records, saved_path)
 
             # Offer flash erase with default = YES
             erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()

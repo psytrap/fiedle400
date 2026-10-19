@@ -1,6 +1,6 @@
 # T-005: HTML viewer for `.spo2` files, offered from the wizard
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud (no hardware involved; pure software/UI work)
 - **Scope & Relevant Files:**
@@ -90,18 +90,71 @@ bytes).
 
 ## Criteria
 
-- [ ] One static HTML template (bundled, maintained once) exists; a
+- [x] One static HTML template (bundled, maintained once) exists; a
       per-open step injects the specific recording's decoded data into
       a copy of it, with no client-side `fetch`/XHR of another file.
-- [ ] Wizard's download flow, when the chosen format is `spo2`, asks
+- [x] Wizard's download flow, when the chosen format is `spo2`, asks
       "Open it now? [y/N]" -- **default no**, opposite of the existing
       PNG-open prompt's default yes.
-- [ ] Reuses `_open_in_viewer` (or equivalent) rather than a new
+- [x] Reuses `_open_in_viewer` (or equivalent) rather than a new
       OS-dispatch mechanism.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**`fiedle400/spo2_viewer.py`** (new): `_TEMPLATE` is the bundled static
+asset -- a Python string constant per the "constant for now" decision,
+not a PyInstaller resource. It's a self-contained HTML page: inline
+CSS, a vanilla-JS `<canvas>` dual-axis line chart (SpO2 % fixed 0-100
+on the left, heart rate auto-scaled with a margin on the right), no
+CDN, no external script tags. `build_viewer_html(records)` keeps only
+the four fields the template uses (`timestamp`, `spo2`, `heart_rate`,
+`flags` -- dropping anything else a caller's dict might carry, e.g.
+`session_id`), serializes to JSON, escapes `<` as `<` so no field
+could ever prematurely close the `<script>` tag it's embedded in
+(defensive -- no real field does this today), and substitutes it into
+the template's `%%DATA%%` placeholder.
+
+**`fiedle400/cli.py`**: `_open_spo2_viewer(records, saved_path)` writes
+the built HTML to a `tempfile.mkstemp(suffix=".html")` file, opens it
+via the existing `_open_in_viewer` (same OS-native opener the PNG path
+already uses), sleeps 2s to give the browser a moment to read the file,
+then removes it -- the "cleaned up after the browser's had a chance to
+load it" decision. If `_open_in_viewer` fails, the temp file is still
+removed but `saved_path` (the real, already-saved `.spo2` file) is
+printed instead, so nothing is ever lost. Wired into the wizard's
+non-png save branch: `if save_fmt == "spo2": ...` prompts "Open it in
+the HTML viewer now? [y/N]" (default no, per psytrap's explicit
+request -- the opposite of the PNG path's default yes).
+
+**Visually verified**, not just unit-tested: generated real HTML from
+`build_viewer_html` with a 120-record synthetic recording including a
+10-record probe-out gap, served it over a local HTTP server (direct
+`file://` opens in this environment's browser tool render as inert
+static snapshots, so a real server was needed to execute the chart's
+JS), and screenshotted it. Confirmed: both SpO2 and heart-rate lines
+draw correctly, the probe-out gap correctly breaks both lines rather
+than interpolating across it, and the legend/title/record-count-and-
+timespan header all render as intended. Fixed one real bug found this
+way: the heart-rate axis's three labels (low/mid/high) could render on
+top of each other when the data's range was narrow -- added a 14px
+minimum-separation check that skips a label too close to the previous
+one, then re-verified.
+
+**Tests:** `tests/test_spo2_viewer.py` (4 tests, pure-function:
+JSON injection, field filtering, the `<` escaping, empty-recording
+handling) and 3 new tests in `tests/test_cli_interactive.py` (prompt
+declined by default, accepted opens and cleans up the temp file,
+opener-failure fallback names the real saved path). Four pre-existing
+wizard tests needed an extra input in their `side_effect` sequences
+since the new prompt now sits between the filename and erase steps for
+any spo2-format download -- not logic changes, just accounting for the
+new step. 280 tests total, OK (skipped=7).
+
+**Not done, deferred per the ticket's own scope:** `T-006` (removing
+`fiedle400 plot`) stays blocked until this reaches feature parity with
+the matplotlib PNG -- it doesn't yet (no zoom/pan, no session
+statistics); `T-007` holds the evaluation of what else to add, now
+that there's a real viewer to evaluate against.
