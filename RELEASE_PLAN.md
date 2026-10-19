@@ -412,6 +412,24 @@ release notes.
   Gatekeeper regression would be caught. Not yet done; this is macOS's
   *only* gate (RELEASE_PLAN.md D2, no hardware to test by hand), so it's
   worth closing this gap specifically.
+- **TODO (psytrap, 2026-10-17): clear the GitHub Actions warnings.** The run
+  for `v0.3.9` (`bc383af`) finished green with 8 warnings and 5 notices:
+  - **Node.js 20 deprecation (the 8 warnings).** GitHub forces these actions
+    onto Node 24 until they are updated: `actions/checkout@v4`,
+    `actions/setup-python@v5`, `actions/upload-artifact@v4`,
+    `actions/download-artifact@v4` and `softprops/action-gh-release@v2`. They
+    are used in `.github/workflows/build-release.yml` and `tests.yml`. Bump
+    each to the newest release that targets Node 24 (check each action's
+    releases page; none of the new versions has been looked at yet), then
+    confirm the next run shows no Node warning. Not yet done.
+  - **`ubuntu-latest` moves to Ubuntu 26 on 2026-10-19** (notice, see
+    actions/runner-images#14748). Decide whether to pin `ubuntu-24.04` in
+    `tests.yml` and the Linux build/release jobs, or to test on 26 as well.
+    A binary built on a newer Ubuntu may need a newer glibc than older
+    distributions have (inferred, not checked here), which is a reason to
+    decide this on purpose instead of drifting.
+  - **macOS arm64 queue times** (notice): GitHub warns of long waits on
+    macOS arm64 runners. Informational, nothing to change.
 
 ---
 
