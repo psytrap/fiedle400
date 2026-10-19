@@ -76,8 +76,10 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 - **raw sample**: one 2 Hz device value. **record**: one exported second (two raw averaged).
 - **offset / page**: start position, in raw samples, of a `9D 04` read.
 - **T1..T8**: findings; current status in RELEASE_PLAN §3d, full history in CHANGELOG.md. **G1..G8**: release gates (RELEASE_PLAN §2).
-- **handoff/**: briefs from the local side to the cloud. The cloud answers each with
-  `handoff/<topic>-response.md` inside the patch it delivers.
+- **handoff/**: frozen archive of pre-ticket cloud briefs; still cited by filename
+  elsewhere in these docs, but superseded by `tickets/` for new work.
+- **tickets/**: numbered work items (`T-NNN-slug.md`) replacing `handoff/`; see
+  `tickets/README.md`.
 
 # Workspace Rules
 
@@ -116,13 +118,17 @@ recommends a fix — it just does not implement it.
 
 ## Rule: Delegation Path
 
-Delegate investigations to the cloud by writing a brief to `handoff/`, then
-telling the cloud it is there. Do not spawn local subagents for this.
+Delegate investigations to the cloud by opening a ticket in `tickets/open/`
+(`Owner: Cloud`, see `tickets/README.md`), then telling the cloud it is
+there. Do not spawn local subagents for this. This replaced the old
+`handoff/` convention (see `tickets/done/T-001-adopt-ticket-strategy.md`);
+`handoff/` itself is frozen, not deleted, and still cited by filename
+elsewhere in these docs.
 
-`handoff/` is tracked in git on purpose. Do NOT use `output/` for anything the
+`tickets/` is tracked in git on purpose. Do NOT use `output/` for anything the
 cloud must read — it is gitignored and therefore invisible to a git-based sync.
 
-A brief must carry what the cloud cannot observe for itself:
+A ticket's `Description & Context` must carry what the cloud cannot observe for itself:
 
 - the symptom, with the exact command and the observed numbers;
 - hardware facts and any measurements taken locally;

@@ -1,0 +1,88 @@
+# Ticket Protocol
+
+Replaces the old `handoff/` convention (loose `<topic>.md` +
+`<topic>-response.md` pairs, no status, no numbering). See
+[T-001](done/T-001-adopt-ticket-strategy.md) for why, and what was
+deliberately *not* carried over from the source this was adapted from
+(`github.com/psytrap/refdiff`'s `tickets/`).
+
+## Directory layout
+
+```
+tickets/
+├── README.md    # this file
+├── INDEX.md     # live list of open tickets
+├── DONE.md      # archive register of completed tickets
+├── open/        # active tickets: T-NNN-slug.md
+└── done/        # completed tickets, moved here via `git mv`
+```
+
+A ticket stays at the same filename for its whole life except for the
+`open/` -> `done/` move, so links into it never break.
+
+## When to open a ticket
+
+Not every request needs one. Quick lookups, direct instructions ("fix X",
+"apply patch N", "bump the version"), and anything small enough to finish
+in the same turn just get done — this project runs on direct instruction,
+not a queue. Open a ticket when a request is a **discrete, nameable unit
+of work that outlives the current conversation**: a cloud investigation
+or fix delivered as a patch, a multi-step hardware finding still being
+chased, or a decision (like this one) worth a permanent record. In other
+words: a ticket is for *tracking* a piece of work, not *gating* it — if
+you're told to do something, do it; open the ticket alongside the work
+(or right after), not as a prerequisite to starting.
+
+## Lifecycle
+
+1. Create `tickets/open/T-NNN-<slug>.md` from the template below.
+2. Do the work (local hardware, or write the brief and hand it to the
+   cloud per the `Owner` field).
+3. Append an `## Execution Notes` section: what was actually done, test
+   results, what was deliberately left out and why.
+4. Check off every `Criteria` item that's actually met.
+5. `git mv tickets/open/T-NNN-<slug>.md tickets/done/T-NNN-<slug>.md`,
+   set `Status: Done`, update `INDEX.md` (remove it) and `DONE.md` (add
+   it).
+6. Commit and push as usual (this project pushes after every applied
+   change — no separate manual-release gate on top of that).
+
+## Ticket template
+
+```markdown
+# T-NNN: <Descriptive Title>
+
+- **Status:** Open | In Progress | Done
+- **Priority:** P0 | High | Normal | Low
+- **Owner:** Local | Cloud | Either
+- **Scope & Relevant Files:**
+  - `path/to/file.py`
+
+---
+
+## Description & Context
+
+<Why this ticket exists. For a cloud handoff: the symptom with the exact
+command and observed numbers, hardware facts and measurements taken
+locally, current repo state (including applied-but-uncommitted patches),
+an explicit statement of what is NOT yet known, and any safety
+constraints (never erase device flash -- stored sessions are real data).>
+
+---
+
+## Criteria
+
+- [ ] Criterion 1
+- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+
+---
+
+## Execution Notes
+
+<!-- Filled in on completion -->
+```
+
+## Numbering
+
+Zero-padded 3-digit (`T-001`, `T-002`, ...), monotonically increasing,
+never reused. Filename: `T-NNN-kebab-case-slug.md`.
