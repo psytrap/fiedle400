@@ -42,44 +42,56 @@ wizard opens this bundled page and points it at the specific `.spo2`
 file just downloaded -- "po400 wizard opens bundled static html +
 dynamic spo2."
 
-**Known technical wrinkle, not yet resolved:** browsers (Chrome
-especially) block a `file://` page from reading *other* local files
-via `fetch`/XHR for security reasons, so passing the `.spo2` path in a
-URL and having the page auto-load it may simply not work across
-browsers. The robust fallback: a plain `<input type="file">` picker in
-the static page itself -- the user grants access via the native file
-dialog, which always works regardless of browser security policy. The
-wizard can still make this painless by printing the exact file path
-right before opening the page, so the user knows exactly what to pick.
-Whoever executes this should try the auto-load-via-path convenience
-first but must not depend on it -- the file-picker path needs to work
-unconditionally.
+**Resolved, 2026-10-19: inject the data at open-time, don't fetch it.**
+Browsers (Chrome especially) block a `file://` page from reading
+*other* local files via `fetch`/XHR for security reasons, so passing
+the `.spo2` path in a URL and having the page load it itself would not
+work reliably. psytrap asked whether the data could instead be
+**injected during the open process** -- yes, and it's the better
+mechanism, not just a workaround:
 
-Parse-client-side-vs-pre-converted-JSON and the `plot`/matplotlib
-relationship are still open (see T-006 -- `plot` removal is explicitly
-blocked on this reaching parity, so this viewer does need to actually
-chart SpO2 + heart-rate, not just dump raw bytes).
+- One **template** is the bundled static asset -- the chart/CSS/JS,
+  maintained once, containing a placeholder
+  (`<script id="spo2-data" type="application/json">{{DATA}}</script>`).
+- At open time, `fiedle400` reads the template, substitutes the
+  specific recording's decoded records in as inline JSON, writes the
+  result to a temp file (`tempfile.NamedTemporaryFile(suffix=".html")`),
+  and opens *that* via `_open_in_viewer`.
+- The browser never fetches anything -- the data is already embedded
+  in the page before it's opened, so the `file://` restriction never
+  applies. Works unconditionally, in every browser. No file-picker
+  fallback needed at all; drop that from scope.
+
+So "static" = the template (one file, one place to maintain the chart
+code); "dynamic" = the per-open injection step, which is what makes
+each opened page show the right recording. `fiedle400`'s own Python
+side does the data decoding (reusing the existing `.spo2`/engine
+decode path, not a client-side binary-format reimplementation in JS)
+and hands the template already-decoded JSON -- simpler than parsing
+the binary format twice (once in Python, once in JS) for no benefit.
+
+The `plot`/matplotlib relationship is still open (see T-006 -- `plot`
+removal is explicitly blocked on this reaching parity, so this viewer
+does need to actually chart SpO2 + heart-rate, not just dump raw
+bytes).
 
 ## Still open for whoever executes this
 
-- Parse the binary `.spo2` format client-side (JS reimplementing
-  `SPO2_FORMAT.md`'s byte layout), or read a CSV/JSON export instead --
-  client-side binary parsing avoids needing any pre-conversion step at
-  all, which fits "static page, not generated per export" better.
-- Where exactly does the bundled asset live in the packaged binary
-  (PyInstaller resource vs. a file written next to the binary on
-  install) -- opened via the same `_open_in_viewer` mechanism the PNG
-  path already uses (a browser is also "the system's default viewer"
-  for an `.html` file via `xdg-open`/`open`/`os.startfile`).
+- Where the template itself lives in the packaged binary (a PyInstaller
+  resource vs. embedded as a Python string constant -- the latter
+  avoids any resource-path resolution complexity across platforms).
+- Exact temp-file lifecycle: left on disk for the user to reopen later,
+  or cleaned up -- leaning toward leaving it (matches "recordings are
+  never touched/removed automatically" elsewhere in this project), but
+  not decided.
 
 ---
 
 ## Criteria
 
-- [ ] One static, bundled HTML file (not generated per export) exists
-      that can read and display a `.spo2` recording -- works via a
-      file picker unconditionally, auto-load-via-path as a bonus if
-      the browser allows it, not a requirement.
+- [ ] One static HTML template (bundled, maintained once) exists; a
+      per-open step injects the specific recording's decoded data into
+      a copy of it, with no client-side `fetch`/XHR of another file.
 - [ ] Wizard's download flow, when the chosen format is `spo2`, asks
       "Open it now? [y/N]" -- **default no**, opposite of the existing
       PNG-open prompt's default yes.
