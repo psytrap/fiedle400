@@ -17,20 +17,34 @@ _TEMPLATE = """<!doctype html>
   body { font-family: system-ui, sans-serif; margin: 2em; background: #fafafa; color: #222; }
   h1 { font-size: 1.1em; margin-bottom: 0.2em; }
   #meta { color: #666; font-size: 0.9em; margin-bottom: 1em; }
-  #legend { margin-bottom: 0.5em; font-size: 0.9em; }
-  #legend span { margin-right: 1.5em; }
+  #legend { margin-bottom: 0.5em; font-size: 0.9em; display: flex; align-items: center; gap: 1.5em; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.4em; }
-  canvas { background: #fff; border: 1px solid #ddd; }
+  #resetZoom { display: none; font-size: 0.85em; color: #2b6cb0; cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; }
+  #chartWrap { position: relative; max-width: 1400px; }
+  canvas { background: #fff; border: 1px solid #ddd; display: block; width: 100%; }
+  #tooltip {
+    position: absolute; display: none; pointer-events: none;
+    background: #222; color: #fff; font-size: 0.8em; padding: 6px 8px;
+    border-radius: 4px; white-space: nowrap; z-index: 2;
+  }
+  #stats { margin-top: 1em; border-collapse: collapse; font-size: 0.9em; }
+  #stats th, #stats td { text-align: left; padding: 3px 1.2em 3px 0; }
+  #stats th { color: #666; font-weight: normal; }
 </style>
 </head>
 <body>
 <h1>fiedle400 recording</h1>
 <div id="meta"></div>
 <div id="legend">
-  <span><span class="dot" style="background:#2b6cb0"></span>SpO2 (%)</span>
-  <span><span class="dot" style="background:#c05621"></span>Heart rate (bpm)</span>
+  <span><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, fixed 50-100)</span>
+  <span><span class="dot" style="background:#c05621"></span>Heart rate (bpm, fixed 30-220)</span>
+  <button id="resetZoom">Reset zoom</button>
 </div>
-<canvas id="c" width="1100" height="420"></canvas>
+<div id="chartWrap">
+  <canvas id="c" height="420"></canvas>
+  <div id="tooltip"></div>
+</div>
+<table id="stats"></table>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script>
 (function () {
@@ -43,71 +57,215 @@ _TEMPLATE = """<!doctype html>
   }
   meta.textContent = n + ' record(s), ' + records[0].timestamp + ' to ' + records[n - 1].timestamp;
 
+  // Fixed ranges so different recordings are visually comparable, not
+  // auto-scaled per file. SpO2 50-100% (below 50 is clamped, not expected
+  // in practice); heart rate 30-220 bpm, a generic pulse-oximeter display
+  // range covering rest through heavy exertion.
+  var SPO2_LO = 50, SPO2_HI = 100;
+  var HR_LO = 30, HR_HI = 220;
+  var DESAT_THRESHOLD = 90; // common clinical desaturation threshold, for the stats line below
+
   var canvas = document.getElementById('c');
   var ctx = canvas.getContext('2d');
-  var W = canvas.width, H = canvas.height;
-  var padL = 50, padR = 50, padT = 20, padB = 30;
-  var plotW = W - padL - padR, plotH = H - padT - padB;
+  var tooltip = document.getElementById('tooltip');
+  var resetBtn = document.getElementById('resetZoom');
+  var padL = 50, padR = 55, padT = 20, padB = 34;
 
-  function x(i) { return padL + (n <= 1 ? 0 : (i / (n - 1)) * plotW); }
-  // SpO2 fixed 0-100%; heart rate auto-scaled with a small margin.
-  var hrVals = records.map(function (r) { return r.heart_rate; }).filter(function (v) { return v !== null && v !== undefined; });
-  var hrMin = hrVals.length ? Math.min.apply(null, hrVals) : 0;
-  var hrMax = hrVals.length ? Math.max.apply(null, hrVals) : 200;
-  var hrLo = Math.max(0, hrMin - 10), hrHi = hrMax + 10;
+  // Zoom window: [viewStart, viewEnd] indices into `records`, inclusive.
+  // Horizontal-only responsiveness: canvas width follows the container;
+  // height is fixed (set via the height="420" attribute), never stretched.
+  var viewStart = 0, viewEnd = n - 1;
+  var layout = null; // recomputed by render(): {W, plotW, plotH, padL, padT, dpr, viewStart, viewEnd}
 
-  function ySpo2(v) { return padT + (1 - v / 100) * plotH; }
-  function yHr(v) { return padT + (1 - (v - hrLo) / (hrHi - hrLo)) * plotH; }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-  // Axes
-  ctx.strokeStyle = '#ccc';
-  ctx.beginPath();
-  ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH);
-  ctx.stroke();
-
-  // SpO2 axis labels (left, fixed 0/50/100)
-  ctx.fillStyle = '#2b6cb0';
-  ctx.font = '11px sans-serif';
-  [0, 50, 100].forEach(function (v) {
-    var yy = ySpo2(v);
-    ctx.fillText(v + '%', 4, yy + 4);
-  });
-
-  // Heart-rate axis labels (right) -- skip a label that would overlap the
-  // previous one when the data range is narrow enough to crowd all three.
-  ctx.fillStyle = '#c05621';
-  var lastLabelY = null;
-  [hrLo, (hrLo + hrHi) / 2, hrHi].forEach(function (v) {
-    var yy = yHr(v);
-    if (lastLabelY !== null && Math.abs(yy - lastLabelY) < 14) return;
-    ctx.fillText(Math.round(v) + '', W - padR + 6, yy + 4);
-    lastLabelY = yy;
-  });
-
-  function drawSeries(key, color, yFn) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    var drawing = false;
-    for (var i = 0; i < n; i++) {
-      var v = records[i][key];
-      if (v === null || v === undefined) {
-        drawing = false;
-        continue;
-      }
-      var px = x(i), py = yFn(v);
-      if (!drawing) {
-        ctx.moveTo(px, py);
-        drawing = true;
-      } else {
-        ctx.lineTo(px, py);
-      }
-    }
-    ctx.stroke();
+  function fmtTime(ts) {
+    var i = String(ts).indexOf('T');
+    return i === -1 ? String(ts) : String(ts).slice(i + 1);
   }
 
-  drawSeries('spo2', '#2b6cb0', ySpo2);
-  drawSeries('heart_rate', '#c05621', yHr);
+  var CSS_HEIGHT = canvas.height; // fixed CSS height, read once; never changed by resize
+                                   // (horizontal-only stretch) -- must not be re-read from
+                                   // canvas.height after the first render, since that attribute
+                                   // gets overwritten with the DPR-scaled pixel buffer size below.
+  function render() {
+    var cssWidth = canvas.parentElement.clientWidth;
+    var cssHeight = CSS_HEIGHT;
+    var dpr = window.devicePixelRatio || 1;
+    // Both the pixel buffer (canvas.width/height) and the CSS display size
+    // must be set for a sharp, correctly-clipped render at any DPR -- scaling
+    // only the width here previously left the buffer too short vertically,
+    // silently clipping anything below CSS y ~= cssHeight / dpr (the x-axis
+    // time labels included).
+    canvas.width = cssWidth * dpr;
+    canvas.height = cssHeight * dpr;
+    canvas.style.width = cssWidth + 'px';
+    canvas.style.height = cssHeight + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    var plotW = cssWidth - padL - padR, plotH = cssHeight - padT - padB;
+    var vs = viewStart, ve = viewEnd, count = ve - vs + 1;
+
+    function x(i) { return padL + (count <= 1 ? 0 : ((i - vs) / (count - 1)) * plotW); }
+    function ySpo2(v) { return padT + (1 - (clamp(v, SPO2_LO, SPO2_HI) - SPO2_LO) / (SPO2_HI - SPO2_LO)) * plotH; }
+    function yHr(v) { return padT + (1 - (clamp(v, HR_LO, HR_HI) - HR_LO) / (HR_HI - HR_LO)) * plotH; }
+
+    layout = { cssWidth: cssWidth, plotW: plotW, plotH: plotH, padL: padL, padT: padT, padB: padB, x: x, vs: vs, ve: ve, count: count };
+
+    // Axes
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    // Horizontal gridlines + SpO2 labels (left)
+    ctx.font = '11px sans-serif';
+    ctx.strokeStyle = '#eee';
+    ctx.fillStyle = '#2b6cb0';
+    for (var sv = SPO2_LO; sv <= SPO2_HI; sv += 10) {
+      var syy = ySpo2(sv);
+      ctx.beginPath(); ctx.moveTo(padL, syy); ctx.lineTo(padL + plotW, syy); ctx.stroke();
+      ctx.fillText(sv + '%', 4, syy + 4);
+    }
+
+    // Heart-rate labels (right), skipping any that would overlap
+    ctx.fillStyle = '#c05621';
+    var lastLabelY = null;
+    for (var hv = HR_LO; hv <= HR_HI; hv += 40) {
+      var hyy = yHr(hv);
+      if (lastLabelY !== null && Math.abs(hyy - lastLabelY) < 14) continue;
+      ctx.fillText(Math.round(hv) + '', padL + plotW + 6, hyy + 4);
+      lastLabelY = hyy;
+    }
+
+    // X-axis time ticks: ~6 evenly spaced across the visible range
+    var tickCount = Math.min(6, count);
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    for (var t = 0; t < tickCount; t++) {
+      var idx = vs + Math.round((t / Math.max(1, tickCount - 1)) * (count - 1));
+      var tx = x(idx);
+      ctx.strokeStyle = '#f2f2f2';
+      ctx.beginPath(); ctx.moveTo(tx, padT); ctx.lineTo(tx, padT + plotH); ctx.stroke();
+      ctx.fillText(fmtTime(records[idx].timestamp), tx, padT + plotH + 16);
+    }
+    ctx.textAlign = 'left';
+
+    function drawSeries(key, color, yFn) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      var drawing = false;
+      for (var i = vs; i <= ve; i++) {
+        var v = records[i][key];
+        if (v === null || v === undefined) { drawing = false; continue; }
+        var px = x(i), py = yFn(v);
+        if (!drawing) { ctx.moveTo(px, py); drawing = true; } else { ctx.lineTo(px, py); }
+      }
+      ctx.stroke();
+    }
+
+    drawSeries('spo2', '#2b6cb0', ySpo2);
+    drawSeries('heart_rate', '#c05621', yHr);
+
+    resetBtn.style.display = (vs === 0 && ve === n - 1) ? 'none' : 'inline';
+  }
+
+  function nearestIndex(mouseX) {
+    if (!layout) return null;
+    var frac = clamp((mouseX - layout.padL) / layout.plotW, 0, 1);
+    return clamp(layout.vs + Math.round(frac * (layout.count - 1)), layout.vs, layout.ve);
+  }
+
+  // Hover tooltip: shows the exact reading at the nearest point.
+  canvas.addEventListener('mousemove', function (ev) {
+    if (dragStartX !== null) { handleDrag(ev); return; }
+    var rect = canvas.getBoundingClientRect();
+    var mx = ev.clientX - rect.left;
+    var idx = nearestIndex(mx);
+    if (idx === null) return;
+    var r = records[idx];
+    tooltip.style.display = 'block';
+    tooltip.style.left = (mx + 12) + 'px';
+    tooltip.style.top = (ev.clientY - rect.top - 10) + 'px';
+    tooltip.innerHTML = fmtTime(r.timestamp) + '<br>SpO2: ' + (r.spo2 === null ? '--' : r.spo2 + '%') +
+      '<br>HR: ' + (r.heart_rate === null ? '--' : r.heart_rate + ' bpm');
+  });
+  canvas.addEventListener('mouseleave', function () { tooltip.style.display = 'none'; });
+
+  // Click-drag to zoom into a horizontal range; reset link restores the full view.
+  var dragStartX = null, dragStartIdx = null;
+  var selectionDiv = document.createElement('div');
+  selectionDiv.style.cssText = 'position:absolute;top:0;bottom:0;background:rgba(43,108,176,0.12);border-left:1px solid #2b6cb0;border-right:1px solid #2b6cb0;display:none;pointer-events:none;';
+  document.getElementById('chartWrap').appendChild(selectionDiv);
+
+  canvas.addEventListener('mousedown', function (ev) {
+    var rect = canvas.getBoundingClientRect();
+    dragStartX = ev.clientX - rect.left;
+    dragStartIdx = nearestIndex(dragStartX);
+    selectionDiv.style.display = 'block';
+    selectionDiv.style.left = dragStartX + 'px';
+    selectionDiv.style.width = '0px';
+  });
+
+  function handleDrag(ev) {
+    var rect = canvas.getBoundingClientRect();
+    var mx = ev.clientX - rect.left;
+    var left = Math.min(dragStartX, mx), width = Math.abs(mx - dragStartX);
+    selectionDiv.style.left = left + 'px';
+    selectionDiv.style.width = width + 'px';
+  }
+
+  window.addEventListener('mouseup', function (ev) {
+    if (dragStartX === null) return;
+    var rect = canvas.getBoundingClientRect();
+    var mx = clamp(ev.clientX - rect.left, 0, rect.width);
+    var endIdx = nearestIndex(mx);
+    selectionDiv.style.display = 'none';
+    var dragged = Math.abs(mx - dragStartX) > 6; // ignore accidental tiny drags (treat as a click)
+    dragStartX = null;
+    if (dragged && endIdx !== null && dragStartIdx !== null && endIdx !== dragStartIdx) {
+      viewStart = Math.min(dragStartIdx, endIdx);
+      viewEnd = Math.max(dragStartIdx, endIdx);
+      render();
+    }
+  });
+
+  resetBtn.addEventListener('click', function () {
+    viewStart = 0; viewEnd = n - 1;
+    render();
+  });
+
+  window.addEventListener('resize', render); // horizontal-only: render() keeps height fixed
+
+  // Session statistics, computed over the whole recording regardless of zoom.
+  function stats() {
+    var spo2Vals = records.map(function (r) { return r.spo2; }).filter(function (v) { return v !== null && v !== undefined; });
+    var hrVals = records.map(function (r) { return r.heart_rate; }).filter(function (v) { return v !== null && v !== undefined; });
+    var invalidCount = n - spo2Vals.length;
+    var desatCount = spo2Vals.filter(function (v) { return v < DESAT_THRESHOLD; }).length;
+    function avg(a) { return a.length ? (a.reduce(function (s, v) { return s + v; }, 0) / a.length) : null; }
+    function fmtSec(s) {
+      var m = Math.floor(s / 60), ss = s % 60;
+      return m + 'm ' + ss + 's';
+    }
+    var rows = [
+      ['Duration', fmtSec(n) + ' (' + n + ' records)'],
+      ['SpO2 min / avg / max', spo2Vals.length ? Math.min.apply(null, spo2Vals) + '% / ' + avg(spo2Vals).toFixed(1) + '% / ' + Math.max.apply(null, spo2Vals) + '%' : 'n/a'],
+      ['Heart rate min / avg / max', hrVals.length ? Math.min.apply(null, hrVals) + ' / ' + avg(hrVals).toFixed(1) + ' / ' + Math.max.apply(null, hrVals) + ' bpm' : 'n/a'],
+      ['Time below ' + DESAT_THRESHOLD + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')],
+      ['No-signal / probe-out', fmtSec(invalidCount) + ' (' + (100 * invalidCount / n).toFixed(1) + '%)'],
+    ];
+    var table = document.getElementById('stats');
+    table.innerHTML = rows.map(function (r) {
+      return '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>';
+    }).join('');
+  }
+
+  stats();
+  render();
 })();
 </script>
 </body>
