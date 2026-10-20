@@ -432,7 +432,7 @@ _TEMPLATE = """<!doctype html>
     rows.push(
       ['__group__', 'Desaturation analysis'],
       ['Event index', f1(a.index_per_hr, ' /hr') + ' (adjusted ' + f1(a.adjusted_index_per_hr, ' /hr') + ')'],
-      ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s, SpO2 Assistant method)'],
+      ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s, Assistant method)'],
       ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
       ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
       ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed)'],
