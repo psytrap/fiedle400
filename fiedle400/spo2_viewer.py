@@ -85,10 +85,11 @@ _TEMPLATE = """<!doctype html>
 </div>
 <div id="pulseParamsGroup" class="paramGroup">
 <table id="pulseParamsTable" class="paramTable" style="font-size:0.85em;color:#999">
-  <tr><td colspan="2"><strong>Pulse-rate event (dummy, not functional -- T-029/T-030)</strong></td></tr>
+  <tr><td colspan="2"><strong>Pulse-rate event</strong></td></tr>
   <tr><td>change of at least</td><td><input type="number" id="pulseDropBpm" min="2" max="20" step="1" value="6" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> bpm</td></tr>
   <tr><td>over</td><td><input type="number" id="pulseMinDur" min="1" max="180" step="1" value="8" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> s</td></tr>
 </table>
+<p id="pulseParamsNote" style="font-size:0.85em;color:#999;margin:0.4em 0 0">(dummy, not functional -- T-029/T-030)</p>
 </div>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script id="spo2-events" type="application/json">%%EVENTS%%</script>
