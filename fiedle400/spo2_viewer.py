@@ -59,8 +59,8 @@ _TEMPLATE = """<!doctype html>
 <h1>fiedle400 recording</h1>
 <div id="meta"></div>
 <div id="legend">
-  <label><input type="checkbox" id="showSpo2" checked><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, 50-100)</label>
-  <label><input type="checkbox" id="showHr" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, 30-220)</label>
+  <label><input type="checkbox" id="showSpo2" checked><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, range 50-100)</label>
+  <label><input type="checkbox" id="showHr" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, range 30-220)</label>
   <button id="resetZoom">Reset zoom</button>
   <button id="printBtn" type="button">Print</button>
 </div>
@@ -435,7 +435,7 @@ _TEMPLATE = """<!doctype html>
       ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s)'],
       ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
       ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
-      ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed)'],
+      ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed -- T-031)'],
       ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
     );
     var table = document.getElementById('stats');
