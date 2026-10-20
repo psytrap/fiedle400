@@ -425,17 +425,17 @@ _TEMPLATE = """<!doctype html>
       ['Duration', fmtSec(n) + ' (' + n + ' records)'],
       ['SpO2 min / avg / max', spo2Vals.length ? Math.min.apply(null, spo2Vals) + '% / ' + avg(spo2Vals).toFixed(1) + '% / ' + Math.max.apply(null, spo2Vals) + '%' : 'n/a'],
       ['Heart rate min / avg / max', hrVals.length ? Math.min.apply(null, hrVals) + ' / ' + avg(hrVals).toFixed(1) + ' / ' + Math.max.apply(null, hrVals) + ' bpm' : 'n/a'],
-      ['Time below ' + DESAT_THRESHOLD + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')],
       ['No-signal / probe-out', fmtSec(invalidCount) + ' (' + (100 * invalidCount / n).toFixed(1) + '%)'],
     ];
     var a = analysis.summary;
     function f1(v, unit) { return v === null || v === undefined ? 'n/a' : v.toFixed(1) + unit; }
     rows.push(
-      ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s, SpO2 Assistant method)'],
       ['Event index', f1(a.index_per_hr, ' /hr') + ' (adjusted ' + f1(a.adjusted_index_per_hr, ' /hr') + ')'],
+      ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s, SpO2 Assistant method)'],
       ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
       ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
-      ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed)']
+      ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed)'],
+      ['Time below ' + DESAT_THRESHOLD + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
     );
     var table = document.getElementById('stats');
     table.innerHTML = rows.map(function (r) {
