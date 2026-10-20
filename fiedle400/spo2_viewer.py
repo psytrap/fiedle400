@@ -37,9 +37,10 @@ _TEMPLATE = """<!doctype html>
   #legend input[type=checkbox] { margin-right: 0.4em; }
   #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
   #desatLevel { width: 3.5em; }
+  #dropPct, #minDur, #critLevel { width: 3.5em; }
   @media print {
     body { margin: 0.5em; background: #fff; }
-    #resetZoom, #printBtn, #legend input[type=checkbox], #levelRow { display: none !important; }
+    #resetZoom, #printBtn, #legend input[type=checkbox], #levelRow, #eventParamsRow { display: none !important; }
     .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #tooltip { display: none !important; }
     canvas { border: 1px solid #999; }
@@ -61,12 +62,17 @@ _TEMPLATE = """<!doctype html>
 </div>
 <table id="stats"></table>
 <p id="levelRow" style="font-size:0.85em;color:#666">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
+<p id="eventParamsRow" style="font-size:0.85em;color:#666">Desaturation event: fall of at least <input type="number" id="dropPct" min="1" max="20" step="1"> % over <input type="number" id="minDur" min="1" max="180" step="1">-180 s, criteria level <input type="number" id="critLevel" min="1" max="99" step="1"> % (pulse-rate events: not decoded, SpO2 only -- T-025)</p>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script id="spo2-events" type="application/json">%%EVENTS%%</script>
 <script>
 (function () {
   var records = JSON.parse(document.getElementById('spo2-data').textContent);
-  var analysis = JSON.parse(document.getElementById('spo2-events').textContent); // {events, summary}, computed in Python (desat.py)
+  // {events, summary, params}, computed in Python (desat.py) for the page's initial
+  // load; re-derived here in JS (detectEvents/summarizeEvents, a 1:1 port of
+  // desat.py's detect_events/summarize) whenever the event parameters below change,
+  // so the page recomputes without a server round-trip (T-025).
+  var analysis = JSON.parse(document.getElementById('spo2-events').textContent);
   var meta = document.getElementById('meta');
   var n = records.length;
   if (n === 0) {
@@ -74,6 +80,112 @@ _TEMPLATE = """<!doctype html>
     return;
   }
   meta.textContent = n + ' record(s), ' + records[0].timestamp + ' to ' + records[n - 1].timestamp;
+  var spo2Arr = records.map(function (r) { return r.spo2; });
+
+  // Desaturation-event detection, ported from fiedle400/desat.py (SPO2_FORMAT.md
+  // §7.2). max_time/max_avg/oscillation stay fixed, matching SpO2 Assistant's own
+  // Analyseparameter dialog, which doesn't expose them either (T-019 screenshot).
+  var EVT_MAX_TIME = 180, EVT_MAX_AVG = 2, EVT_OSCILLATION = 1, EVT_LO = 0, EVT_HI = 100, EVT_INVALID = 127;
+
+  function detectEvents(spo2, drop, minTime) {
+    var x = spo2.map(function (v) { return (v === null || v === undefined) ? EVT_INVALID : v; });
+    var cands = [];
+    var st = 0, en = 0;
+    function finish() {
+      if (st && en && en - st > 0) cands.push([st, en, x[st], x[en]]);
+      st = 0; en = 0;
+    }
+    for (var i = 0; i < x.length; i++) {
+      var v = x[i];
+      if (v > EVT_HI || v < EVT_LO) { finish(); continue; }
+      if (i === 0) continue;
+      var p = x[i - 1];
+      if (v > p) {
+        finish();
+      } else if (v === p) {
+        if (st) en = i;
+      } else if (st) {
+        en = i;
+      } else if (p > EVT_LO && p < EVT_HI) {
+        st = i - 1; en = i;
+      }
+    }
+    finish();
+
+    function accepted(c) {
+      var dur = c[1] - c[0], depth = c[2] - c[3];
+      if (!dur || depth < drop || dur < minTime || dur > EVT_MAX_TIME) return false;
+      if (!(Math.floor(depth / dur) < EVT_MAX_AVG)) return false;
+      for (var k = c[0]; k <= c[1]; k++) { if (!(x[k] >= EVT_LO && x[k] <= EVT_HI)) return false; }
+      return true;
+    }
+
+    var events = [];
+    if (!cands.length) return events;
+    var cur = cands[0].slice();
+    for (var j = 1; j < cands.length; j++) {
+      var nx = cands[j];
+      if (nx[2] - cur[3] <= EVT_OSCILLATION && nx[3] < cur[3] && nx[2] < cur[2] && nx[0] - cur[1] <= minTime) {
+        cur[1] = nx[1]; cur[3] = nx[3];
+      } else {
+        if (accepted(cur)) events.push(cur);
+        cur = nx.slice();
+      }
+    }
+    if (accepted(cur)) events.push(cur);
+    return events.map(function (e) { return { start: e[0], nadir: e[1], from_pct: e[2], to_pct: e[3] }; });
+  }
+
+  function summarizeEvents(spo2, events, criteria) {
+    var valid = [];
+    for (var i = 0; i < spo2.length; i++) {
+      var v = spo2[i];
+      if (v !== null && v !== undefined && v >= 1 && v <= 100) valid.push(i);
+    }
+    var out = { samples: spo2.length, valid_samples: valid.length, total_event: events.length };
+    if (!spo2.length) return out;
+    function r2(v) { return Math.round(v * 100) / 100; }
+    function r1(v) { return Math.round(v * 10) / 10; }
+    function sum(a, f) { return a.reduce(function (s, e) { return s + f(e); }, 0); }
+    var hours = spo2.length / 3600.0;
+    out.index_per_hr = r2(events.length / hours);
+    out.adjusted_index_per_hr = valid.length ? r2(events.length / (valid.length / 3600.0)) : null;
+    out.artifact_pct = r2(100.0 * (spo2.length - valid.length) / spo2.length);
+    out.avg_low_spo2 = events.length ? r2(sum(events, function (e) { return e.to_pct; }) / events.length) : null;
+    var low = events.filter(function (e) { return e.to_pct < criteria; });
+    out.events_below_criteria = low.length;
+    out.avg_low_spo2_below_criteria = low.length ? r2(sum(low, function (e) { return e.to_pct; }) / low.length) : null;
+    out.avg_event_duration_s = events.length ? r1(sum(events, function (e) { return e.nadir - e.start; }) / events.length) : null;
+    var inside = {};
+    events.forEach(function (e) { for (var k = e.start; k <= e.nadir; k++) inside[k] = true; });
+    var basal = valid.filter(function (i) { return !inside[i]; }).map(function (i) { return spo2[i]; });
+    if (!basal.length) basal = valid.map(function (i) { return spo2[i]; });
+    out.basal_spo2 = basal.length ? r2(sum(basal, function (v) { return v; }) / basal.length) : null;
+    return out;
+  }
+
+  function recomputeEvents() {
+    var drop = parseFloat(document.getElementById('dropPct').value);
+    var minTime = parseInt(document.getElementById('minDur').value, 10);
+    var criteria = parseFloat(document.getElementById('critLevel').value);
+    if (isNaN(drop) || drop < 1 || drop > 20) return;
+    if (isNaN(minTime) || minTime < 1 || minTime > EVT_MAX_TIME) return;
+    if (isNaN(criteria) || criteria < 1 || criteria > 99) return;
+    var events = detectEvents(spo2Arr, drop, minTime);
+    analysis = {
+      events: events,
+      summary: summarizeEvents(spo2Arr, events, criteria),
+      params: { drop: drop, min_time: minTime, max_time: EVT_MAX_TIME, criteria: criteria },
+    };
+    stats(); render();
+  }
+
+  document.getElementById('dropPct').value = analysis.params.drop;
+  document.getElementById('minDur').value = analysis.params.min_time;
+  document.getElementById('critLevel').value = analysis.params.criteria;
+  ['dropPct', 'minDur', 'critLevel'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', recomputeEvents);
+  });
 
   // Fixed ranges so different recordings are visually comparable, not
   // auto-scaled per file. SpO2 50-100% (below 50 is clamped, not expected

@@ -150,5 +150,48 @@ class TestViewerAcrossSessionGap(unittest.TestCase):
         self.assertIsNone(data[40]["spo2"])
 
 
+class TestViewerConfigurableEventParameters(unittest.TestCase):
+    """T-025: the desaturation-event parameters (drop %, min duration, criteria
+    level) are adjustable inputs in the page, pre-filled from the same values
+    desat.py used to compute the page's initial `analysis` block -- not
+    hardcoded separately, which would let the two drift apart. The actual
+    live-recompute behaviour (detectEvents/summarizeEvents, a JS port of
+    desat.py) needs a browser and was verified by hand against the T-019
+    probe recording: drop=3 -> 8 events, min_time=8 -> 9 events, both an
+    exact match to the real SpO2 Assistant numbers from that ticket."""
+
+    def setUp(self):
+        self.html = spo2_viewer.build_viewer_html([])
+
+    def test_has_an_input_per_parameter(self):
+        self.assertIn('id="dropPct"', self.html)
+        self.assertIn('id="minDur"', self.html)
+        self.assertIn('id="critLevel"', self.html)
+
+    def test_ranges_match_the_real_spo2_assistant_dialog(self):
+        self.assertIn('id="dropPct" min="1" max="20"', self.html)
+        self.assertIn('id="minDur" min="1" max="180"', self.html)
+        self.assertIn('id="critLevel" min="1" max="99"', self.html)
+
+    def test_defaults_are_not_hardcoded_separately_from_desat_py(self):
+        # No value="..." on these inputs in the template itself -- they're set
+        # from analysis.params in JS, so desat.py's constants stay the one
+        # source of truth for the page's initial numbers.
+        for input_id in ("dropPct", "minDur", "critLevel"):
+            self.assertNotRegex(self.html, r'id="%s"[^>]*value=' % input_id)
+        self.assertIn("document.getElementById('dropPct').value = analysis.params.drop", self.html)
+        self.assertIn("document.getElementById('minDur').value = analysis.params.min_time", self.html)
+        self.assertIn("document.getElementById('critLevel').value = analysis.params.criteria", self.html)
+
+    def test_pulse_rate_events_explicitly_noted_as_not_implemented(self):
+        # T-025: no decoded pulse-event detector exists; the page must say so
+        # rather than offer dead pulse-parameter inputs.
+        self.assertIn("pulse-rate events: not decoded", self.html)
+        self.assertNotIn('id="pulseDropPct"', self.html)
+
+    def test_inputs_recompute_on_change(self):
+        self.assertIn("addEventListener('input', recomputeEvents)", self.html)
+
+
 if __name__ == "__main__":
     unittest.main()
