@@ -42,6 +42,15 @@ mocked `input()`/`builtins.input`. A tkinter GUI changes that shape:
   when `tkinter`/`python3-tk` isn't installed (some distros ship it as a
   separate OS package) -- evaluate whether a fallback is needed, without
   committing to one here.
+- "tkinter" covers two widget sets in the stdlib: the classic `tkinter`
+  widgets (`tk.Button`, `tk.Entry`, ...) and `tkinter.ttk`, the themed set
+  (`ttk.Button`, `ttk.Combobox`, `ttk.Progressbar`, ...) that looks native
+  per-OS and is the generally preferred choice for new UIs. Both are
+  stdlib-only, so "no third-party toolkit" permits either -- the
+  evaluation should say whether `ttk` is assumed for the actual widgets,
+  since that choice affects what the CI test-strategy recommendation is
+  even testing (widget classes differ, though the headless/`xvfb-run`
+  question is the same for both).
 
 ---
 
@@ -54,6 +63,8 @@ mocked `input()`/`builtins.input`. A tkinter GUI changes that shape:
 - [ ] The no-display / missing-`python3-tk` question is addressed in the
       recommendation (even if the answer is "out of scope, needs its own
       ticket").
+- [ ] The recommendation states whether `tkinter.ttk` (themed widgets) or
+      plain `tkinter` widgets is assumed for the migration, with a reason.
 - [ ] Any recommended implementation approach is filed as its own
       follow-up ticket rather than carried out inline here.
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
