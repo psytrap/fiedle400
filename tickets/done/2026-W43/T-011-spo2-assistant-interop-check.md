@@ -126,3 +126,10 @@ both directions, write and read, verified by actually running the vendor
 program -- not re-reading its strings. The one real defect this testing
 surfaced (T-020) was found, fixed, and independently re-verified against
 the real program before this ticket closed.
+
+Broader coverage (more/longer real recordings, the other existing captures
+in `archive/capture/raw/` and `archive/capture/realtime/`, a recording with
+real finger-out data) is deliberately not required here -- this ticket's
+own criteria only asked for one real check per direction, which is done.
+That broader coverage is deferred as its own ticket, **T-021**, rather than
+reopening this one.
