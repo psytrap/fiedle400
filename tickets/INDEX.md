@@ -16,3 +16,4 @@ protocol; `DONE.md` for the archive.
 | [T-030](open/T-030-pulse-rate-desaturation-implementation.md) | Implement the pulse-rate desaturation detector | Cloud | Open |
 | [T-031](open/T-031-basal-spo2-rule-confirmation.md) | Confirm the exact Basal SpO2 calculation rule | Cloud | Open |
 | [T-032](open/T-032-desaturation-algorithm-review.md) | Review the desaturation-event algorithm against the decoded spec | Local or Cloud | Open |
+| [T-033](open/T-033-migrate-wizard-to-tkinter.md) | Evaluate migrating the interactive wizard from a terminal TUI to tkinter | Cloud | Open |
