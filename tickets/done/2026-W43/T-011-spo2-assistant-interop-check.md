@@ -1,6 +1,6 @@
 # T-011: Check `.spo2` export compatibility against the real SpO2 Assistant
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -59,27 +59,70 @@ the live check if it can't be done.
 
 ## Criteria
 
-- [ ] `SpO2.exe` is actually launched against a real `fiedle400`-written
+- [x] `SpO2.exe` is actually launched against a real `fiedle400`-written
       `.spo2` file (not just its strings/disassembly re-read again),
       and the result (opens cleanly / opens with wrong data / fails)
       is recorded, with the method used to run it.
-- [ ] If SpO2 Assistant rejects or misreads the file, the specific
+- [x] If SpO2 Assistant rejects or misreads the file, the specific
       byte/field responsible is identified against `SPO2_FORMAT.md`,
       and either a fix is filed as a follow-up ticket or the format
       doc is corrected to match reality.
-- [ ] The reverse direction (does `fiedle400` correctly read a
+- [x] The reverse direction (does `fiedle400` correctly read a
       `.SpO2` file written by the real SpO2 Assistant, if such a file
       is available) is checked too, not just the write direction.
-- [ ] `SPO2_FORMAT.md` §5.1's SpO2 Assistant compatibility claim is
+- [x] `SPO2_FORMAT.md` §5.1's SpO2 Assistant compatibility claim is
       updated to say it was verified by execution (with date and
       method), matching the standard already applied to its OSCAR
       entry -- or, if it could not be run at all, the claim is marked
       explicitly as still static-analysis-only rather than left to
       imply more than was actually checked.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Method.** Real Windows 8.1 laptop (`192.168.2.165`), reached over SSH
+(`~/.ssh/po400_win_ed25519`), real SpO2 Assistant GUI -- not Wine, not a VM.
+Files exchanged via `scp` through the same key. The real PO-400 device was
+connected locally during this work, so the write-direction test used a real
+downloaded recording, not a synthetic one.
+
+**Direction 1: write (`fiedle400` -> SpO2 Assistant).** Two real device
+sessions (2026-10-16, 08:37:31 + 2m40s and 08:43:12 + 30s) downloaded with
+`fiedle400 download --all -f spo2` and opened in the real SpO2 Assistant:
+
+- First attempt (pre-T-020-fix code): opened cleanly, no error, but showed
+  one continuous 3m10s recording -- which led directly to filing and fixing
+  **T-020** (the multi-session gap-collapse bug found via this ticket's own
+  testing, not a pre-existing finding).
+- Re-tested after T-020's fix (v0.4.21): same two sessions re-downloaded,
+  opened in SpO2 Assistant, reported **6:11** total duration (371 s: 160
+  real + 181 sentinel-padded gap + 30 real) -- exact match to the real gap.
+
+In both cases **the file opened without error** -- SpO2 Assistant's own
+validation of magic/version/header offsets accepts `fiedle400`'s output.
+No byte/field rejection or misread was found; the only issue was the
+(now-fixed) multi-session timestamp compression, which is a `fiedle400`
+writer correctness issue (T-020), not an SpO2 Assistant compatibility
+rejection.
+
+**Direction 2: read (SpO2 Assistant -> `fiedle400`).** `fiedle400/plot.py`'s
+`read_spo2_file` (the only `.spo2` reader shipped in the package) decoded a
+real vendor-written capture, `archive/capture/_user_1_0_20260903074127-
+20260903074137joint.SpO2`: start `2026-09-02 22:32:31`, 11480 records,
+matching the file's own timestamp span exactly (`(end - start) + 1 ==
+11480`). Values decoded are physiologically plausible (SpO2 90-97%, HR
+56-82 bpm) across the sample shown. No decode error, no garbage values.
+
+**`SPO2_FORMAT.md` §5.1 updated** (see diff in this commit) to state the
+SpO2 Assistant compatibility claim was verified by execution on 2026-10-20,
+with the method above, matching the existing standard set by the OSCAR
+entry -- it previously carried no such note and traced only to static
+string/disassembly mining (T-007's `FINDINGS.md`).
+
+**Result:** `fiedle400` and the real Contec SpO2 Assistant are compatible in
+both directions, write and read, verified by actually running the vendor
+program -- not re-reading its strings. The one real defect this testing
+surfaced (T-020) was found, fixed, and independently re-verified against
+the real program before this ticket closed.

@@ -73,6 +73,15 @@ real time and OSCAR's alignment with CPAP data stays correct (T-020). A pause lo
    - File dialog filter: `*.SpO2` (`.SpO2(Saves the complete data and can be opened with the current software only)`).
    - Expected default path: `%USERPROFILE%\AppData\Local\VirtualStore\Program Files (x86)\SpO2\Data\`.
    - Validates `magic == 0x358` (856) and parses start date/time block at offset `0x0420`.
+   - **Verified by execution (T-011, 2026-10-20),** not just static analysis of `SpO2.exe`'s
+     validation code path: the real SpO2 Assistant GUI, on a real Windows 8.1 laptop reached
+     over SSH, opened `.spo2` files `fiedle400` wrote from real device downloads without error
+     or rejection (including after the T-020 fix, a 371-sample multi-session file with a
+     sentinel-padded gap, reported as the correct 6:11 duration). The reverse direction was
+     also checked: `fiedle400/plot.py`'s `read_spo2_file` correctly decoded a real
+     SpO2-Assistant-written capture (`archive/capture/..._joint.SpO2`, 11480 records,
+     timestamp span matching exactly). Full details:
+     `tickets/done/2026-W43/T-011-spo2-assistant-interop-check.md`.
 
 2. **OSCAR (Open Source CPAP Analysis Reporter)**:
    - Imports `.SpO2` files via the **Oximetry Import Wizard**.
