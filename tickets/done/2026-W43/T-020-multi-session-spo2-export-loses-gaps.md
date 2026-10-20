@@ -95,6 +95,12 @@ Done 2026-10-20 (cloud, patch 0025, v0.4.21).
 - **Docs.** `SPO2_FORMAT.md` section 4, "Several sessions in one file".
 - **Effect on the viewer.** A padded gap shows as probe-out and counts as artifact in the
   T-018 statistics, which is what SpO2 Assistant does with invalid samples.
-- **Not done.** Not re-run against the real SpO2 Assistant: the T-011 file would show the
-  3-minute pause as an invalid stretch; worth a look when T-011 is picked up.
+- **Verified against the real SpO2 Assistant, 2026-10-20 (local).** Re-downloaded the same
+  two real device sessions with the fix in place: `fiedle400_all_sessions_20261020_143740.spo2`,
+  371 total samples (160 real + 181 sentinel-padded gap + 30 real), confirmed locally by
+  reading the header/payload directly (`N=371`, one sentinel run at index 160, length 181 --
+  matches the real ~181 s gap exactly). Sent to the Windows 8.1 laptop and opened in the real
+  SpO2 Assistant: it reported **6:11** total duration (371 s = 6m11s), matching exactly. The
+  previous "Not done" item above is now done -- the fix holds against the real program, not
+  just the unit tests.
 
