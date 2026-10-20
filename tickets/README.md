@@ -39,7 +39,11 @@ you're told to do something, do it; open the ticket alongside the work
 1. Create `tickets/open/T-NNN-<slug>.md` from the template below, and apply the model
    check in `.agents/rules/coordinator-and-model-checks.md` (one advisory line).
 2. Do the work (local hardware, or write the brief and hand it to the
-   cloud per the `Owner` field).
+   cloud per the `Owner` field). While working, show a progress block in
+   the conversation the user reads: one line per step, `✓` done, `✱` in
+   progress, `○` next. Post it when the work starts and again whenever a
+   step completes or a long step (tests, build, search) starts; the last
+   one before the result has no `✱` left.
 3. Append an `## Execution Notes` section: what was actually done, test
    results, what was deliberately left out and why.
 4. Check off every `Criteria` item that's actually met.

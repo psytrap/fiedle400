@@ -203,3 +203,76 @@ def read_spo2_file(data: bytes) -> Tuple[datetime, List[dict]]:
         })
     return start_dt, records
 ```
+
+---
+
+## 7. SpO2 Assistant Analysis Definitions (Reference Only)
+
+Reference material from T-017 (2026-10-20). This section describes how the vendor's
+SpO2 Assistant computes its report values. It is **not** a `fiedle400` feature spec;
+`fiedle400` implements none of it (follow-up: T-018).
+
+Sources: [M] = *SpO2 Assistant User Manual*, CONTEC, 2010-05-27
+(`http://manual.pulseoximeter.org/SPO2_Assistant_Manual.pdf`), section given;
+[X] = static disassembly of `archive/bruteforce/SpO2.exe` (gitignored local artifact),
+virtual address given (image base `0x400000`). Anything not backed by one of these is
+marked *inferred*.
+
+### 7.1 Report values
+
+| Report label | Definition | Source |
+| :--- | :--- | :--- |
+| Basal SpO2 (%) | "the average value of SpO2 total" -- the mean SpO2 of the recording, not a sleep or awake baseline. Whether excluded ranges and artifact samples are left out of the mean is *inferred* (likely, not verified). | [M] §5.4.7.3 |
+| Total Event | Number of SpO2 desaturation events (7.2). | [M] §5.4.7.3 |
+| Index (1/hr) | "the event number per hour" (events / recording hours). | [M] §5.4.7.3 |
+| Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |
+| Artifact (%) | Share of non-effective data: "that zero value area and excluding data area" (zero/invalid samples plus user-excluded ranges, see [M] §5.4.2 Exclude data). | [M] §5.4.7.3 |
+| Avg. Low SpO2 (%) | "the average value of 'Minimum SpO2' for all SpO2 events" (mean of event nadirs). | [M] §5.4.7.3 |
+| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). | [M] §5.4.7.3, [X] |
+
+### 7.2 Desaturation event algorithm
+
+**Parameters.** The analysis-parameter XML writer (`0x4fde76`-`0x4fdf2d`) emits
+`<analy_para><spo2><drop/><min_time/><max_time/><oscillation/><max_avg/><criteria/></spo2><pulse><drop/><time/></pulse>`.
+The detector is built at `0x532a43` (`call 0x533300`) with exactly these values:
+
+| Parameter | Default | UI range | Meaning (from the code) | Source |
+| :--- | :---: | :---: | :--- | :--- |
+| `drop` (Percent Drop For Event) | 4 % | 1-20 | Minimum depth: start value minus nadir value. | [X] init `0x531e96`, `0x53215b`; ranges from exe strings |
+| `min_time` (Minimum Event Duration) | 10 s | 1-180 | Minimum descent duration, and the maximum gap bridged when merging (below). | [X] same |
+| `max_time` | 180 s | fixed | Maximum descent duration. | [X] `push 0xb4` at `0x532a55` |
+| `max_avg` | 2 | fixed | Average fall rate must be **below** 2 %/sample; steeper drops are rejected. | [X] `0x535e42` |
+| `oscillation` | 1 | fixed | Rebound tolerance in % for merging partial descents. | [X] `0x53580e` |
+| valid range | 0..100 | fixed | Samples outside it break an event (e.g. the `0x7F` probe-out sentinel). | [X] `0x535469`, `0x535f60` |
+| Pulse change / time | 6 bpm / 8 s | 2-20 bpm | Pulse-rate event parameters; that detector was not decoded. | [X] init routines |
+
+**Detection** (`0x535430`, per SpO2 sample; `.SpO2` data is 1 Hz, so a sample is a second):
+
+1. A sample outside 0..100 ends the current candidate.
+2. A rise (`s[i] > s[i-1]`) ends the current candidate.
+3. A fall (`s[i] < s[i-1]`) starts a candidate at `i-1` if none is open and `s[i-1]` is
+   between 1 and 99; otherwise it extends the open candidate to `i`. A flat sample extends
+   an open candidate.
+4. So the **baseline is the last sample before the fall starts (the local peak)**, not a
+   moving average or a rolling baseline. A candidate records start index/value, nadir
+   index/value, `duration = nadir_idx - start_idx` and `depth = start_val - nadir_val`
+   (`0x535d60`).
+
+**Merging** (`0x535710`, active because `oscillation` = 1). Consecutive candidates are joined
+when the next one starts at most `oscillation` (1 %) above where the current one ended, ends
+lower and starts lower than the current one, and begins at most `min_time` samples after the
+current one's nadir. The joined event keeps the first start and takes the later nadir. This
+turns a staircase descent with small rebounds into one event.
+
+**Acceptance** (`0x535df0` + `0x535f60`). An event counts when all hold:
+`depth >= drop`, `min_time <= duration <= max_time`, `depth / duration < max_avg`
+(integer division), and every sample from start to nadir is inside 0..100.
+
+Not determined: whether user-excluded ranges are removed from the series before detection
+(*inferred*: probably, since the manual counts them as non-effective time), and how the
+pulse-rate events are detected. Note that "duration" is the **descent time to the nadir**,
+not the time spent below the start value, which differs from AASM-style scoring.
+
+Validation: `scripts/make_desat_probe.py` writes a synthetic probe recording with the
+predicted report values; T-019 runs it through the real SpO2 Assistant. Until then this
+section is a hypothesis from static analysis.

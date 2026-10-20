@@ -10,4 +10,5 @@ protocol; `DONE.md` for the archive.
 | [T-012](open/T-012-make-html-the-default-download-output.md) | Make the HTML viewer the default download output | Cloud | Open |
 | [T-013](open/T-013-view-command-for-existing-recordings.md) | `fiedle400 view FILE` opens the HTML viewer for an existing recording | Cloud | Open |
 | [T-016](open/T-016-html-viewer-deferred-features.md) | Add save-as-PNG and a smooth trend overlay to the HTML viewer | Cloud | Open |
-| [T-017](open/T-017-desaturation-and-basal-spo2-definitions.md) | Research the vendor's desaturation-event and "Basal SpO2" definitions | Cloud | Open |
+| [T-018](open/T-018-desaturation-events-and-basal-spo2.md) | Show desaturation events, ODI and Basal SpO2 in the HTML viewer | Cloud | Open (placeholder) |
+| [T-019](open/T-019-validate-desat-algorithm-in-spo2-assistant.md) | Validate the decoded desaturation algorithm in SpO2 Assistant | Local | Open |
