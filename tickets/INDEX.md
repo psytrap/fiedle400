@@ -11,4 +11,4 @@ protocol; `DONE.md` for the archive.
 | [T-021](open/T-021-broader-spo2-assistant-decode-coverage.md) | Broader real SpO2 Assistant `.spo2` decode coverage | Local | Open (deferred) |
 | [T-023](open/T-023-viewer-blocked-areas-and-exportable-settings.md) | Viewer area-exclusion selection | Cloud | Open (deferred) |
 | [T-024](open/T-024-viewer-settings-export-and-adjustable-parameters.md) | Viewer export/save settings button | Cloud | Open (deferred) |
-| [T-026](open/T-026-refine-t25-saturation-parameters.md) | Refine T-025's configurable saturation parameters | Local or Cloud | Open (deferred) |
+| [T-026](open/T-026-refine-t25-saturation-parameters.md) | Refine T-025's saturation parameters based on user feedback | Local or Cloud | Open (placeholder) |
