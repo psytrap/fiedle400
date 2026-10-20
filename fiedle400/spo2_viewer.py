@@ -9,6 +9,7 @@ with no server and no extra dependency (T-005).
 import json
 
 from fiedle400 import desat
+from fiedle400.export import pad_records
 
 _TEMPLATE = """<!doctype html>
 <html>
@@ -338,6 +339,10 @@ def build_viewer_html(records):
     `<script>` tag it's embedded in -- defensive; none of this data can
     contain it today, but it costs nothing to not depend on that staying true.
     """
+    # One entry per elapsed second (T-022): the chart places records by list index and the
+    # event detector treats neighbours as one second apart, so a pause between two stored
+    # sessions has to be present as probe-out records or it is drawn/analysed as a fall.
+    records = pad_records(records)
     payload = [
         {
             "timestamp": r.get("timestamp"),

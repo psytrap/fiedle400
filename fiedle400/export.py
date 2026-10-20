@@ -10,7 +10,8 @@ import csv
 import json
 import os
 import struct
-from datetime import datetime
+import warnings
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 # Header length for .SpO2 binary format (0x043C)
@@ -26,9 +27,10 @@ SPO2_TAG_BLE = b"B\x00L\x00E\x00"
 SPO2_INVALID_SPO2 = 127  # 0x7F
 SPO2_INVALID_HR = 255    # 0xFF
 
-# Longest between-session gap that is padded with sentinel samples (2 bytes per second);
-# a bigger one means a wrong device clock, not a real pause, so it is refused (T-020).
-MAX_GAP_FILL_S = 7 * 86400
+# Longest between-session gap that is padded with sentinel samples (2 bytes per second).
+# A longer one is more likely a wrong device clock than a real pause: it is not padded, one
+# probe-out sample marks the break, and a warning says so (T-020).
+MAX_GAP_FILL_S = 12 * 3600
 
 
 def parse_record_datetime(ts_val: Any) -> Optional[datetime]:
@@ -51,27 +53,63 @@ def _sample_positions(records: List[Dict[str, Any]]) -> List[int]:
     lands earlier than it happened (T-020). A record whose timestamp is later than
     the next free position is placed at its real time; the skipped seconds stay
     probe-out. Missing, unparsable or non-advancing timestamps just follow the
-    previous record by one second, as before.
+    previous record by one second, as before. A pause over MAX_GAP_FILL_S is not
+    padded: one probe-out second marks it, the records after it follow on, and a
+    warning is issued, because the timestamps after it no longer match real time.
     """
     first = parse_record_datetime(records[0].get("timestamp")) if records else None
     positions: List[int] = []
+    unpadded = 0  # seconds of over-long pauses left out of the file so far
     for i, r in enumerate(records):
         pos = positions[-1] + 1 if i else 0
         ts = parse_record_datetime(r.get("timestamp")) if first is not None and i else None
         if ts is not None:
             try:
-                real = int((ts - first).total_seconds())
+                real = int((ts - first).total_seconds()) - unpadded
             except TypeError:  # naive vs aware datetimes
                 real = pos
             if real - pos > MAX_GAP_FILL_S:
-                raise ValueError(
-                    f"Gap of {real - pos} s before record {i + 1} is too large to pad into one "
-                    f".SpO2 file (limit {MAX_GAP_FILL_S} s); the timestamps look wrong. "
-                    "Export the sessions separately."
+                warnings.warn(
+                    f"Pause of {real - pos} s before record {i + 1} is longer than "
+                    f"{MAX_GAP_FILL_S // 3600} h, which looks like a wrong device clock: it is "
+                    "not padded into the .SpO2 file, so timestamps after it are too early "
+                    "by that amount. Export the sessions separately to keep their times.",
+                    UserWarning,
+                    stacklevel=2,
                 )
-            pos = max(pos, real)
+                pos += 1  # one probe-out second marks the break
+                unpadded += real - pos
+            else:
+                pos = max(pos, real)
         positions.append(pos)
     return positions
+
+
+def pad_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return `records` with one entry per elapsed second, gaps filled with probe-out records.
+
+    Same placement as build_spo2_binary (it uses the same positions), for callers that
+    read records by list index and need index == second: the HTML viewer and the
+    desaturation detector (T-022). A pause between sessions shows up as probe-out
+    records (spo2/heart_rate None, flags "probe-out") instead of being squeezed out.
+    A pause over MAX_GAP_FILL_S is not padded and gives a warning, like build_spo2_binary.
+    """
+    positions = _sample_positions(records)
+    if not records or positions[-1] + 1 == len(records):
+        return list(records)
+    first = parse_record_datetime(records[0].get("timestamp"))
+    out: List[Dict[str, Any]] = []
+    for pos, r in zip(positions, records):
+        while len(out) < pos:
+            sec = len(out)
+            out.append({
+                "timestamp": (first + timedelta(seconds=sec)).isoformat(),
+                "spo2": None,
+                "heart_rate": None,
+                "flags": "probe-out",
+            })
+        out.append(r)
+    return out
 
 
 def build_spo2_binary(

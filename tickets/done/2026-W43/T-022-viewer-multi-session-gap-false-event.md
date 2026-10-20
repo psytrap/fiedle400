@@ -1,6 +1,6 @@
 # T-022: HTML viewer draws a false desaturation event across a multi-session gap
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -76,7 +76,7 @@ caller that passes it genuinely gapped data.
 
 ## Criteria
 
-- [ ] The live viewer path (`_open_spo2_viewer`/`all_records`) gets the
+- [x] The live viewer path (`_open_spo2_viewer`/`all_records`) gets the
       same gap-awareness T-020 gave the file writer -- either by running
       `all_records` through the same gap-fill logic before building the
       viewer HTML, or a different fix, but the inconsistency between saved
@@ -87,16 +87,45 @@ caller that passes it genuinely gapped data.
     clock jump mid-session) -- fixing only the multi-session case without
     checking the single-session assumption would leave a narrower version
     of the same bug.
-- [ ] A test reproducing this exact scenario (two sessions with a real gap
+- [x] A test reproducing this exact scenario (two sessions with a real gap
       between them, feeding `all_records` to `build_viewer_html` or
       `desat.detect_events` directly) that fails without the fix.
-- [ ] Verified no false event survives the fix, using the reproduction
+- [x] Verified no false event survives the fix, using the reproduction
       above (or equivalent) as a before/after check.
-- [ ] Version bumped via `scripts/bump_version.py` (product-code change).
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Version bumped via `scripts/bump_version.py` (product-code change).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Done 2026-10-20 (cloud, patch 0026, v0.4.22).
+
+- **Reproduced first.** Two sessions 3 minutes apart (end 98/97 %, start 96-94 %) given to
+  `desat.detect_events` side by side gave `[{'start': 33, 'nadir': 44, 'from_pct': 98,
+  'to_pct': 94}]`, a fall across the join. With the fix: no events.
+- **Fix, in the shared place.** New `export.pad_records(records)` returns one entry per
+  elapsed second, gaps filled with probe-out records (spo2/heart_rate `None`, flags
+  `probe-out`, real timestamps), using the same `_sample_positions` as the file writer, so
+  file and viewer cannot disagree again. `spo2_viewer.build_viewer_html` pads first, which
+  fixes the chart position (`x(i)` is index == second again), the event detector, the
+  statistics and the live wizard path (`cli.py` passes `all_records` to the same function)
+  in one step. `desat.py`'s docstring now states the one-second-per-entry assumption and
+  where to pad.
+- **Single-session check (the ticket's side question).** A clock jump inside one session is
+  the same case: its records carry timestamps, so padding handles it the same way; records
+  without usable timestamps still follow one second apart, as in the file writer.
+- **Gap limit (psytrap).** The limit for padding is now 12 hours and exceeding it is a
+  warning, not an error (changes T-020's 7-day `ValueError`): the pause is not padded, one
+  probe-out second marks the break so no event can run across it, and `warnings.warn` says
+  later timestamps are too early. Used by both the file writer and the viewer.
+- **Tests (326, was 321).** `TestViewerAcrossSessionGap` (no false event; one chart entry per
+  second), `TestPadRecords`, and in `test_export_spo2.py` the over-12-hours warning and the
+  just-under-12-hours padding; the old "7 days refused" test replaced. Both new viewer tests
+  fail with `pad_records` taken out (checked). The page was also opened in headless
+  Chromium with the two-session data: the pause is an empty stretch, no red band, 70.7 %
+  probe-out in the statistics.
+- **Docs.** `SPO2_FORMAT.md`, "Several sessions in one file".
+- **Not done.** Not tried on the real two-session device download again; psytrap's pipx
+  reproduction is the check for that.
+

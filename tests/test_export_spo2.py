@@ -16,6 +16,7 @@ from fiedle400.export import (
     SPO2_INVALID_HR,
     build_spo2_binary,
     export_records,
+    pad_records,
 )
 
 # Also import the reference decoder to test round-trip compatibility
@@ -221,13 +222,46 @@ class TestMultiSessionGap(unittest.TestCase):
         data = build_spo2_binary(recs)
         self.assertEqual(parse_header(data)["sample_count"], 4)
 
-    def test_absurd_gap_is_refused(self):
-        recs = [self._rec("2026-10-16T08:37:31"), self._rec("2027-10-16T08:37:31")]
-        with self.assertRaises(ValueError):
-            build_spo2_binary(recs)
+    def test_gap_over_twelve_hours_warns_and_is_not_padded(self):
+        recs = [self._rec("2026-10-16T08:37:31"), self._rec("2026-10-17T20:37:31"),
+                self._rec("2026-10-17T20:37:32")]
+        with self.assertWarns(UserWarning):
+            data = build_spo2_binary(recs)
+        meta = parse_header(data)
+        # records 1, one probe-out second marking the break, records 2 and 3
+        self.assertEqual(meta["sample_count"], 4)
+        samples = parse_samples(data, meta["start_time"], header_count=4)
+        self.assertEqual(samples[1]["status"], "probe-out")
+        self.assertEqual(samples[2]["spo2"], 97)
+
+    def test_gap_just_under_twelve_hours_is_padded(self):
+        recs = [self._rec("2026-10-16T08:00:00"), self._rec("2026-10-16T19:59:59")]
+        data = build_spo2_binary(recs)
+        self.assertEqual(parse_header(data)["sample_count"], 12 * 3600)
 
     def test_empty_records(self):
         self.assertEqual(parse_header(build_spo2_binary([]))["sample_count"], 0)
+
+
+class TestPadRecords(unittest.TestCase):
+    """T-022: callers that read records by list index need index == second."""
+
+    def _rec(self, ts, v=97):
+        return {"timestamp": ts, "spo2": v, "heart_rate": 70, "flags": "ok"}
+
+    def test_gap_becomes_probe_out_records_with_real_timestamps(self):
+        recs = [self._rec("2026-10-16T08:00:00"), self._rec("2026-10-16T08:00:04")]
+        out = pad_records(recs)
+        self.assertEqual(len(out), 5)
+        self.assertEqual([r["flags"] for r in out], ["ok", "probe-out", "probe-out", "probe-out", "ok"])
+        self.assertEqual(out[2]["timestamp"], "2026-10-16T08:00:02")
+        self.assertIsNone(out[2]["spo2"])
+        self.assertIs(out[4], recs[1])
+
+    def test_continuous_records_come_back_unchanged(self):
+        recs = [self._rec("2026-10-16T08:00:%02d" % i) for i in range(5)]
+        self.assertEqual(pad_records(recs), recs)
+        self.assertEqual(pad_records([]), [])
 
 if __name__ == "__main__":
     unittest.main()

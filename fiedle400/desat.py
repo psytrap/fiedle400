@@ -3,7 +3,9 @@
 Implements the detector decoded from SpO2 Assistant (SPO2_FORMAT.md §7.2) and
 validated against the real program with the T-019 probe recording: the same
 event counts for the default parameters and for two changed ones. Samples are
-taken as 1 Hz, as in the `.spo2` format.
+taken as 1 Hz, as in the `.spo2` format: every neighbouring pair is one second apart, so
+a recording with a pause in it (several stored sessions) must be padded to one entry per
+second first, `export.pad_records` (T-022).
 
 Basal SpO2 is the one value that is not confirmed: the plain mean of the valid
 samples reads about 0.8 points lower than the real program's figure on the

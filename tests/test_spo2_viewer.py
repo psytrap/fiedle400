@@ -110,5 +110,45 @@ class TestViewerDesaturationEvents(unittest.TestCase):
         self.assertIn("Basal SpO2 (estimate)", spo2_viewer.build_viewer_html([]))
 
 
+class TestViewerAcrossSessionGap(unittest.TestCase):
+    """T-022: two stored sessions with a real pause between them must not give a false
+    event across the pause, in the chart data or in the statistics."""
+
+    def _two_sessions(self):
+        def r(ts, v):
+            return {"timestamp": ts, "spo2": v, "heart_rate": 70, "flags": "ok"}
+        s1 = [98] * 30 + [98, 98, 98, 98, 97, 97, 97, 97]
+        s2 = [96, 96, 95, 95, 95, 94, 94] + [97] * 30
+        recs = [r("2026-10-16T08:37:%02d" % (31 + i) if i < 29 else "2026-10-16T08:38:%02d" % (i - 29), v)
+                for i, v in enumerate(s1)]
+        recs += [r("2026-10-16T08:41:%02d" % (10 + i) if i < 50 else "2026-10-16T08:42:%02d" % (i - 50), v)
+                 for i, v in enumerate(s2)]
+        return recs
+
+    def _blocks(self, html):
+        out = []
+        for tag in ('<script id="spo2-data" type="application/json">',
+                    '<script id="spo2-events" type="application/json">'):
+            start = html.index(tag) + len(tag)
+            out.append(json.loads(html[start:html.index("</script>", start)]))
+        return out
+
+    def test_no_false_event_across_the_pause(self):
+        from fiedle400 import desat
+        recs = self._two_sessions()
+        # What the viewer used to see: the sessions side by side, an event across the join.
+        self.assertEqual(len(desat.detect_events([r["spo2"] for r in recs])), 1)
+        data, analysis = self._blocks(spo2_viewer.build_viewer_html(recs))
+        self.assertEqual(analysis["events"], [])
+        self.assertEqual(analysis["summary"]["total_event"], 0)
+
+    def test_chart_data_has_one_entry_per_elapsed_second(self):
+        data, _ = self._blocks(spo2_viewer.build_viewer_html(self._two_sessions()))
+        # 08:37:31 .. 08:41:46 inclusive is 256 s; the pause is probe-out.
+        self.assertEqual(len(data), 256)
+        self.assertEqual(data[40]["flags"], "probe-out")
+        self.assertIsNone(data[40]["spo2"])
+
+
 if __name__ == "__main__":
     unittest.main()

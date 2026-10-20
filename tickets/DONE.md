@@ -27,6 +27,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-020](done/2026-W43/T-020-multi-session-spo2-export-loses-gaps.md) | Multi-session `.spo2` export silently discards the gap between sessions | Cloud |
 | [T-011](done/2026-W43/T-011-spo2-assistant-interop-check.md) | Check `.spo2` export compatibility against the real SpO2 Assistant | Local |
 | [T-016](done/2026-W43/T-016-html-viewer-deferred-features.md) | Add save-as-PNG and a smooth trend overlay to the HTML viewer | Cloud *(Won't Do)* |
+| [T-022](done/2026-W43/T-022-viewer-multi-session-gap-false-event.md) | HTML viewer draws a false desaturation event across a multi-session gap | Cloud |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
@@ -82,4 +83,5 @@ announced, not everything it touched.
 - Vendor desaturation-event and Basal SpO2 definitions decoded from `SpO2.exe` and the manual,
   written up in `SPO2_FORMAT.md` §7 (T-017); probe recording script and its validation against the real program (T-019), events and
   report values in the HTML viewer (T-018, v0.4.20), multi-session `.spo2` export keeps the
-  pause between sessions (T-020).
+  pause between sessions (T-020) and the viewer pads it the same way, so no false event across it
+  (T-022, v0.4.22).

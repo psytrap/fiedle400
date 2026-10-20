@@ -63,7 +63,10 @@ The format has one start time and one sample per second; it cannot describe seve
 recordings. `fiedle400`'s multi-session export (`download --all`) therefore writes the pause
 between two stored sessions as probe-out samples (`[0x7F, 0xFF]`), so each record sits at its
 real time and OSCAR's alignment with CPAP data stays correct (T-020). A pause longer than
-7 days (`MAX_GAP_FILL_S`) is refused as a wrong device clock instead of writing a huge file.
+12 hours (`MAX_GAP_FILL_S`) looks like a wrong device clock: it is not padded (that could be a
+huge file), one probe-out sample marks the break, and a warning is printed; timestamps after it
+are then too early by the unpadded time. The HTML viewer pads the same way (`export.pad_records`,
+T-022), so it never draws a fall across the pause.
 
 ---
 
