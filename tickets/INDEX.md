@@ -11,3 +11,4 @@ protocol; `DONE.md` for the archive.
 | [T-013](open/T-013-view-command-for-existing-recordings.md) | `fiedle400 view FILE` opens the HTML viewer for an existing recording | Cloud | Open |
 | [T-016](open/T-016-html-viewer-deferred-features.md) | Add save-as-PNG and a smooth trend overlay to the HTML viewer | Cloud | Open |
 | [T-018](open/T-018-desaturation-events-and-basal-spo2.md) | Show desaturation events, ODI and Basal SpO2 in the HTML viewer | Cloud | Open |
+| [T-020](open/T-020-multi-session-spo2-export-loses-gaps.md) | Multi-session `.spo2` export silently discards the gap between sessions | Cloud | Open |
