@@ -222,7 +222,7 @@ marked *inferred*.
 
 | Report label | Definition | Source |
 | :--- | :--- | :--- |
-| Basal SpO2 (%) | "the average value of SpO2 total" -- the mean SpO2 of the recording, not a sleep or awake baseline. Whether excluded ranges and artifact samples are left out of the mean is *inferred* (likely, not verified). | [M] §5.4.7.3 |
+| Basal SpO2 (%) | "the average value of SpO2 total" -- the mean SpO2 of the recording, not a sleep or awake baseline. Whether excluded ranges and artifact samples are left out of the mean is *inferred* (likely, not verified). **T-019 real-run evidence (2026-10-20):** the probe's flat mean over all samples predicts 95.39 %, the real SpO2 Assistant reported 96.2 % -- a +0.8 pt difference consistent with event-affected ranges being excluded from the mean (not just artifact/sentinel samples), but not confirmed by disassembly. Still *inferred*, now with a real discrepancy pointing the same direction. | [M] §5.4.7.3 |
 | Total Event | Number of SpO2 desaturation events (7.2). | [M] §5.4.7.3 |
 | Index (1/hr) | "the event number per hour" (events / recording hours). | [M] §5.4.7.3 |
 | Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |
@@ -274,5 +274,12 @@ pulse-rate events are detected. Note that "duration" is the **descent time to th
 not the time spent below the start value, which differs from AASM-style scoring.
 
 Validation: `scripts/make_desat_probe.py` writes a synthetic probe recording with the
-predicted report values; T-019 runs it through the real SpO2 Assistant. Until then this
-section is a hypothesis from static analysis.
+predicted report values; T-019 runs it through the real SpO2 Assistant. **Run 1 of 3
+done (2026-10-20, default parameters drop=4/min_time=10/criteria=88):** Total Event,
+Index, Adjusted Index, Avg. Low SpO2, Time <88%, Minimum SpO2 and Artifact % all
+matched; Basal SpO2 differed by +0.8 pts (see §7.1). The two previously-undecoded
+report fields `Ereignis<88%` and `Durchschn. niedrige SpO2<88%` were confirmed from
+the live UI's German labels and match exactly. Still pending: reruns at drop=3 and
+min_time=8 (full details: `tickets/open/T-019-validate-desat-algorithm-in-spo2-assistant.md`).
+Until all three runs are done this section remains a hypothesis, now partially
+corroborated rather than purely static.
