@@ -104,7 +104,11 @@ _TEMPLATE = """<!doctype html>
     return;
   }
   function fmtTs(ts) { return ts == null ? ts : String(ts).replace('T', ' '); }
-  meta.textContent = n + ' record(s), ' + fmtTs(records[0].timestamp) + ' to ' + fmtTs(records[n - 1].timestamp);
+  function fmtSec(s) {
+    var m = Math.floor(s / 60), ss = s % 60;
+    return m + 'm ' + ss + 's';
+  }
+  meta.textContent = fmtTs(records[0].timestamp) + ' to ' + fmtTs(records[n - 1].timestamp) + ' -- duration ' + fmtSec(n);
   var spo2Arr = records.map(function (r) { return r.spo2; });
 
   // Desaturation-event detection, ported from fiedle400/desat.py (SPO2_FORMAT.md
@@ -417,10 +421,6 @@ _TEMPLATE = """<!doctype html>
     // the desaturation criteria level" in SpO2 Assistant too, one input, two uses.
     var desatCount = spo2Vals.filter(function (v) { return v < analysis.params.criteria; }).length;
     function avg(a) { return a.length ? (a.reduce(function (s, v) { return s + v; }, 0) / a.length) : null; }
-    function fmtSec(s) {
-      var m = Math.floor(s / 60), ss = s % 60;
-      return m + 'm ' + ss + 's';
-    }
     var rows = [
       ['__group__', 'Recording'],
       ['Duration', fmtSec(n) + ' (' + n + ' records)'],
