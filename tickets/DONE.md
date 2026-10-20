@@ -26,6 +26,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-019](done/2026-W43/T-019-validate-desat-algorithm-in-spo2-assistant.md) | Validate the decoded desaturation algorithm in SpO2 Assistant | Local |
 | [T-020](done/2026-W43/T-020-multi-session-spo2-export-loses-gaps.md) | Multi-session `.spo2` export silently discards the gap between sessions | Cloud |
 | [T-011](done/2026-W43/T-011-spo2-assistant-interop-check.md) | Check `.spo2` export compatibility against the real SpO2 Assistant | Local |
+| [T-016](done/2026-W43/T-016-html-viewer-deferred-features.md) | Add save-as-PNG and a smooth trend overlay to the HTML viewer | Cloud *(Won't Do)* |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with

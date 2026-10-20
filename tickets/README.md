@@ -53,12 +53,19 @@ you're told to do something, do it; open the ticket alongside the work
 6. Commit and push as usual (this project pushes after every applied
    change — no separate manual-release gate on top of that).
 
+A ticket closed without doing the work (psytrap says to drop it, scope
+moved on, superseded by something else) follows the same steps 3-6 but with
+`Status: Won't Do` instead of `Done`, and Execution Notes giving the reason
+in one or two lines rather than a result. It still moves to `done/` and
+`DONE.md` — "closed" is the state being recorded, not "shipped". It is not
+reopened; if the work becomes wanted again later, open a fresh ticket.
+
 ## Ticket template
 
 ```markdown
 # T-NNN: <Descriptive Title>
 
-- **Status:** Open | In Progress | Done
+- **Status:** Open | In Progress | Done | Won't Do
 - **Priority:** P0 | High | Normal | Low
 - **Owner:** Local | Cloud | Either
 - **Scope & Relevant Files:**

@@ -1,6 +1,6 @@
 # T-016: Add save-as-PNG and a smooth trend overlay to the HTML viewer
 
-- **Status:** Open
+- **Status:** Won't Do
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -54,4 +54,9 @@ rather than being folded into this one.
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Closed 2026-10-20 (psytrap: "close t16 as wont do"), no reason beyond that
+given. Neither item 10 (smooth trend overlay) nor item 11 (save-as-PNG) was
+implemented; nothing in `fiedle400/spo2_viewer.py` changed. If either item
+becomes wanted later, re-open a fresh ticket rather than reopening this one
+-- the surrounding scope (T-007's full candidate list, what's since shipped
+via T-008/T-018) may have moved on by then.

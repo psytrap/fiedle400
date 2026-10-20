@@ -8,4 +8,3 @@ protocol; `DONE.md` for the archive.
 | [T-006](open/T-006-remove-plot-command.md) | Remove `fiedle400 plot` once the HTML viewer supersedes it | Cloud | Open |
 | [T-012](open/T-012-make-html-the-default-download-output.md) | Make the HTML viewer the default download output | Cloud | Open |
 | [T-013](open/T-013-view-command-for-existing-recordings.md) | `fiedle400 view FILE` opens the HTML viewer for an existing recording | Cloud | Open |
-| [T-016](open/T-016-html-viewer-deferred-features.md) | Add save-as-PNG and a smooth trend overlay to the HTML viewer | Cloud | Open |
