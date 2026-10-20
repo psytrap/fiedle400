@@ -1,38 +1,32 @@
-# T-024: Viewer export/save settings button and adjustable analysis parameters
+# T-024: Viewer export/save settings button
 
 - **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
-  - `fiedle400/spo2_viewer.py` (statistics panel, `desat.py` params wiring)
-  - `fiedle400/desat.py` (`DROP`/`MIN_TIME`/`CRITERIA` -- currently fixed
-    constants, not exposed in the page)
-  - `tickets/done/2026-W43/T-018-desaturation-events-and-basal-spo2.md`
-    ("Not done: changing the parameters in the page")
+  - `fiedle400/spo2_viewer.py` (statistics panel)
   - `tickets/open/T-023-viewer-blocked-areas-and-exportable-settings.md`
-    (split from this ticket -- the exclusion-selection interaction this
-    one would persist, if T-023 lands first)
+    (exclusion-selection interaction this ticket would persist)
+  - `tickets/open/T-025-viewer-configurable-saturation-parameters.md`
+    (parameter UI this ticket would persist)
 
 ---
 
 ## Description & Context
 
 psytrap: add an export/save button so the user can keep their configured
-viewer settings -- analysis limits/thresholds (desaturation drop %, minimum
-duration, criteria level) and, once T-023 exists, any excluded ranges --
-rather than losing them every time the page is a fresh one-shot temp file
-(T-005's own design: generate, open, clean up).
+viewer settings rather than losing them every time the page is a fresh
+one-shot temp file (T-005's own design: generate, open, clean up).
 
-**Split 2026-10-20** from a combined ticket that also asked for click/drag
-area-exclusion selection in the chart -- that's now **T-023**. This ticket
-is the persistence/configuration half: making the analysis parameters
-adjustable in the page at all, and an export/save mechanism for them (and,
-once it exists, T-023's exclusion state).
-
-**Pulls in T-018's own leftover item.** T-018 shipped `desat.py` with fixed
-constants (`DROP=4`, `MIN_TIME=10`, `CRITERIA=88`) and explicitly left
-"changing the parameters in the page" as not done. That's this ticket's
-starting point regardless of what T-023 does.
+**Split 2026-10-20, twice.** Originally one ticket covering area-exclusion
+selection, adjustable analysis parameters, and export/save together. Split
+into **T-023** (area-exclusion selection) and this ticket (export/save +
+adjustable parameters); then split again into **T-025** (the parameter UI
+itself) and this ticket, now just the persistence mechanism. This ticket
+has nothing to persist until T-023 and/or T-025 exist -- it depends on at
+least one of them landing first, or defines its format speculatively ahead
+of either (riskier: the format would need to match whatever they actually
+build).
 
 **Not decided here, for whoever picks this up:**
 - What "export/save" actually means for a one-shot temp-file page (T-005):
@@ -43,27 +37,21 @@ starting point regardless of what T-023 does.
 - Whether reloading a saved settings file into a *different* recording
   (not the one it was made for) should be allowed, warned about, or
   rejected.
-- Whether this ticket should wait for T-023 to land first (so it can
-  persist exclusion state from day one) or ship parameter-adjustment and
-  export on its own, with exclusion-state persistence added once T-023
-  exists -- either is fine, but pick one rather than blocking indefinitely
-  on the other ticket's own open scope decision.
+- Whether this ticket should wait for T-023 and/or T-025 to land first, or
+  ship against just one of them with the other added later.
 
 ---
 
 ## Criteria
 
-- [ ] Scope above decided with psytrap and this ticket updated before
-      implementation starts (same pattern as T-018's own placeholder
-      phase).
-- [ ] Desaturation parameters (drop %, min duration, criteria level)
-      adjustable in the page, not just the fixed `desat.py` constants.
-- [ ] An export/save action that persists the configured parameters (and
-      T-023's excluded ranges, if that ticket has landed) in a concrete,
-      chosen format.
-- [ ] A test per piece (parameter adjustment, export format, and
-      round-trip if a reload/import path is built) that fails without the
-      change.
+- [ ] Scope above decided with psytrap (wait for T-023/T-025, or build
+      against whichever already exists) and this ticket updated before
+      implementation starts.
+- [ ] An export/save action that persists whatever of T-023's excluded
+      ranges and T-025's configured parameters exist at the time, in a
+      concrete, chosen format.
+- [ ] A test covering the export format (and round-trip, if a
+      reload/import path is built) that fails without the change.
 - [ ] Version bumped via `scripts/bump_version.py` (product-code change).
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
 

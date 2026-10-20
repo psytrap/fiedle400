@@ -10,4 +10,5 @@ protocol; `DONE.md` for the archive.
 | [T-013](open/T-013-view-command-for-existing-recordings.md) | `fiedle400 view FILE` opens the HTML viewer for an existing recording | Cloud | Open |
 | [T-021](open/T-021-broader-spo2-assistant-decode-coverage.md) | Broader real SpO2 Assistant `.spo2` decode coverage | Local | Open (deferred) |
 | [T-023](open/T-023-viewer-blocked-areas-and-exportable-settings.md) | Viewer area-exclusion selection | Cloud | Open (deferred) |
-| [T-024](open/T-024-viewer-settings-export-and-adjustable-parameters.md) | Viewer export/save settings button and adjustable analysis parameters | Cloud | Open (deferred) |
+| [T-024](open/T-024-viewer-settings-export-and-adjustable-parameters.md) | Viewer export/save settings button | Cloud | Open (deferred) |
+| [T-025](open/T-025-viewer-configurable-saturation-parameters.md) | Configurable desaturation/pulse analysis parameters in the viewer | Cloud | Open (deferred) |
