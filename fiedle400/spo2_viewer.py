@@ -109,7 +109,8 @@ _TEMPLATE = """<!doctype html>
     meta.textContent = 'No records in this recording.';
     return;
   }
-  meta.textContent = n + ' record(s), ' + records[0].timestamp + ' to ' + records[n - 1].timestamp;
+  function fmtTs(ts) { return ts == null ? ts : String(ts).replace('T', ' '); }
+  meta.textContent = n + ' record(s), ' + fmtTs(records[0].timestamp) + ' to ' + fmtTs(records[n - 1].timestamp);
   var spo2Arr = records.map(function (r) { return r.spo2; });
 
   // Desaturation-event detection, ported from fiedle400/desat.py (SPO2_FORMAT.md
