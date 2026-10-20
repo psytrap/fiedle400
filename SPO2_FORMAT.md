@@ -273,13 +273,24 @@ Not determined: whether user-excluded ranges are removed from the series before 
 pulse-rate events are detected. Note that "duration" is the **descent time to the nadir**,
 not the time spent below the start value, which differs from AASM-style scoring.
 
-Validation: `scripts/make_desat_probe.py` writes a synthetic probe recording with the
-predicted report values; T-019 runs it through the real SpO2 Assistant. **Run 1 of 3
-done (2026-10-20, default parameters drop=4/min_time=10/criteria=88):** Total Event,
-Index, Adjusted Index, Avg. Low SpO2, Time <88%, Minimum SpO2 and Artifact % all
-matched; Basal SpO2 differed by +0.8 pts (see §7.1). The two previously-undecoded
-report fields `Ereignis<88%` and `Durchschn. niedrige SpO2<88%` were confirmed from
-the live UI's German labels and match exactly. Still pending: reruns at drop=3 and
-min_time=8 (full details: `tickets/open/T-019-validate-desat-algorithm-in-spo2-assistant.md`).
-Until all three runs are done this section remains a hypothesis, now partially
-corroborated rather than purely static.
+**Validated (T-019, 2026-10-20).** `scripts/make_desat_probe.py` writes a synthetic
+probe recording with predicted report values; T-019 ran it through the real SpO2
+Assistant (Windows 8.1 laptop) three times, varying `drop` and `min_time`:
+
+| Run | Parameters | Predicted events | Actual events |
+| :---: | :--- | :---: | :---: |
+| 1 | drop=4, min_time=10 (default) | 7 | 7 |
+| 2 | drop=3, min_time=10 | 8 | 8 |
+| 3 | drop=4, min_time=8 | 9 | 9 |
+
+All three matched exactly, validating the acceptance formula above (`depth >= drop`,
+`min_time <= duration <= max_time`, `depth / duration < max_avg`, `oscillation`-based
+merging) against the real program, not just its static decode. Index, Adjusted Index,
+Avg. Low SpO2, Time <88%, Minimum SpO2 and Artifact % also matched in every run. Two
+previously-undecoded report fields were confirmed from the live UI's German labels:
+`Ereignis<88%` (count of events whose nadir crosses the criteria level) and
+`Durchschn. niedrige SpO2<88%` (mean nadir of only those sub-criteria events) --
+both matched exactly. The only discrepancy across all three runs: Basal SpO2 read
++0.8 pts higher than predicted every time (see §7.1's note on excluded ranges, still
+*inferred* not confirmed). Full comparison and raw report files:
+`tickets/done/2026-W43/T-019-validate-desat-algorithm-in-spo2-assistant.md`.

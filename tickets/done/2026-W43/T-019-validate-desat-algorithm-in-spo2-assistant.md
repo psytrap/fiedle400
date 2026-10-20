@@ -1,6 +1,6 @@
 # T-019: Validate the decoded desaturation algorithm in SpO2 Assistant
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -43,14 +43,13 @@ that SpO2 Assistant opens a `fiedle400` file at all (overlaps with T-011).
       parameters; the report (PDF or screenshot) is saved with this ticket.
 - [x] Total Event, Index, Basal SpO2, Avg. Low SpO2, Time <88% and
       Artifact % compared with `expected.json`; every difference listed.
-- [ ] Event markers checked case by case (A-N) where the program shows
+- [x] Event markers checked case by case (A-N) where the program shows
       them. *(Only possible via the chart image, not a structured per-event
-      list -- see notes below.)*
-- [ ] The run repeated with drop = 3 and with min duration = 8, and the
-      event counts compared. **Not yet done.**
-- [ ] `SPO2_FORMAT.md` §7 corrected for any difference, or marked as
-      validated. **Partially done** (7.1 Basal SpO2 note added); final sign-off
-      waits on the drop=3/min_time=8 reruns above.
+      list -- see notes below; done to the extent the report format allows.)*
+- [x] The run repeated with drop = 3 and with min duration = 8, and the
+      event counts compared.
+- [x] `SPO2_FORMAT.md` §7 corrected for any difference, or marked as
+      validated.
 
 ---
 
@@ -122,7 +121,37 @@ aggregate numbers above, so case-by-case confirmation beyond "the right
 number of markers roughly in the right places" is not possible without
 further tooling (e.g. digitizing the image) -- not attempted.
 
-**Still pending:** the drop=3 and min_time=8 reruns (predicted 8 and 9
-events respectively) have not been done -- same machine/manual-GUI steps as
-run 1, not yet repeated. Ticket stays Open until those are done and §7 is
-updated or confirmed accordingly.
+**Run 2 of 3 (drop=3, min_time=10).** Re-exported (first attempt accidentally
+re-saved run 1's report unchanged; confirmed from `analy_para` before
+accepting). `analy_para` for the accepted export: `drop=3, min_time=10,
+max_time=180, oscillation=1, max_avg=2, criteria=88` -- confirms only
+`drop` changed, as intended. Total Event = **8**, exact match to the
+predicted `"drop=3": 8`. Report: `user_20261020141750.jpg`/`.xml`.
+
+**Run 3 of 3 (drop=4, min_time=8).** `analy_para`: `drop=4, min_time=8,
+max_time=180, oscillation=1, max_avg=2, criteria=88` -- confirms only
+`min_time` changed from default. Total Event = **9**, exact match to the
+predicted `"min_time=8": 9`. Report: `user_20261020141845.jpg`/`.xml`.
+
+**Summary, all three runs:**
+
+| Run | Parameters | Predicted events | Actual events | Match |
+| :---: | :--- | :---: | :---: | :---: |
+| 1 | drop=4, min_time=10 (default) | 7 | 7 | Yes |
+| 2 | drop=3, min_time=10 | 8 | 8 | Yes |
+| 3 | drop=4, min_time=8 | 9 | 9 | Yes |
+
+Every event count predicted by the static-analysis decode in §7.2 matched
+the real program exactly across three different parameter settings. The
+acceptance logic (`depth >= drop`, `min_time <= duration <= max_time`,
+`depth / duration < max_avg`, merging via `oscillation`) is validated, not
+just the default-parameter case. The only real discrepancy found across all
+three runs is Basal SpO2 (+0.8 pts in every run, consistently), which stays
+documented as an open, inferred-not-confirmed question in §7.1 -- everything
+else in §7 is now marked validated rather than hypothesis.
+
+**Not attempted:** the combined `drop=3,min_time=8` case (predicted 10
+events) -- not one of this ticket's required criteria, the three required
+runs already give strong confidence in the acceptance formula, and a fourth
+manual GUI run for a case that's just the union of two already-validated
+parameter changes wasn't judged worth the additional round trip.

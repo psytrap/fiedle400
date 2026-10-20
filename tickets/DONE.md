@@ -22,6 +22,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-014](done/2026-W43/T-014-patch-sync-script.md) | Script to apply and generate the local/cloud sync patches | Local |
 | [T-015](done/2026-W43/T-015-coordinator-compact-clear-rule-and-model-check.md) | Context-hygiene hint and model check as an advisory rule | Local |
 | [T-017](done/2026-W43/T-017-desaturation-and-basal-spo2-definitions.md) | Research the vendor's desaturation-event and "Basal SpO2" definitions | Cloud |
+| [T-019](done/2026-W43/T-019-validate-desat-algorithm-in-spo2-assistant.md) | Validate the decoded desaturation algorithm in SpO2 Assistant | Local |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
