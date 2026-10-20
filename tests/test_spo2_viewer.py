@@ -184,13 +184,49 @@ class TestViewerConfigurableEventParameters(unittest.TestCase):
         self.assertIn("document.getElementById('critLevel').value = analysis.params.criteria", self.html)
 
     def test_pulse_rate_events_explicitly_noted_as_not_implemented(self):
-        # T-025: no decoded pulse-event detector exists; the page must say so
-        # rather than offer dead pulse-parameter inputs.
+        # T-025: no decoded pulse-event detector exists; the SpO2 row must say
+        # so (the pulse row itself is covered by TestViewerDummyPulseInputs).
         self.assertIn("pulse-rate events: not decoded", self.html)
-        self.assertNotIn('id="pulseDropPct"', self.html)
 
     def test_inputs_recompute_on_change(self):
         self.assertIn("addEventListener('input', recomputeEvents)", self.html)
+
+
+class TestViewerDummyPulseInputs(unittest.TestCase):
+    """Placeholder pulse-rate parameter inputs matching SpO2 Assistant's own
+    "Pulsrate Parameter" dialog section, added so the layout can be reviewed
+    before T-029/T-030 decode and implement the real detector. Explicitly
+    disabled and labelled dummy -- no detector exists yet (see T-025/T-028's
+    original "not decoded" decision), so these must never look functional."""
+
+    def setUp(self):
+        self.html = spo2_viewer.build_viewer_html([])
+
+    def test_has_an_input_per_pulse_parameter(self):
+        self.assertIn('id="pulseDropBpm"', self.html)
+        self.assertIn('id="pulseMinDur"', self.html)
+
+    def test_inputs_are_disabled(self):
+        self.assertRegex(self.html, r'id="pulseDropBpm"[^>]*\bdisabled\b')
+        self.assertRegex(self.html, r'id="pulseMinDur"[^>]*\bdisabled\b')
+
+    def test_marked_as_dummy_not_functional(self):
+        self.assertIn("dummy", self.html.lower())
+        self.assertIn("not functional", self.html.lower())
+        self.assertIn("T-029", self.html)
+        self.assertIn("T-030", self.html)
+
+    def test_defaults_match_the_real_spo2_assistant_dialog(self):
+        # Captured live against the T-019 probe recording (screenshot):
+        # Pulsaenderung fuer Ereignis 6 bpm, Minimum Ereignisdauer 8 s.
+        self.assertIn('id="pulseDropBpm" min="2" max="20" step="1" value="6"', self.html)
+        self.assertIn('id="pulseMinDur" min="1" max="180" step="1" value="8"', self.html)
+
+    def test_not_wired_to_any_recompute(self):
+        # Dummy inputs must not trigger recomputeEvents -- there is nothing
+        # for them to recompute.
+        self.assertNotIn("pulseDropBpm').addEventListener", self.html)
+        self.assertNotIn("pulseMinDur').addEventListener", self.html)
 
 
 if __name__ == "__main__":

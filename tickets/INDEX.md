@@ -13,4 +13,5 @@ protocol; `DONE.md` for the archive.
 | [T-024](open/T-024-viewer-settings-export-and-adjustable-parameters.md) | Viewer export/save settings button | Cloud | Open (deferred) |
 | [T-026](open/T-026-refine-t25-saturation-parameters.md) | Refine T-025's saturation parameters based on user feedback | Local or Cloud | Open (placeholder) |
 | [T-027](open/T-027-js-detection-logic-test-coverage.md) | Automated test coverage for the viewer's ported JS detection logic | Cloud | Open |
-| [T-028](open/T-028-pulse-rate-desaturation-events.md) | Decode and implement pulse-rate desaturation events | Cloud | Open |
+| [T-029](open/T-029-pulse-rate-desaturation-decode.md) | Decode and validate the pulse-rate desaturation detector | Cloud | Open |
+| [T-030](open/T-030-pulse-rate-desaturation-implementation.md) | Implement the pulse-rate desaturation detector | Cloud | Open |

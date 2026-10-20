@@ -38,9 +38,10 @@ _TEMPLATE = """<!doctype html>
   #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
   #desatLevel { width: 3.5em; }
   #dropPct, #minDur, #critLevel { width: 3.5em; }
+  #pulseDropBpm, #pulseMinDur { width: 3.5em; }
   @media print {
     body { margin: 0.5em; background: #fff; }
-    #resetZoom, #printBtn, #legend input[type=checkbox], #levelRow, #eventParamsRow { display: none !important; }
+    #resetZoom, #printBtn, #legend input[type=checkbox], #levelRow, #eventParamsRow, #pulseParamsRow { display: none !important; }
     .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #tooltip { display: none !important; }
     canvas { border: 1px solid #999; }
@@ -63,6 +64,7 @@ _TEMPLATE = """<!doctype html>
 <table id="stats"></table>
 <p id="levelRow" style="font-size:0.85em;color:#666">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
 <p id="eventParamsRow" style="font-size:0.85em;color:#666">Desaturation event: fall of at least <input type="number" id="dropPct" min="1" max="20" step="1"> % over <input type="number" id="minDur" min="1" max="180" step="1">-180 s, criteria level <input type="number" id="critLevel" min="1" max="99" step="1"> % (pulse-rate events: not decoded, SpO2 only -- T-025)</p>
+<p id="pulseParamsRow" style="font-size:0.85em;color:#999">Pulse-rate event (dummy, not functional -- T-029/T-030): change of at least <input type="number" id="pulseDropBpm" min="2" max="20" step="1" value="6" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> bpm over <input type="number" id="pulseMinDur" min="1" max="180" step="1" value="8" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> s</p>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script id="spo2-events" type="application/json">%%EVENTS%%</script>
 <script>
