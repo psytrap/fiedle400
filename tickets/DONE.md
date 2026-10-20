@@ -29,6 +29,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-016](done/2026-W43/T-016-html-viewer-deferred-features.md) | Add save-as-PNG and a smooth trend overlay to the HTML viewer | Cloud *(Won't Do)* |
 | [T-022](done/2026-W43/T-022-viewer-multi-session-gap-false-event.md) | HTML viewer draws a false desaturation event across a multi-session gap | Cloud |
 | [T-025](done/2026-W43/T-025-viewer-configurable-saturation-parameters.md) | Configurable desaturation analysis parameters in the viewer | Local |
+| [T-026](done/2026-W43/T-026-viewer-html-design-and-format-feedback.md) | HTML viewer design and format feedback | Local |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with

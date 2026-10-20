@@ -1,6 +1,6 @@
 # T-026: HTML viewer design and format feedback
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -38,11 +38,11 @@ permanent record rather than gating any of the individual changes.
 
 ## Criteria
 
-- [ ] Feedback collected and addressed, logged in Execution Notes as it
+- [x] Feedback collected and addressed, logged in Execution Notes as it
       comes in.
-- [ ] Each piece of feedback addressed, or explicitly deferred with a
+- [x] Each piece of feedback addressed, or explicitly deferred with a
       reason, not silently dropped.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
@@ -94,4 +94,9 @@ as T-004/T-025). Applied so far, each its own commit:
   gap with no pointer to where it gets resolved.
 
 337 tests pass throughout (5 net new from the dummy pulse-input tests).
-Still open -- review is ongoing, more feedback expected.
+
+Closed 2026-10-20: psytrap confirmed "happy now" after the double-spacing
+fix on the readonly 180 box -- "this was an important refinement." No
+further feedback pending. Version bumped per AGENTS.md's ticket-closure
+rule (the only version bump across this whole series of changes; each
+individual round was a direct-instruction tweak, not its own release).
