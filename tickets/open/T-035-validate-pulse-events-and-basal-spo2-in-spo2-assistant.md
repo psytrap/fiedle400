@@ -1,9 +1,10 @@
 # T-035: Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant
 
-- **Status:** Open
+- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**
+  - `SPO2_ASSISTANT_CHECKS.md` (the procedure to follow, written in T-036)
   - `scripts/make_pulse_basal_probe.py` (writes the probe recording and the predictions)
   - `SPO2_FORMAT.md` §7.1 (Basal SpO2 row) and §7.3 (pulse-rate events), the hypotheses
     being validated
@@ -14,6 +15,11 @@
 ---
 
 ## Description & Context
+
+**Deferred by psytrap, 2026-10-20.** T-030 was implemented without waiting for this
+check, so the viewer shows pulse events from the static decode alone. If this check later
+finds a difference, fix `desat.py` and the viewer's JS port together (the T-027 parity test
+keeps them in step).
 
 psytrap, 2026-10-20: confirm the new findings in the real Windows program once the
 analysis is done. T-029 and T-031 decoded two things from `SpO2.exe` (static analysis only,
@@ -26,10 +32,11 @@ addresses in `SPO2_FORMAT.md`):
   (start to nadir). That is the rule `desat.py` already used; T-019's single data point
   (96.2 reported) could not tell it apart from "mean of samples >= 88 %".
 
-Same method as T-019. `python3 scripts/make_pulse_basal_probe.py OUTDIR` writes
+Follow `SPO2_ASSISTANT_CHECKS.md` (the reusable procedure split out of this ticket into
+T-036). `python3 scripts/make_pulse_basal_probe.py OUTDIR` writes
 `probe-pulse-basal.SpO2` (49.5 min, 1 Hz, start 2026-10-21 22:00:00), `probe-pulse-basal.csv`
 (the same series) and `expected.json` (predictions overall and per case). A copy generated
-in the cloud is in the project files under `probe-spo2/t034/`.
+in the cloud is in the project files under `probe-spo2/t035/`.
 
 Predicted with default parameters (SpO2 drop 4 %, min 10 s, criteria 88 %; pulse change
 6 bpm, time 8 s):
@@ -65,9 +72,10 @@ flash for this; it only needs the laptop and the probe file.
 - [ ] Basal SpO2 compared with 94.3 / 96.8 / 93.7; which rule matched is recorded.
 - [ ] Pulse event count (and index / average duration where shown) compared with
       `expected.json`; every difference listed.
-- [ ] Re-run with pulse change = 5 and with pulse time = 7; counts compared (5 and 5).
+- [ ] Re-run with pulse change = 5 and with pulse time = 7; counts compared (5 and 5)
+      (`scripts/check_spo2_assistant_report.py report.xml expected.json --variant "pulse change=5"`).
 - [ ] `SPO2_FORMAT.md` §7.1 / §7.3 marked as validated, or corrected; `desat.py` fixed if
-      a prediction was wrong (cloud follow-up if needed). T-030 can then start.
+      a prediction was wrong (cloud follow-up if needed).
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---

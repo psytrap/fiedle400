@@ -10,7 +10,8 @@ second first, `export.pad_records` (T-022).
 Basal SpO2 is the mean of the valid samples outside the event descents (start to
 nadir), decoded from SpO2.exe in T-031 (SPO2_FORMAT.md §7.1). The program runs
 the same detector on the pulse rate with its own parameters (T-029, §7.3);
-`detect_pulse_events` gives those events, nothing displays them yet (T-030).
+`detect_pulse_events` gives those events and `summarize_pulse` their report values (T-030).
+The decoded algorithm has not yet been checked in the real program (T-035).
 """
 
 DROP = 4          # Percent Drop For Event (%)
@@ -121,4 +122,21 @@ def summarize(spo2, events, criteria=CRITERIA):
     # start..nadir) / (valid count - those samples); not computed when nothing is left.
     basal = [spo2[i] for i in valid if i not in inside]
     out["basal_spo2"] = round(sum(basal) / len(basal), 2) if basal else None
+    return out
+
+
+def summarize_pulse(pulse, events):
+    """Pulse-channel report values (SPO2_FORMAT.md §7.1/§7.3; same formulas as `summarize`).
+    Valid pulse is 1..250 like the rest of fiedle400, while the detector's own range is
+    0..254; the program's artifact count may differ at the margins (T-035)."""
+    valid = sum(1 for v in pulse if v is not None and 1 <= v <= 250)
+    out = dict(samples=len(pulse), valid_samples=valid, total_event=len(events))
+    if not pulse:
+        return out
+    out["index_per_hr"] = round(len(events) / (len(pulse) / 3600.0), 2)
+    out["adjusted_index_per_hr"] = round(len(events) / (valid / 3600.0), 2) if valid else None
+    out["artifact_pct"] = round(100.0 * (len(pulse) - valid) / len(pulse), 2)
+    out["avg_event_duration_s"] = (
+        round(sum(e["nadir"] - e["start"] for e in events) / len(events), 1) if events else None
+    )
     return out

@@ -8,6 +8,22 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.27 (2026-10-20)
+
+The rest of the 0.4.26 work: the 0028 that was applied was an earlier draft, without the
+T-030 and T-036 changes below.
+
+- **T-030:** the viewer shows pulse-rate events: amber bands on the heart-rate series, a "Pulse-rate
+  events" statistics group (count, index and adjusted index, average duration) and live
+  "Pulse-rate event" inputs (2-20 bpm, 1-180 s, defaults 6 bpm / 8 s) recomputed in the page.
+  `desat.summarize_pulse`; the JS port is covered by the parity test. The decoded algorithm is not yet
+  checked in the real SpO2 Assistant (T-035, now deferred).
+- **T-036:** `SPO2_ASSISTANT_CHECKS.md`, a reusable procedure for confirming a decoded algorithm in
+  the real SpO2 Assistant, and `scripts/check_spo2_assistant_report.py`, which compares a report XML
+  with a probe's `expected.json`. Not exercised in the cloud; running a check is local.
+
+---
+
 ## 0.4.26 (2026-10-20)
 
 **Breaking CLI change (T-012, psytrap's decision):** `fiedle400 download` now writes the

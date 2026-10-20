@@ -44,7 +44,6 @@ _TEMPLATE = """<!doctype html>
   .paramTable { border-collapse: collapse; margin: 0.4em 0; }
   .paramTable td { padding: 1px 8px 1px 0; }
   .paramTable td:first-child { color: #666; }
-  #pulseParamsTable td:first-child { color: #999; }
   .paramGroup { padding: 0.6em 0 0.2em; margin-top: 0.4em; border-top: 1px solid #e5e5e5; }
   .paramGroup:first-of-type { border-top: none; }
   @media print {
@@ -77,22 +76,20 @@ _TEMPLATE = """<!doctype html>
   <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> - <input type="number" id="maxTimeFixed" value="180" readonly title="Fixed by SpO2 Assistant, not adjustable (SPO2_FORMAT.md Sec7.2)"> s</td></tr>
   <tr><td>count event as severe if under</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
 </table>
-<p id="eventParamsNote" style="font-size:0.85em;color:#666;margin:0.4em 0 0">(pulse-rate events: decoded, not shown yet -- T-030)</p>
 </div>
 <div id="pulseParamsGroup" class="paramGroup">
-<table id="pulseParamsTable" class="paramTable" style="font-size:0.85em;color:#999">
+<table id="pulseParamsTable" class="paramTable" style="font-size:0.85em">
   <tr><td colspan="2"><strong>Pulse-rate event</strong></td></tr>
-  <tr><td>change of at least</td><td><input type="number" id="pulseDropBpm" min="2" max="20" step="1" value="6" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> bpm</td></tr>
-  <tr><td>over</td><td><input type="number" id="pulseMinDur" min="1" max="180" step="1" value="8" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> s</td></tr>
+  <tr><td>fall of at least</td><td><input type="number" id="pulseDropBpm" min="2" max="20" step="1"> bpm</td></tr>
+  <tr><td>over</td><td><input type="number" id="pulseMinDur" min="1" max="180" step="1"> - 180 s</td></tr>
 </table>
-<p id="pulseParamsNote" style="font-size:0.85em;color:#999;margin:0.4em 0 0">(dummy, not functional -- T-029/T-030)</p>
 </div>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script id="spo2-events" type="application/json">%%EVENTS%%</script>
 <script>
 (function () {
   var records = JSON.parse(document.getElementById('spo2-data').textContent);
-  // {events, summary, params}, computed in Python (desat.py) for the page's initial
+  // {events, summary, params, pulse: {events, summary, params}}, computed in Python (desat.py) for the page's initial
   // load; re-derived here in JS (detectEvents/summarizeEvents, a 1:1 port of
   // desat.py's detect_events/summarize) whenever the event parameters below change,
   // so the page recomputes without a server round-trip (T-025).
@@ -110,6 +107,7 @@ _TEMPLATE = """<!doctype html>
   }
   meta.textContent = fmtTs(records[0].timestamp) + ' to ' + fmtTs(records[n - 1].timestamp) + ' -- duration ' + fmtSec(n);
   var spo2Arr = records.map(function (r) { return r.spo2; });
+  var pulseArr = records.map(function (r) { return r.heart_rate; });
 
   // BEGIN desat-port (extracted and run under Node by tests/test_desat_js_parity.py, T-027)
   // Desaturation-event detection, ported from fiedle400/desat.py (SPO2_FORMAT.md
@@ -117,8 +115,14 @@ _TEMPLATE = """<!doctype html>
   // Analyseparameter dialog, which doesn't expose them either (T-019 screenshot).
   var EVT_MAX_TIME = 180, EVT_MAX_AVG = 2, EVT_OSCILLATION = 1, EVT_LO = 0, EVT_HI = 100, EVT_INVALID = 127;
 
-  function detectEvents(spo2, drop, minTime) {
-    var x = spo2.map(function (v) { return (v === null || v === undefined) ? EVT_INVALID : v; });
+  // The pulse-rate detector is the same code on the pulse series (SPO2_FORMAT.md §7.3):
+  // valid range 0..254, probe-out 255, only falls count.
+  var PULSE_HI = 254, PULSE_INVALID = 255;
+
+  function detectEvents(spo2, drop, minTime, hi, invalid) {
+    if (hi === undefined) hi = EVT_HI;
+    if (invalid === undefined) invalid = EVT_INVALID;
+    var x = spo2.map(function (v) { return (v === null || v === undefined) ? invalid : v; });
     var cands = [];
     var st = 0, en = 0;
     function finish() {
@@ -127,7 +131,7 @@ _TEMPLATE = """<!doctype html>
     }
     for (var i = 0; i < x.length; i++) {
       var v = x[i];
-      if (v > EVT_HI || v < EVT_LO) { finish(); continue; }
+      if (v > hi || v < EVT_LO) { finish(); continue; }
       if (i === 0) continue;
       var p = x[i - 1];
       if (v > p) {
@@ -136,7 +140,7 @@ _TEMPLATE = """<!doctype html>
         if (st) en = i;
       } else if (st) {
         en = i;
-      } else if (p > EVT_LO && p < EVT_HI) {
+      } else if (p > EVT_LO && p < hi) {
         st = i - 1; en = i;
       }
     }
@@ -146,7 +150,7 @@ _TEMPLATE = """<!doctype html>
       var dur = c[1] - c[0], depth = c[2] - c[3];
       if (!dur || depth < drop || dur < minTime || dur > EVT_MAX_TIME) return false;
       if (!(Math.floor(depth / dur) < EVT_MAX_AVG)) return false;
-      for (var k = c[0]; k <= c[1]; k++) { if (!(x[k] >= EVT_LO && x[k] <= EVT_HI)) return false; }
+      for (var k = c[0]; k <= c[1]; k++) { if (!(x[k] >= EVT_LO && x[k] <= hi)) return false; }
       return true;
     }
 
@@ -166,6 +170,21 @@ _TEMPLATE = """<!doctype html>
     return events.map(function (e) { return { start: e[0], nadir: e[1], from_pct: e[2], to_pct: e[3] }; });
   }
 
+  // Python's round(x, n): nearest, exact ties to even (Math.round is half-up and
+  // v * 100 is inexact). toFixed is exact; a tie is a value whose exact decimal
+  // expansion is the kept digits, a 5 and nothing else.
+  function pyRound(v, nd) {
+    var t = Math.abs(v).toFixed(nd + 40);
+    var cut = t.length - 40;
+    var down = Number(t.slice(0, cut)), up = Number(Math.abs(v).toFixed(nd));
+    var r = up;
+    if (t.slice(cut) === '5' + new Array(40).join('0') && Number(t.slice(cut - 1, cut)) % 2 === 0) r = down;
+    return v < 0 ? -r : r;
+  }
+  function r2(v) { return pyRound(v, 2); }
+  function r1(v) { return pyRound(v, 1); }
+  function sum(a, f) { return a.reduce(function (s, e) { return s + f(e); }, 0); }
+
   function summarizeEvents(spo2, events, criteria) {
     var valid = [];
     for (var i = 0; i < spo2.length; i++) {
@@ -174,20 +193,6 @@ _TEMPLATE = """<!doctype html>
     }
     var out = { samples: spo2.length, valid_samples: valid.length, total_event: events.length };
     if (!spo2.length) return out;
-    // Python's round(x, n): nearest, exact ties to even (Math.round is half-up and
-    // v * 100 is inexact). toFixed is exact; a tie is a value whose exact decimal
-    // expansion is the kept digits, a 5 and nothing else.
-    function pyRound(v, nd) {
-      var t = Math.abs(v).toFixed(nd + 40);
-      var cut = t.length - 40;
-      var down = Number(t.slice(0, cut)), up = Number(Math.abs(v).toFixed(nd));
-      var r = up;
-      if (t.slice(cut) === '5' + new Array(40).join('0') && Number(t.slice(cut - 1, cut)) % 2 === 0) r = down;
-      return v < 0 ? -r : r;
-    }
-    function r2(v) { return pyRound(v, 2); }
-    function r1(v) { return pyRound(v, 1); }
-    function sum(a, f) { return a.reduce(function (s, e) { return s + f(e); }, 0); }
     var hours = spo2.length / 3600.0;
     out.index_per_hr = r2(events.length / hours);
     out.adjusted_index_per_hr = valid.length ? r2(events.length / (valid.length / 3600.0)) : null;
@@ -203,6 +208,22 @@ _TEMPLATE = """<!doctype html>
     out.basal_spo2 = basal.length ? r2(sum(basal, function (v) { return v; }) / basal.length) : null;
     return out;
   }
+
+  // Pulse-channel report values, ported from desat.summarize_pulse (valid pulse 1..250).
+  function summarizePulse(pulse, events) {
+    var valid = 0;
+    for (var i = 0; i < pulse.length; i++) {
+      var v = pulse[i];
+      if (v !== null && v !== undefined && v >= 1 && v <= 250) valid++;
+    }
+    var out = { samples: pulse.length, valid_samples: valid, total_event: events.length };
+    if (!pulse.length) return out;
+    out.index_per_hr = r2(events.length / (pulse.length / 3600.0));
+    out.adjusted_index_per_hr = valid ? r2(events.length / (valid / 3600.0)) : null;
+    out.artifact_pct = r2(100.0 * (pulse.length - valid) / pulse.length);
+    out.avg_event_duration_s = events.length ? r1(sum(events, function (e) { return e.nadir - e.start; }) / events.length) : null;
+    return out;
+  }
   // END desat-port
 
   function recomputeEvents() {
@@ -213,10 +234,22 @@ _TEMPLATE = """<!doctype html>
     if (isNaN(minTime) || minTime < 1 || minTime > EVT_MAX_TIME) return;
     if (isNaN(criteria) || criteria < 1 || criteria > 99) return;
     var events = detectEvents(spo2Arr, drop, minTime);
-    analysis = {
+    analysis.events = events;
+    analysis.summary = summarizeEvents(spo2Arr, events, criteria);
+    analysis.params = { drop: drop, min_time: minTime, max_time: EVT_MAX_TIME, criteria: criteria };
+    stats(); render();
+  }
+
+  function recomputePulse() {
+    var drop = parseFloat(document.getElementById('pulseDropBpm').value);
+    var minTime = parseInt(document.getElementById('pulseMinDur').value, 10);
+    if (isNaN(drop) || drop < 2 || drop > 20) return;
+    if (isNaN(minTime) || minTime < 1 || minTime > EVT_MAX_TIME) return;
+    var events = detectEvents(pulseArr, drop, minTime, PULSE_HI, PULSE_INVALID);
+    analysis.pulse = {
       events: events,
-      summary: summarizeEvents(spo2Arr, events, criteria),
-      params: { drop: drop, min_time: minTime, max_time: EVT_MAX_TIME, criteria: criteria },
+      summary: summarizePulse(pulseArr, events),
+      params: { drop: drop, min_time: minTime },
     };
     stats(); render();
   }
@@ -224,8 +257,13 @@ _TEMPLATE = """<!doctype html>
   document.getElementById('dropPct').value = analysis.params.drop;
   document.getElementById('minDur').value = analysis.params.min_time;
   document.getElementById('critLevel').value = analysis.params.criteria;
+  document.getElementById('pulseDropBpm').value = analysis.pulse.params.drop;
+  document.getElementById('pulseMinDur').value = analysis.pulse.params.min_time;
   ['dropPct', 'minDur', 'critLevel'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', recomputeEvents);
+  });
+  ['pulseDropBpm', 'pulseMinDur'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', recomputePulse);
   });
 
   // Fixed ranges so different recordings are visually comparable, not
@@ -348,6 +386,16 @@ _TEMPLATE = """<!doctype html>
       });
     }
 
+    // Pulse-rate events (falls only): amber bands, drawn with the heart-rate series.
+    if (show.heart_rate) {
+      ctx.fillStyle = 'rgba(214,158,46,0.28)';
+      analysis.pulse.events.forEach(function (e) {
+        if (e.nadir < vs || e.start > ve) return;
+        var x0 = x(Math.max(e.start, vs)), x1 = x(Math.min(e.nadir, ve));
+        ctx.fillRect(x0, padT, Math.max(2, x1 - x0), plotH);
+      });
+    }
+
     if (show.spo2) drawSeries('spo2', '#2b6cb0', ySpo2);
     if (show.heart_rate) drawSeries('heart_rate', '#c05621', yHr);
 
@@ -451,6 +499,13 @@ _TEMPLATE = """<!doctype html>
       ['Basal SpO2', f1(a.basal_spo2, '%') + ' (mean outside the event falls, as SpO2 Assistant computes it)'],
       ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
     );
+    var pu = analysis.pulse.summary, pp = analysis.pulse.params;
+    rows.push(
+      ['__group__', 'Pulse-rate events'],
+      ['Event index', f1(pu.index_per_hr, ' /hr') + ' (adjusted ' + f1(pu.adjusted_index_per_hr, ' /hr') + ')'],
+      ['Pulse-rate events', pu.total_event + ' (amber bands; fall of at least ' + pp.drop + ' bpm over ' + pp.min_time + '-' + analysis.params.max_time + ' s)'],
+      ['Average event duration', f1(pu.avg_event_duration_s, ' s')]
+    );
     var table = document.getElementById('stats');
     table.innerHTML = rows.map(function (r) {
       if (r[0] === '__group__') return '<tr><th colspan="2" class="statsGroup">' + r[1] + '</th></tr>';
@@ -505,6 +560,8 @@ def build_viewer_html(records):
     data_json = json.dumps(payload).replace("<", "\\u003c")
     spo2 = [p["spo2"] for p in payload]
     events = desat.detect_events(spo2)
+    pulse = [p["heart_rate"] for p in payload]
+    pulse_events = desat.detect_pulse_events(pulse)
     analysis = {
         "events": events,
         "summary": desat.summarize(spo2, events),
@@ -513,6 +570,11 @@ def build_viewer_html(records):
             "min_time": desat.MIN_TIME,
             "max_time": desat.MAX_TIME,
             "criteria": desat.CRITERIA,
+        },
+        "pulse": {
+            "events": pulse_events,
+            "summary": desat.summarize_pulse(pulse, pulse_events),
+            "params": {"drop": desat.PULSE_DROP, "min_time": desat.PULSE_MIN_TIME},
         },
     }
     events_json = json.dumps(analysis).replace("<", "\\u003c")

@@ -235,7 +235,8 @@ Sources: [M] = *SpO2 Assistant User Manual*, CONTEC, 2010-05-27
 (`http://manual.pulseoximeter.org/SPO2_Assistant_Manual.pdf`), section given;
 [X] = static disassembly of `archive/bruteforce/SpO2.exe` (gitignored local artifact),
 virtual address given (image base `0x400000`). Anything not backed by one of these is
-marked *inferred*.
+marked *inferred*. A decode counts as validated once the real program has reproduced
+predicted numbers; `SPO2_ASSISTANT_CHECKS.md` is the procedure for that check.
 
 ### 7.1 Report values
 
@@ -336,5 +337,6 @@ above 254 (the `0xFF` sentinel) breaks it. A rise in pulse rate is never an even
 step 2 of the detection ends a candidate on any rise. The pulse event list feeds the pulse
 columns of the report XML (`0x4fd8e1`-`0x4fdb63`): event count, total and average event
 duration, index and adjusted index, artifact %. `fiedle400/desat.py`'s `detect_pulse_events`
-implements it; nothing displays pulse events yet (T-030). Not yet checked against the real
-program: `scripts/make_pulse_basal_probe.py` writes a probe with predicted counts (T-035).
+implements it, `summarize_pulse` computes the pulse report values, and the viewer shows the
+events as bands on the heart-rate series with adjustable parameters (T-030). Not yet checked
+against the real program: `scripts/make_pulse_basal_probe.py` writes a probe with predicted counts (T-035).

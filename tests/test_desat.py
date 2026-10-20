@@ -137,6 +137,28 @@ class TestPulseEvents(unittest.TestCase):
             self.assertEqual(desat.detect_pulse_events(x), [], gap)
 
 
+class TestSummarizePulse(unittest.TestCase):
+    """Pulse report values (SPO2_FORMAT.md §7.1): same formulas as the SpO2 channel."""
+
+    def test_values(self):
+        x = [70] * 1000 + _fall(70, 6, 10) + [70] * 1000 + [None] * 50 + [0] * 50 + [255] * 100
+        ev = desat.detect_pulse_events(x)
+        self.assertEqual(len(ev), 1)
+        s = desat.summarize_pulse(x, ev)
+        n, bad = len(x), 200  # None, 0 and 255 are not valid pulse values
+        self.assertEqual((s["samples"], s["valid_samples"], s["total_event"]), (n, n - bad, 1))
+        self.assertEqual(s["index_per_hr"], round(3600.0 / n, 2))
+        self.assertEqual(s["adjusted_index_per_hr"], round(3600.0 / (n - bad), 2))
+        self.assertEqual(s["artifact_pct"], round(100.0 * bad / n, 2))
+        self.assertEqual(s["avg_event_duration_s"], 10.0)
+
+    def test_no_events_and_empty(self):
+        s = desat.summarize_pulse([70] * 100, [])
+        self.assertEqual((s["total_event"], s["index_per_hr"], s["avg_event_duration_s"]), (0, 0.0, None))
+        self.assertEqual(desat.summarize_pulse([], []), dict(samples=0, valid_samples=0, total_event=0))
+        self.assertIsNone(desat.summarize_pulse([None] * 5, [])["adjusted_index_per_hr"])
+
+
 class TestPulseBasalProbe(unittest.TestCase):
     """scripts/make_pulse_basal_probe.py: every case lands as designed, and the three
     Basal candidates differ at the program's printed precision (T-035 checks them)."""

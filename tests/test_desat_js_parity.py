@@ -26,9 +26,13 @@ BEGIN, END = "// BEGIN desat-port", "// END desat-port"
 RUNNER = """
 var fs = require('fs');
 var block = process.argv[1];
-var port = new Function(block + '; return {detectEvents: detectEvents, summarizeEvents: summarizeEvents};')();
+var port = new Function(block + '; return {detectEvents: detectEvents, summarizeEvents: summarizeEvents, summarizePulse: summarizePulse, PULSE_HI: PULSE_HI, PULSE_INVALID: PULSE_INVALID};')();
 var cases = JSON.parse(fs.readFileSync(0, 'utf8'));
 var out = cases.map(function (c) {
+  if (c.pulse) {
+    var pe = port.detectEvents(c.spo2, c.drop, c.min_time, port.PULSE_HI, port.PULSE_INVALID);
+    return {events: pe, summary: port.summarizePulse(c.spo2, pe)};
+  }
   var events = port.detectEvents(c.spo2, c.drop, c.min_time);
   return {events: events, summary: port.summarizeEvents(c.spo2, events, c.criteria)};
 });
@@ -152,6 +156,43 @@ class TestJsMatchesPython(unittest.TestCase):
         self.assertEqual(len(events), 4)
         self.assertEqual(desat.summarize(x, events)["avg_event_duration_s"], 10.2)
         self._compare([x], [(4, 10, 88)])
+
+    # Pulse series (T-030): same detector with range 0..254 / probe-out 255, plus summarize_pulse.
+    PULSE_PARAMS = [(6, 8), (4, 8), (6, 12), (10, 5)]
+
+    def _compare_pulse(self, series_list, params=None):
+        cases = [dict(spo2=s, drop=d, min_time=m, pulse=True) for s in series_list for d, m in (params or self.PULSE_PARAMS)]
+        got = self._run_js(cases)
+        self.assertEqual(len(got), len(cases))
+        for case, js in zip(cases, got):
+            events = desat.detect_pulse_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
+            py = json.loads(json.dumps({"events": events, "summary": desat.summarize_pulse(case["spo2"], events)}))
+            where = f"pulse drop={case['drop']} min_time={case['min_time']} series={case['spo2']}"
+            self.assertEqual(js["events"], py["events"], where)
+            self.assertEqual(js["summary"], py["summary"], where)
+
+    def test_pulse_cases_above_100_and_gaps(self):
+        cases = [
+            [140] * 20 + _fall(140, 6, 8) + [140] * 10,
+            [70] * 20 + _fall(70, 6, 10) + [70] * 10,
+            [70] * 20 + [70 + k for k in range(1, 11)] + [80] * 20,  # a rise is not an event
+            [70] * 20 + _fall(70, 3, 5) + [None, 67] + _fall(67, 4, 5) + [70] * 10,
+            [70] * 20 + _fall(70, 3, 5) + [255, 67] + _fall(67, 4, 5) + [70] * 10,
+            [250] * 5 + _fall(250, 8, 10) + [254, 255, None, 0, 251, 252] + [200] * 5,
+            [], [None] * 20, [255] * 20,
+        ]
+        self._compare_pulse(cases)
+        got = self._run_js([dict(spo2=cases[0], drop=6, min_time=8, pulse=True)])[0]
+        self.assertEqual(len(got["events"]), 1)
+
+    def test_pulse_seeded_random_sequences(self):
+        rng = random.Random(30)
+        series = []
+        for s in _fuzz_cases(150, seed=30):
+            off = rng.choice((0, 40, 100, 160))  # lift into the pulse range, incl. above 100
+            series.append([v if v is None or v in (127, 255) or v == 0 else v + off for v in s])
+        self.assertGreater(sum(len(desat.detect_pulse_events(s)) for s in series), 30)
+        self._compare_pulse(series, self.PULSE_PARAMS[:2])
 
 
 if __name__ == "__main__":

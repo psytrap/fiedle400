@@ -194,51 +194,63 @@ class TestViewerConfigurableEventParameters(unittest.TestCase):
         self.assertIn("document.getElementById('minDur').value = analysis.params.min_time", self.html)
         self.assertIn("document.getElementById('critLevel').value = analysis.params.criteria", self.html)
 
-    def test_pulse_rate_events_explicitly_noted_as_not_shown(self):
-        # T-029 decoded the pulse-event detector, but the viewer does not show
-        # pulse events until T-030; the SpO2 row must say so (the pulse row
-        # itself is covered by TestViewerDummyPulseInputs).
-        self.assertIn("pulse-rate events: decoded, not shown yet", self.html)
-
     def test_inputs_recompute_on_change(self):
         self.assertIn("addEventListener('input', recomputeEvents)", self.html)
 
 
-class TestViewerDummyPulseInputs(unittest.TestCase):
-    """Placeholder pulse-rate parameter inputs matching SpO2 Assistant's own
-    "Pulsrate Parameter" dialog section, added so the layout can be reviewed
-    before T-029/T-030 decode and implement the real detector. Explicitly
-    disabled and labelled dummy -- no detector exists yet (see T-025/T-028's
-    original "not decoded" decision), so these must never look functional."""
+class TestViewerPulseRateEvents(unittest.TestCase):
+    """T-030: the pulse-rate event parameters are live inputs, pre-filled from desat.py,
+    and the page carries the Python-computed pulse events and summary. The JS port is
+    checked against Python in tests/test_desat_js_parity.py."""
 
     def setUp(self):
         self.html = spo2_viewer.build_viewer_html([])
+
+    def _analysis(self, recs):
+        return TestViewerAcrossSessionGap()._blocks(spo2_viewer.build_viewer_html(recs))[1]
 
     def test_has_an_input_per_pulse_parameter(self):
         self.assertIn('id="pulseDropBpm"', self.html)
         self.assertIn('id="pulseMinDur"', self.html)
 
-    def test_inputs_are_disabled(self):
-        self.assertRegex(self.html, r'id="pulseDropBpm"[^>]*\bdisabled\b')
-        self.assertRegex(self.html, r'id="pulseMinDur"[^>]*\bdisabled\b')
+    def test_inputs_are_live_and_no_longer_marked_dummy(self):
+        self.assertNotRegex(self.html, r'id="pulseDropBpm"[^>]*\bdisabled\b')
+        self.assertNotRegex(self.html, r'id="pulseMinDur"[^>]*\bdisabled\b')
+        self.assertNotIn("dummy", self.html.lower())
+        self.assertNotIn("not functional", self.html.lower())
+        self.assertNotIn("T-030", self.html)
+        self.assertNotIn("decoded, not shown yet", self.html)
 
-    def test_marked_as_dummy_not_functional(self):
-        self.assertIn("dummy", self.html.lower())
-        self.assertIn("not functional", self.html.lower())
-        self.assertIn("T-029", self.html)
-        self.assertIn("T-030", self.html)
+    def test_ranges_match_the_real_spo2_assistant_dialog(self):
+        self.assertIn('id="pulseDropBpm" min="2" max="20"', self.html)
+        self.assertIn('id="pulseMinDur" min="1" max="180"', self.html)
 
-    def test_defaults_match_the_real_spo2_assistant_dialog(self):
-        # Captured live against the T-019 probe recording (screenshot):
-        # Pulsaenderung fuer Ereignis 6 bpm, Minimum Ereignisdauer 8 s.
-        self.assertIn('id="pulseDropBpm" min="2" max="20" step="1" value="6"', self.html)
-        self.assertIn('id="pulseMinDur" min="1" max="180" step="1" value="8"', self.html)
+    def test_defaults_come_from_desat_py_not_the_template(self):
+        from fiedle400 import desat
+        for input_id in ("pulseDropBpm", "pulseMinDur"):
+            self.assertNotRegex(self.html, r'id="%s"[^>]*value=' % input_id)
+        self.assertIn("document.getElementById('pulseDropBpm').value = analysis.pulse.params.drop", self.html)
+        self.assertIn("document.getElementById('pulseMinDur').value = analysis.pulse.params.min_time", self.html)
+        params = self._analysis([])["pulse"]["params"]
+        self.assertEqual(params, {"drop": desat.PULSE_DROP, "min_time": desat.PULSE_MIN_TIME})
+        self.assertEqual((params["drop"], params["min_time"]), (6, 8))  # the real program's defaults
 
-    def test_not_wired_to_any_recompute(self):
-        # Dummy inputs must not trigger recomputeEvents -- there is nothing
-        # for them to recompute.
-        self.assertNotIn("pulseDropBpm').addEventListener", self.html)
-        self.assertNotIn("pulseMinDur').addEventListener", self.html)
+    def test_inputs_recompute_on_change(self):
+        self.assertIn("addEventListener('input', recomputePulse)", self.html)
+
+    def test_pulse_events_and_summary_are_injected(self):
+        def r(i, hr):
+            return {"timestamp": "2026-10-20T22:%02d:%02d" % (i // 60, i % 60), "spo2": 97, "heart_rate": hr, "flags": "ok"}
+        hr = [80] * 30 + [80 - (6 * k + 9) // 10 for k in range(1, 11)] + [80] * 30
+        pulse = self._analysis([r(i, v) for i, v in enumerate(hr)])["pulse"]
+        self.assertEqual(len(pulse["events"]), 1)
+        self.assertEqual((pulse["events"][0]["from_pct"], pulse["events"][0]["to_pct"]), (80, 74))
+        self.assertEqual(pulse["summary"]["total_event"], 1)
+        self.assertEqual(pulse["summary"]["avg_event_duration_s"], 10.0)
+
+    def test_drawn_and_listed(self):
+        self.assertIn("analysis.pulse.events.forEach", self.html)
+        self.assertIn("'Pulse-rate events'", self.html)
 
 
 if __name__ == "__main__":

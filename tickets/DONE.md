@@ -36,6 +36,8 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-027](done/2026-W43/T-027-js-detection-logic-test-coverage.md) | Automated test coverage for the viewer's ported JS detection logic | Cloud |
 | [T-029](done/2026-W43/T-029-pulse-rate-desaturation-decode.md) | Decode and validate the pulse-rate desaturation detector | Cloud |
 | [T-031](done/2026-W43/T-031-basal-spo2-rule-confirmation.md) | Confirm the exact Basal SpO2 calculation rule | Cloud |
+| [T-030](done/2026-W43/T-030-pulse-rate-desaturation-implementation.md) | Implement the pulse-rate desaturation detector | Cloud |
+| [T-036](done/2026-W43/T-036-spo2-assistant-check-procedure.md) | Reusable procedure for confirming a decoded algorithm in SpO2 Assistant | Cloud |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
