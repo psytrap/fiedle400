@@ -134,8 +134,8 @@ elsewhere in these docs.
 
 While working through several tickets, or when opening one, follow
 `.agents/rules/coordinator-and-model-checks.md` (advisory `/clear`/`/compact` hint and a
-one-line model suggestion; the user always decides). While working on a ticket, show a
-progress block as `.agents/rules/progress-blocks.md` describes.
+one-line model suggestion; the user always decides). On every ticket, keep the
+pending-steps checklist current as `.agents/rules/progress-blocks.md` describes.
 
 `tickets/` is tracked in git on purpose. Do NOT use `output/` for anything the
 cloud must read — it is gitignored and therefore invisible to a git-based sync.

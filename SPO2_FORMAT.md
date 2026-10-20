@@ -210,7 +210,7 @@ def read_spo2_file(data: bytes) -> Tuple[datetime, List[dict]]:
 
 Reference material from T-017 (2026-10-20). This section describes how the vendor's
 SpO2 Assistant computes its report values. It is **not** a `fiedle400` feature spec;
-`fiedle400` implements none of it (follow-up: T-018).
+`fiedle400/desat.py` implements it for the HTML viewer (T-018).
 
 Sources: [M] = *SpO2 Assistant User Manual*, CONTEC, 2010-05-27
 (`http://manual.pulseoximeter.org/SPO2_Assistant_Manual.pdf`), section given;
@@ -222,7 +222,7 @@ marked *inferred*.
 
 | Report label | Definition | Source |
 | :--- | :--- | :--- |
-| Basal SpO2 (%) | "the average value of SpO2 total" -- the mean SpO2 of the recording, not a sleep or awake baseline. Whether excluded ranges and artifact samples are left out of the mean is *inferred* (likely, not verified). **T-019 real-run evidence (2026-10-20):** the probe's flat mean over all samples predicts 95.39 %, the real SpO2 Assistant reported 96.2 % -- a +0.8 pt difference consistent with event-affected ranges being excluded from the mean (not just artifact/sentinel samples), but not confirmed by disassembly. Still *inferred*, now with a real discrepancy pointing the same direction. | [M] §5.4.7.3 |
+| Basal SpO2 (%) | "the average value of SpO2 total" -- the mean SpO2 of the recording, not a sleep or awake baseline. Whether excluded ranges and artifact samples are left out of the mean is *inferred* (likely, not verified). **T-019 real-run evidence (2026-10-20):** the probe's flat mean over all samples predicts 95.39 %, the real SpO2 Assistant reported 96.2 % -- a +0.8 pt difference consistent with event-affected ranges being excluded from the mean (not just artifact/sentinel samples), but not confirmed by disassembly. Still *inferred*, now with a real discrepancy pointing the same direction. `fiedle400/desat.py` (T-018) uses the mean outside the event falls (96.23 on the probe) and labels it an estimate; the mean of samples >= 88 % (96.21) fits equally well. | [M] §5.4.7.3 |
 | Total Event | Number of SpO2 desaturation events (7.2). | [M] §5.4.7.3 |
 | Index (1/hr) | "the event number per hour" (events / recording hours). | [M] §5.4.7.3 |
 | Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |

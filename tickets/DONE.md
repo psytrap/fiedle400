@@ -22,6 +22,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-014](done/2026-W43/T-014-patch-sync-script.md) | Script to apply and generate the local/cloud sync patches | Local |
 | [T-015](done/2026-W43/T-015-coordinator-compact-clear-rule-and-model-check.md) | Context-hygiene hint and model check as an advisory rule | Local |
 | [T-017](done/2026-W43/T-017-desaturation-and-basal-spo2-definitions.md) | Research the vendor's desaturation-event and "Basal SpO2" definitions | Cloud |
+| [T-018](done/2026-W43/T-018-desaturation-events-and-basal-spo2.md) | Show desaturation events, event index and Basal SpO2 in the HTML viewer | Cloud |
 | [T-019](done/2026-W43/T-019-validate-desat-algorithm-in-spo2-assistant.md) | Validate the decoded desaturation algorithm in SpO2 Assistant | Local |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
@@ -76,5 +77,5 @@ announced, not everything it touched.
   T-012); `.spo2` export keeps SpO2 and pulse sentinels in step (T-004, v0.4.19).
 - This ticket's own housekeeping (T-010), the patch sync script (T-014) and the advisory rule (T-015).
 - Vendor desaturation-event and Basal SpO2 definitions decoded from `SpO2.exe` and the manual,
-  written up in `SPO2_FORMAT.md` §7 (T-017); probe recording script and validation ticket T-019,
-  implementation placeholder T-018.
+  written up in `SPO2_FORMAT.md` §7 (T-017); probe recording script and its validation against the real program (T-019), events and
+  report values in the HTML viewer (T-018, v0.4.20).

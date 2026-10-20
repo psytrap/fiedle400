@@ -17,6 +17,7 @@ from datetime import datetime
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
+from fiedle400.desat import detect_events  # noqa: E402
 from fiedle400.export import build_spo2_binary  # noqa: E402
 
 BASE = 97
@@ -89,64 +90,14 @@ def build_series():
     return s, cases
 
 
-def detect(x, drop=4, min_time=10, max_time=180, max_avg=2, oscillation=1, lo=0, hi=100):
-    """The detector decoded from SpO2.exe (SPO2_FORMAT.md §7.2). Returns [start, nadir, from, to]."""
-    cands = []
-    st = en = 0
-
-    def finish():
-        nonlocal st, en
-        if st and en and en - st > 0:
-            cands.append([st, en, x[st], x[en]])
-        st = en = 0
-
-    for i, v in enumerate(x):
-        if v > hi or v < lo:
-            finish()
-            continue
-        if i == 0:
-            continue
-        p = x[i - 1]
-        if v > p:
-            finish()
-        elif v == p:
-            if st:
-                en = i
-        elif st:
-            en = i
-        elif lo < p < hi:
-            st, en = i - 1, i
-    finish()
-
-    def accepted(c):
-        dur, depth = c[1] - c[0], c[2] - c[3]
-        return (dur and depth >= drop and min_time <= dur <= max_time and depth // dur < max_avg
-                and all(lo <= x[k] <= hi for k in range(c[0], c[1] + 1)))
-
-    events = []
-    if not cands:
-        return events
-    cur = cands[0][:]
-    for n in cands[1:]:
-        if n[2] - cur[3] <= oscillation and n[3] < cur[3] and n[2] < cur[2] and n[0] - cur[1] <= min_time:
-            cur[1], cur[3] = n[1], n[3]
-        else:
-            if accepted(cur):
-                events.append(cur)
-            cur = n[:]
-    if accepted(cur):
-        events.append(cur)
-    return events
-
-
 def main(argv):
     outdir = argv[1] if len(argv) > 1 else "."
     s, cases = build_series()
-    events = detect(s)
+    events = detect_events(s)
     for c in cases:
-        got = [e for e in events if c["start_s"] - 1 <= e[0] < c["end_s"]]
+        got = [e for e in events if c["start_s"] - 1 <= e["start"] < c["end_s"]]
         c["predicted"] = "event" if got else "none"
-        c["events"] = [dict(start_s=e[0], nadir_s=e[1], from_pct=e[2], to_pct=e[3]) for e in got]
+        c["events"] = [dict(start_s=e["start"], nadir_s=e["nadir"], from_pct=e["from_pct"], to_pct=e["to_pct"]) for e in got]
         assert c["predicted"] == c["expect"], c
     valid = [v for v in s if 1 <= v <= 100]
     summary = dict(
@@ -156,14 +107,14 @@ def main(argv):
         index_per_hr=round(len(events) / (len(s) / 3600), 2),
         adjusted_index_per_hr=round(len(events) / (len(valid) / 3600), 2),
         basal_spo2_mean=round(sum(valid) / len(valid), 2),
-        avg_low_spo2=round(sum(e[3] for e in events) / len(events), 2),
+        avg_low_spo2=round(sum(e["to_pct"] for e in events) / len(events), 2),
         min_spo2=min(valid),
         time_below_88_s=sum(1 for v in valid if v < 88),
         artifact_samples=len(s) - len(valid),
         total_event_with_other_params={
-            "drop=3": len(detect(s, drop=3)),
-            "min_time=8": len(detect(s, min_time=8)),
-            "drop=3,min_time=8": len(detect(s, drop=3, min_time=8)),
+            "drop=3": len(detect_events(s, drop=3)),
+            "min_time=8": len(detect_events(s, min_time=8)),
+            "drop=3,min_time=8": len(detect_events(s, drop=3, min_time=8)),
         },
     )
     recs = [dict(spo2=None if v == PROBE_OUT else v, heart_rate=None if v == PROBE_OUT else HR)

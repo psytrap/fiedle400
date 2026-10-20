@@ -8,6 +8,8 @@ with no server and no extra dependency (T-005).
 
 import json
 
+from fiedle400 import desat
+
 _TEMPLATE = """<!doctype html>
 <html>
 <head>
@@ -59,9 +61,11 @@ _TEMPLATE = """<!doctype html>
 <table id="stats"></table>
 <p id="levelRow" style="font-size:0.85em;color:#666">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
+<script id="spo2-events" type="application/json">%%EVENTS%%</script>
 <script>
 (function () {
   var records = JSON.parse(document.getElementById('spo2-data').textContent);
+  var analysis = JSON.parse(document.getElementById('spo2-events').textContent); // {events, summary}, computed in Python (desat.py)
   var meta = document.getElementById('meta');
   var n = records.length;
   if (n === 0) {
@@ -181,6 +185,16 @@ _TEMPLATE = """<!doctype html>
       ctx.stroke();
     }
 
+    // Desaturation events (SpO2 Assistant's method): shaded from the start of the fall to the nadir.
+    if (show.spo2) {
+      ctx.fillStyle = 'rgba(197,48,48,0.18)';
+      analysis.events.forEach(function (e) {
+        if (e.nadir < vs || e.start > ve) return;
+        var x0 = x(Math.max(e.start, vs)), x1 = x(Math.min(e.nadir, ve));
+        ctx.fillRect(x0, padT, Math.max(2, x1 - x0), plotH);
+      });
+    }
+
     if (show.spo2) drawSeries('spo2', '#2b6cb0', ySpo2);
     if (show.heart_rate) drawSeries('heart_rate', '#c05621', yHr);
 
@@ -273,6 +287,15 @@ _TEMPLATE = """<!doctype html>
       ['Time below ' + DESAT_THRESHOLD + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')],
       ['No-signal / probe-out', fmtSec(invalidCount) + ' (' + (100 * invalidCount / n).toFixed(1) + '%)'],
     ];
+    var a = analysis.summary;
+    function f1(v, unit) { return v === null || v === undefined ? 'n/a' : v.toFixed(1) + unit; }
+    rows.push(
+      ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s, SpO2 Assistant method)'],
+      ['Event index', f1(a.index_per_hr, ' /hr') + ' (adjusted ' + f1(a.adjusted_index_per_hr, ' /hr') + ')'],
+      ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
+      ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
+      ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed)']
+    );
     var table = document.getElementById('stats');
     table.innerHTML = rows.map(function (r) {
       return '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>';
@@ -325,4 +348,17 @@ def build_viewer_html(records):
         for r in records
     ]
     data_json = json.dumps(payload).replace("<", "\\u003c")
-    return _TEMPLATE.replace("%%DATA%%", data_json)
+    spo2 = [p["spo2"] for p in payload]
+    events = desat.detect_events(spo2)
+    analysis = {
+        "events": events,
+        "summary": desat.summarize(spo2, events),
+        "params": {
+            "drop": desat.DROP,
+            "min_time": desat.MIN_TIME,
+            "max_time": desat.MAX_TIME,
+            "criteria": desat.CRITERIA,
+        },
+    }
+    events_json = json.dumps(analysis).replace("<", "\\u003c")
+    return _TEMPLATE.replace("%%DATA%%", data_json).replace("%%EVENTS%%", events_json)

@@ -86,5 +86,29 @@ class TestViewerControls(unittest.TestCase):
             self.assertNotIn(needle, self.html)
 
 
+class TestViewerDesaturationEvents(unittest.TestCase):
+    """T-018: events are computed in Python and injected next to the records."""
+
+    def _analysis(self, html):
+        tag = '<script id="spo2-events" type="application/json">'
+        start = html.index(tag) + len(tag)
+        return json.loads(html[start:html.index("</script>", start)])
+
+    def test_events_and_summary_are_injected(self):
+        spo2 = [97] * 30 + [96, 96, 96, 95, 95, 95, 94, 94, 94, 93, 93, 93] + [95, 97] * 5
+        records = [{"timestamp": "t%d" % i, "spo2": v, "heart_rate": 70, "flags": "ok"} for i, v in enumerate(spo2)]
+        analysis = self._analysis(spo2_viewer.build_viewer_html(records))
+        self.assertEqual(len(analysis["events"]), 1)
+        self.assertEqual(analysis["summary"]["total_event"], 1)
+        self.assertEqual(analysis["params"]["drop"], 4)
+
+    def test_empty_recording_has_an_analysis_block(self):
+        analysis = self._analysis(spo2_viewer.build_viewer_html([]))
+        self.assertEqual(analysis["events"], [])
+
+    def test_basal_spo2_is_labelled_as_an_estimate(self):
+        self.assertIn("Basal SpO2 (estimate)", spo2_viewer.build_viewer_html([]))
+
+
 if __name__ == "__main__":
     unittest.main()
