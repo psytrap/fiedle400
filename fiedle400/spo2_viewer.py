@@ -39,7 +39,7 @@ _TEMPLATE = """<!doctype html>
   #legend input[type=checkbox] { margin-right: 0.4em; }
   #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
   #dropPct, #minDur, #critLevel, #maxTimeFixed { width: 3.5em; }
-  #maxTimeFixed { color: #999; background: #f5f5f5; margin-left: 0.6em; }
+  #maxTimeFixed { color: #999; background: #f5f5f5; }
   #pulseDropBpm, #pulseMinDur { width: 3.5em; }
   .paramTable { border-collapse: collapse; margin: 0.4em 0; }
   .paramTable td { padding: 1px 8px 1px 0; }
