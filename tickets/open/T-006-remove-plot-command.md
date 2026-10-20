@@ -28,18 +28,20 @@ real cost). If an HTML viewer does the same job with no extra runtime
 dependency, that cost -- and the whole `plot`/matplotlib code path --
 has no remaining reason to exist.
 
-**Explicitly blocked on T-005**, and on T-005 actually reaching
-feature parity with what `plot` provides today (dual-axis SpO2 +
-heart-rate chart) -- this should not be executed before that's true,
-regardless of when this ticket itself gets picked up.
+**Blocked on T-013** (updated 2026-10-20). T-005 is done and, with T-008
+(v0.4.18), the viewer matches the chart `plot` draws and goes beyond it. What
+is missing is a way to open an existing recording file in the viewer: `plot`
+takes any `.spo2`/`.csv`/`.json`, the viewer is only offered after a wizard
+download. T-013 adds `fiedle400 view FILE` and moves the file readers out of
+`plot.py`; do not execute this ticket before that is true.
 
 ---
 
 ## Criteria
 
-- [ ] T-005's HTML viewer is shipped and covers what `plot` provides
-      today (confirm feature parity explicitly before removing
-      anything -- don't assume).
+- [ ] The HTML viewer (T-005, T-008) is shipped, `fiedle400 view FILE` exists
+      (T-013) and covers what `plot` provides today (confirm feature parity
+      explicitly before removing anything -- don't assume).
 - [ ] `plot` subcommand, `fiedle400/plot.py`, matplotlib bundling in
       `fiedle400.spec`, and the `fiedle400[plot]` extra are removed.
 - [ ] Every doc that mentions `plot` or the matplotlib dependency is

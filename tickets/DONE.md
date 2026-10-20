@@ -9,3 +9,5 @@ Archive register for `tickets/done/`. See `README.md` for the protocol.
 | [T-003](done/T-003-worked-download-walkthrough.md) | Worked example -- one real download, start to finish | Local |
 | [T-005](done/T-005-html-spo2-viewer.md) | HTML viewer for `.spo2` files, offered from the wizard | Cloud |
 | [T-007](done/T-007-html-viewer-feature-evaluation.md) | Evaluate further features for the HTML `.spo2` viewer | Cloud |
+| [T-008](done/T-008-html-viewer-adopted-features.md) | HTML viewer extras adopted from the T-007 evaluation | Cloud |
+| [T-009](done/T-009-html-viewer-as-default-output.md) | Evaluate making the HTML viewer the default output | Cloud |

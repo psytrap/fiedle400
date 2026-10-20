@@ -2,15 +2,15 @@
 
 **Superseded by direct instruction, 2026-10-20:** psytrap decided this
 directly rather than waiting on the evaluation below -- see
-[T-012](T-012-make-html-the-default-download-output.md), which carries
+[T-012](../open/T-012-make-html-the-default-download-output.md), which carries
 out the change and absorbs this ticket's open questions (non-interactive
 `-f/--format` behaviour, keeping the raw data file, headless/CI safety)
-as its own criteria. Left open rather than closed: the CI-testability
+as its own criteria. Kept as a record, closed 2026-10-20 (see Execution Notes): the CI-testability
 constraint recorded below is still the standing reason a native GUI
 toolkit was never considered as the mechanism, and is worth keeping as
 a citable record independent of T-012's execution.
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -82,22 +82,55 @@ layer CI doesn't have today, where HTML-in-a-string does not.
 
 ## Criteria
 
-- [ ] A written recommendation exists (this ticket's own Execution
+- [x] A written recommendation exists (this ticket's own Execution
       Notes): keep the current opt-in default, or change it, with a
       reason -- not a flat "yes/no" with no justification.
-- [ ] If changing the default is recommended, the non-interactive
+- [x] If changing the default is recommended, the non-interactive
       `download` CLI behaviour (scripted use, no prompts) is addressed
       explicitly: what it writes by default today must keep working
       unless this ticket's follow-up says otherwise.
-- [ ] Any recommended change is filed as its own follow-up ticket
+- [x] Any recommended change is filed as its own follow-up ticket
       rather than implemented inline here.
-- [ ] The recommendation explicitly confirms it keeps the viewer
+- [x] The recommendation explicitly confirms it keeps the viewer
       testable headlessly under GitHub Actions (no real display or
       browser needed in CI) -- not silently assumed.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Outcome (written 2026-10-20, after psytrap's T-012).** Nothing was changed in
+code for this ticket. psytrap decided the question directly in
+[T-012](../open/T-012-make-html-the-default-download-output.md), so the follow-up
+this ticket asked for already exists and no further ticket is filed for it.
+Status is Done; the note at the top about this ticket staying a citable
+record still holds.
+
+What the evaluation adds to T-012:
+- **Wizard prompt default to yes:** supported. The viewer is no longer a
+  draft (T-008, v0.4.18: channel switches, zoom, statistics, print), and it
+  already degrades safely: `_open_spo2_viewer` prints the saved file's path
+  when no opener works (T-005 notes), so "yes" on an SSH session costs nothing.
+- **`download -f html`:** my first reading was against it, because an HTML page is
+  a presentation of the records, not a data format. T-012 already attaches the
+  conditions that settle that (the default stays `spo2`, the raw data file is
+  always written next to the HTML, no failure when no browser can open), so
+  I have no further objection.
+- **Raw `.spo2` stays always written:** already a criterion in T-012.
+- **T-006 and a gap found while reading `cli.py`:** `plot` accepts any
+  `.spo2`/`.csv`/`.json` file, but the viewer is only reachable from a fresh
+  download. `plot` cannot be removed until the viewer can open an existing
+  file. Filed as **T-013** (`fiedle400 view FILE`). The file readers
+  (`read_spo2_file`, `read_csv_file`, `read_json_file`, `load_session_file`)
+  live in `fiedle400/plot.py`, which imports matplotlib at the top, so T-013
+  moves them to a matplotlib-free module first. T-006 now waits on T-013.
+- T-012's wizard offer after `csv` and `json` saves is a small add-on worth
+  considering there: the records are already in memory.
+- T-008's open items (channel switch, print) are done, so nothing here waits on them.
+
+**CI stays headless.** The viewer is a string built by `build_viewer_html` and
+tested as text, and launching it is the mockable `_open_in_viewer` call
+(`TestOpenInViewer`). T-012 and T-013 need no display or browser in
+`.github/workflows/tests.yml`; a native GUI toolkit stays rejected for that
+reason. Suite: 289 run, OK (skipped=15).

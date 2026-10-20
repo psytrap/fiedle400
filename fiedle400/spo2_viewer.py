@@ -30,21 +30,34 @@ _TEMPLATE = """<!doctype html>
   #stats { margin-top: 1em; border-collapse: collapse; font-size: 0.9em; }
   #stats th, #stats td { text-align: left; padding: 3px 1.2em 3px 0; }
   #stats th { color: #666; font-weight: normal; }
+  #legend label { cursor: pointer; user-select: none; }
+  #legend input[type=checkbox] { margin-right: 0.4em; }
+  #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
+  #desatLevel { width: 3.5em; }
+  @media print {
+    body { margin: 0.5em; background: #fff; }
+    #resetZoom, #printBtn, #legend input[type=checkbox], #levelRow { display: none !important; }
+    .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #tooltip { display: none !important; }
+    canvas { border: 1px solid #999; }
+  }
 </style>
 </head>
 <body>
 <h1>fiedle400 recording</h1>
 <div id="meta"></div>
 <div id="legend">
-  <span><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, fixed 50-100)</span>
-  <span><span class="dot" style="background:#c05621"></span>Heart rate (bpm, fixed 30-220)</span>
+  <label><input type="checkbox" id="showSpo2" checked><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, fixed 50-100)</label>
+  <label><input type="checkbox" id="showHr" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, fixed 30-220)</label>
   <button id="resetZoom">Reset zoom</button>
+  <button id="printBtn" type="button">Print</button>
 </div>
 <div id="chartWrap">
   <canvas id="c" height="420"></canvas>
   <div id="tooltip"></div>
 </div>
 <table id="stats"></table>
+<p id="levelRow" style="font-size:0.85em;color:#666">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script>
 (function () {
@@ -63,7 +76,8 @@ _TEMPLATE = """<!doctype html>
   // range covering rest through heavy exertion.
   var SPO2_LO = 50, SPO2_HI = 100;
   var HR_LO = 30, HR_HI = 220;
-  var DESAT_THRESHOLD = 90; // common clinical desaturation threshold, for the stats line below
+  var DESAT_THRESHOLD = 90; // default level for "time below"; changeable in the page (vendor: a user-chosen level)
+  var show = { spo2: true, heart_rate: true }; // per-channel switches (checkboxes in the legend)
 
   var canvas = document.getElementById('c');
   var ctx = canvas.getContext('2d');
@@ -127,13 +141,13 @@ _TEMPLATE = """<!doctype html>
     for (var sv = SPO2_LO; sv <= SPO2_HI; sv += 10) {
       var syy = ySpo2(sv);
       ctx.beginPath(); ctx.moveTo(padL, syy); ctx.lineTo(padL + plotW, syy); ctx.stroke();
-      ctx.fillText(sv + '%', 4, syy + 4);
+      if (show.spo2) ctx.fillText(sv + '%', 4, syy + 4);
     }
 
     // Heart-rate labels (right), skipping any that would overlap
     ctx.fillStyle = '#c05621';
     var lastLabelY = null;
-    for (var hv = HR_LO; hv <= HR_HI; hv += 40) {
+    for (var hv = HR_LO; show.heart_rate && hv <= HR_HI; hv += 40) {
       var hyy = yHr(hv);
       if (lastLabelY !== null && Math.abs(hyy - lastLabelY) < 14) continue;
       ctx.fillText(Math.round(hv) + '', padL + plotW + 6, hyy + 4);
@@ -167,8 +181,8 @@ _TEMPLATE = """<!doctype html>
       ctx.stroke();
     }
 
-    drawSeries('spo2', '#2b6cb0', ySpo2);
-    drawSeries('heart_rate', '#c05621', yHr);
+    if (show.spo2) drawSeries('spo2', '#2b6cb0', ySpo2);
+    if (show.heart_rate) drawSeries('heart_rate', '#c05621', yHr);
 
     resetBtn.style.display = (vs === 0 && ve === n - 1) ? 'none' : 'inline';
   }
@@ -190,8 +204,9 @@ _TEMPLATE = """<!doctype html>
     tooltip.style.display = 'block';
     tooltip.style.left = (mx + 12) + 'px';
     tooltip.style.top = (ev.clientY - rect.top - 10) + 'px';
-    tooltip.innerHTML = fmtTime(r.timestamp) + '<br>SpO2: ' + (r.spo2 === null ? '--' : r.spo2 + '%') +
-      '<br>HR: ' + (r.heart_rate === null ? '--' : r.heart_rate + ' bpm');
+    tooltip.innerHTML = fmtTime(r.timestamp) +
+      (show.spo2 ? '<br>SpO2: ' + (r.spo2 === null ? '--' : r.spo2 + '%') : '') +
+      (show.heart_rate ? '<br>HR: ' + (r.heart_rate === null ? '--' : r.heart_rate + ' bpm') : '');
   });
   canvas.addEventListener('mouseleave', function () { tooltip.style.display = 'none'; });
 
@@ -263,6 +278,23 @@ _TEMPLATE = """<!doctype html>
       return '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>';
     }).join('');
   }
+
+  document.getElementById('showSpo2').addEventListener('change', function (ev) {
+    show.spo2 = ev.target.checked; render();
+  });
+  document.getElementById('showHr').addEventListener('change', function (ev) {
+    show.heart_rate = ev.target.checked; render();
+  });
+  document.getElementById('desatLevel').addEventListener('input', function (ev) {
+    var v = parseInt(ev.target.value, 10);
+    if (isNaN(v) || v < 50 || v > 99) return; // ignore half-typed or out-of-range values
+    DESAT_THRESHOLD = v; stats();
+  });
+  // Print uses the browser's own dialog; the canvas is redrawn at the print
+  // width first (see the @media print rules above).
+  document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
+  window.addEventListener('beforeprint', render);
+  window.addEventListener('afterprint', render);
 
   stats();
   render();

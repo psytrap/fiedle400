@@ -60,5 +60,31 @@ class TestBuildViewerHtml(unittest.TestCase):
         self.assertEqual(json.loads(html[start:end]), [])
 
 
+class TestViewerControls(unittest.TestCase):
+    """Markup the T-008 controls rely on. The behaviour itself needs a browser,
+    which CI does not have; these only pin that the controls and the print
+    stylesheet are in the generated page (checked by hand in a real browser)."""
+
+    def setUp(self):
+        self.html = spo2_viewer.build_viewer_html([])
+
+    def test_has_a_switch_per_channel(self):
+        self.assertIn('id="showSpo2"', self.html)
+        self.assertIn('id="showHr"', self.html)
+
+    def test_has_print_button_and_print_stylesheet(self):
+        self.assertIn('id="printBtn"', self.html)
+        self.assertIn("window.print()", self.html)
+        self.assertIn("@media print", self.html)
+
+    def test_time_below_level_is_adjustable_and_defaults_to_90(self):
+        self.assertIn('id="desatLevel"', self.html)
+        self.assertIn('value="90"', self.html)
+
+    def test_page_loads_nothing_from_the_network(self):
+        for needle in ("http://", "https://", "src=\"//"):
+            self.assertNotIn(needle, self.html)
+
+
 if __name__ == "__main__":
     unittest.main()

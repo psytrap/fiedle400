@@ -1,6 +1,6 @@
 # T-008: HTML viewer extras adopted from the T-007 evaluation
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -22,7 +22,8 @@ draft" feedback on T-005, before this ticket was read. Reconciled below
 rather than silently left stale.
 
 1. **SpO2 and pulse trace with a switch per channel** (vendor:
-   `BTN_Spo2GraphEnable`, `BTN_PRGraphEnable`). **Still open.** Not built.
+   `BTN_Spo2GraphEnable`, `BTN_PRGraphEnable`). **Done in v0.4.18** (see
+   Execution Notes).
 2. **Choose the time window, with zoom and pan.** **Done in v0.4.13**
    (`fiedle400/spo2_viewer.py`, commit `a035529`) -- click-drag to zoom into
    a range, a "Reset zoom" link to restore the full view. Built as free
@@ -37,11 +38,10 @@ rather than silently left stale.
    arguably as useful), plus "time below 90% SpO2" (vendor: a
    *user-chosen* level via `STR_TimeLessThan`; v0.4.13 hardcodes 90%, the
    common clinical desaturation threshold, not a selector). **Gap vs. the
-   vendor spec, left for this ticket:** make the 90% threshold configurable
-   rather than fixed, if that's still wanted now that the fixed version
-   exists.
-4. **Print** with the browser's own print and a print stylesheet. **Still
-   open.** Not built.
+   vendor spec:** the 90% level was fixed. **Closed in v0.4.18:** it is now
+   a number field (50 to 99, default 90).
+4. **Print** with the browser's own print and a print stylesheet. **Done in
+   v0.4.18.**
 
 **Precondition verified, not just assumed:** records at the sentinel values
 (SpO2 127, pulse 255; see `SPO2_FORMAT.md`) are probe-out, never readings,
@@ -70,15 +70,14 @@ data, live view, PI and colour/language are skipped).
 - [x] Sentinel records are neither plotted nor counted in any statistic --
       verified against `detector.py`'s decode logic directly (see above),
       not just by inspecting the viewer's own filtering.
-- [ ] Per-channel switch and print work (the two still-open items).
+- [x] Per-channel switch and print work (v0.4.18).
 - [x] Time-window selection with zoom/pan, and summary numbers, work --
-      shipped in v0.4.13. Decide whether the desaturation threshold should
-      become user-configurable (vendor has it as a chosen level; v0.4.13
-      hardcodes 90%) as part of finishing this ticket, or is fine fixed.
-- [ ] Summary numbers are plain arithmetic on the samples; no clinical
-      index is shown -- true for what shipped (min/avg/max, time below a
-      threshold), re-confirm once the remaining items are added.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+      shipped in v0.4.13. The desaturation level became user-configurable
+      in v0.4.18 (default still 90%).
+- [x] Summary numbers are plain arithmetic on the samples; no clinical
+      index is shown -- re-confirmed after the v0.4.18 additions (min/avg/max,
+      time below a level, probe-out share).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 **Added, 2026-10-19 (psytrap): T-007's evaluation only read `SpO2.exe`'s
 strings, never the vendor's own PDF manual.** Found and read it
@@ -123,4 +122,44 @@ explicitly adopt/defer/skip with a reason, same as every other candidate.
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**`fiedle400/spo2_viewer.py`** (v0.4.18). Three changes to the page template,
+nothing else in the product:
+- **Channel switches:** a checkbox in front of each legend entry. An off channel
+  is not drawn, loses its axis labels and is left out of the hover tooltip.
+  The statistics table always covers both channels (the switch is a view
+  option, not a filter).
+- **Time-below level:** a number field (50 to 99, default 90) under the table.
+  Values that are empty or out of range are ignored, so half-typed input
+  does not break the table.
+- **Print:** a Print button calling `window.print()` (the browser's own
+  dialog), an `@media print` stylesheet (hides buttons, checkboxes, the level
+  field and the tooltip; keeps the legend dots with `print-color-adjust`),
+  and a redraw on `beforeprint`/`afterprint` so the canvas matches the page width.
+
+**Checked in a real browser (headless Chromium), not in CI:** generated a
+300-record page with a 20 s probe-out gap and an 8-point dip, toggled each
+channel, typed a new level (the "time below" row changed from 90% to 94%
+as expected), and printed to PDF: chart, legend dots and statistics all
+appear on one page, no page errors. CI has no browser, so it cannot repeat
+this.
+
+**Tests** (`tests/test_spo2_viewer.py`, `TestViewerControls`, 4 tests): the
+controls, the print button and stylesheet and the default level are present
+in the generated page, and the page contains no `http://`, `https://` or
+`//` source. These check markup only and need no browser, which keeps
+`.github/workflows/tests.yml` unchanged. Full suite: 289 run, OK (skipped=15).
+
+**Judgement calls.**
+- The "Exclude data" feature from the manual (§5.4.2, noted above) is
+  **deferred**. A user-marked exclusion changes every statistic, so it needs a
+  clear "excluded" display and an undo, and nobody has asked for it. The
+  manual's definition of "Basal SpO2" (mean SpO2) is already covered by the
+  "SpO2 avg" row, so T-007 item 6 needs no feature. T-007 item 5 (desaturation
+  events) stays deferred: its algorithm is now published, but it would still be
+  a diagnostic-looking number from a hobby tool, which is a decision for psytrap,
+  not part of this ticket.
+- **Found while doing this:** the viewer is only reachable from the wizard,
+  while `plot` takes any `.spo2`/`.csv`/`.json` file. T-006 cannot be executed
+  until the viewer can open an existing file. That is filed as **T-013**
+  (see T-009's notes).
+- Version bumped 0.4.17 to 0.4.18 (one patch bump for this change set).
