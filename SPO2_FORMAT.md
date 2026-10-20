@@ -102,9 +102,16 @@ Each record represents 1 second of continuous measurement. Each record is exactl
        `fiedle400` ever wrote a record where only one channel decoded as invalid (SpO2 = `0x7F`
        but Pulse = a real, valid value, or vice versa), OSCAR would import the invalid channel's
        sentinel as a literal, impossible reading (e.g. a `127%` SpO2 point on the chart) instead
-       of blanking it. `export.py` currently computes `s_byte`/`h_byte` on independent per-channel
-       conditions (lines 94-95), so this mixed state is possible in principle, though not observed
-       in any real capture so far. Not yet fixed -- see the ticket this finding was filed as.
+       of blanking it. **Fixed (T-004, 2026-10-20):** `fiedle400/export.py`'s `build_spo2_binary`
+       now writes the sentinel pair `(0x7F, 0xFF)` for both bytes whenever *either* channel is
+       invalid, never a mixed pair -- its own output always matches OSCAR's AND-check. The mixed
+       state was confirmed reachable, not just a defensive hypothetical: `fiedle400/engine/device.py`'s
+       block-pairing logic (`flush_block_buffers`) derives `is_probe_out` from whichever of the
+       SpO2/pulse event pair is present, checking only that one event's own status -- so a record
+       whose SpO2 channel decodes "ok" while its pulse channel decodes `None` with no prior
+       `last_block_hr` to fall back on (e.g. the very first record of a session) reaches
+       `export.py` as `spo2=<value>, heart_rate=None`, a genuinely mixed record, not merely one
+       `export.py` could theoretically be handed.
      - **`0x00` is not a recognized sentinel in OSCAR's reader at all.** It is passed through
        literally as the value `0`; OSCAR has no special case for it. This document's §4 claiming
        `0x00` as an alternate sentinel for either field describes `fiedle400`'s/this spec's own

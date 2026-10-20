@@ -88,6 +88,30 @@ class TestExportSpO2(unittest.TestCase):
         self.assertEqual(payload[6], 99)
         self.assertEqual(payload[7], 75)
 
+    def test_mixed_channel_validity_synchronizes_to_sentinel_pair(self):
+        """T-004: OSCAR's probe-out check is `o2 == 0x7f AND pr == 0xff` (SPO2_FORMAT.md
+        §5.2) -- it never treats one channel as probe-out on its own. A record where only
+        one channel is invalid (spo2 decoded but heart_rate missing/out-of-range, or the
+        reverse) must still write the sentinel pair for BOTH bytes, never a mixed pair
+        that OSCAR would import as a literal value on the "valid" channel.
+        """
+        mixed_records = [
+            # SpO2 decoded fine, heart rate missing (e.g. no prior fallback yet).
+            {"session_id": 1, "user_id": 1, "block_id": 1, "seq": 1, "timestamp": "2026-09-30T20:15:30", "spo2": 98, "heart_rate": None, "flags": "ok"},
+            # Heart rate decoded fine, SpO2 out of physiological range.
+            {"session_id": 1, "user_id": 1, "block_id": 1, "seq": 2, "timestamp": "2026-09-30T20:15:31", "spo2": 0, "heart_rate": 72, "flags": "ok"},
+        ]
+        data = build_spo2_binary(mixed_records, start_dt=self.start_dt)
+        payload = data[SPO2_HEADER_SIZE:]
+
+        # Sample 1: spo2 valid, heart_rate None -> both bytes sentinel.
+        self.assertEqual(payload[0], SPO2_INVALID_SPO2)
+        self.assertEqual(payload[1], SPO2_INVALID_HR)
+
+        # Sample 2: heart_rate valid, spo2 out of range -> both bytes sentinel.
+        self.assertEqual(payload[2], SPO2_INVALID_SPO2)
+        self.assertEqual(payload[3], SPO2_INVALID_HR)
+
     def test_round_trip_with_decode_spo2(self):
         """Verify that files written by build_spo2_binary are 100% decoded by decode_spo2.py."""
         data = build_spo2_binary(self.sample_records, start_dt=self.start_dt)

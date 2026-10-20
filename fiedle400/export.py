@@ -91,8 +91,20 @@ def build_spo2_binary(
         hr = r.get("heart_rate")
 
         # Check for valid physiological ranges
-        s_byte = int(spo2) if (spo2 is not None and 1 <= int(spo2) <= 100) else SPO2_INVALID_SPO2
-        h_byte = int(hr) if (hr is not None and 1 <= int(hr) <= 250) else SPO2_INVALID_HR
+        spo2_valid = spo2 is not None and 1 <= int(spo2) <= 100
+        hr_valid = hr is not None and 1 <= int(hr) <= 250
+
+        # OSCAR's probe-out check is an AND of both sentinel bytes (T-004,
+        # SPO2_FORMAT.md §5.2): it never treats a single channel as probe-out
+        # on its own. If either channel is invalid, write the sentinel pair
+        # for both -- fiedle400's own output must never produce a record
+        # OSCAR would import as a literal (e.g. SpO2 127%) on one channel.
+        if spo2_valid and hr_valid:
+            s_byte = int(spo2)
+            h_byte = int(hr)
+        else:
+            s_byte = SPO2_INVALID_SPO2
+            h_byte = SPO2_INVALID_HR
 
         payload[i * 2] = s_byte
         payload[i * 2 + 1] = h_byte
