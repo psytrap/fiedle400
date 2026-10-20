@@ -11,3 +11,4 @@ protocol; `DONE.md` for the archive.
 | [T-011](open/T-011-spo2-assistant-interop-check.md) | Check `.spo2` export compatibility against the real SpO2 Assistant | Cloud | Open |
 | [T-012](open/T-012-make-html-the-default-download-output.md) | Make the HTML viewer the default download output | Cloud | Open |
 | [T-013](open/T-013-view-command-for-existing-recordings.md) | `fiedle400 view FILE` opens the HTML viewer for an existing recording | Cloud | Open |
+| [T-014](open/T-014-patch-sync-script.md) | Script to apply and generate the local/cloud sync patches | Local | Open |
