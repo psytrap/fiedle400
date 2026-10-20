@@ -43,9 +43,11 @@ _TEMPLATE = """<!doctype html>
   .paramTable td { padding: 1px 8px 1px 0; }
   .paramTable td:first-child { color: #666; }
   #pulseParamsTable td:first-child { color: #999; }
+  .paramGroup { padding: 0.6em 0 0.2em; margin-top: 0.4em; border-top: 1px solid #e5e5e5; }
+  .paramGroup:first-of-type { border-top: none; }
   @media print {
     body { margin: 0.5em; background: #fff; }
-    #resetZoom, #printBtn, #legend input[type=checkbox], #levelRow, #eventParamsTable, #eventParamsNote, #pulseParamsTable { display: none !important; }
+    #resetZoom, #printBtn, #legend input[type=checkbox], #levelGroup, #eventParamsGroup, #pulseParamsGroup { display: none !important; }
     .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #tooltip { display: none !important; }
     canvas { border: 1px solid #999; }
@@ -66,18 +68,24 @@ _TEMPLATE = """<!doctype html>
   <div id="tooltip"></div>
 </div>
 <table id="stats"></table>
-<p id="levelRow" style="font-size:0.85em;color:#666">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
+<div id="levelGroup" class="paramGroup">
+<p id="levelRow" style="font-size:0.85em;color:#666;margin:0">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
+</div>
+<div id="eventParamsGroup" class="paramGroup">
 <table id="eventParamsTable" class="paramTable" style="font-size:0.85em">
   <tr><td>Desaturation event: fall of at least</td><td><input type="number" id="dropPct" min="1" max="20" step="1"> %</td></tr>
   <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> -180 s</td></tr>
   <tr><td>criteria level</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
 </table>
-<p id="eventParamsNote" style="font-size:0.85em;color:#666;margin:0 0 0.6em">(pulse-rate events: not decoded, SpO2 only -- T-025)</p>
+<p id="eventParamsNote" style="font-size:0.85em;color:#666;margin:0.4em 0 0">(pulse-rate events: not decoded, SpO2 only -- T-025)</p>
+</div>
+<div id="pulseParamsGroup" class="paramGroup">
 <table id="pulseParamsTable" class="paramTable" style="font-size:0.85em;color:#999">
   <tr><td colspan="2">Pulse-rate event (dummy, not functional -- T-029/T-030):</td></tr>
   <tr><td>change of at least</td><td><input type="number" id="pulseDropBpm" min="2" max="20" step="1" value="6" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> bpm</td></tr>
   <tr><td>over</td><td><input type="number" id="pulseMinDur" min="1" max="180" step="1" value="8" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> s</td></tr>
 </table>
+</div>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
 <script id="spo2-events" type="application/json">%%EVENTS%%</script>
 <script>
