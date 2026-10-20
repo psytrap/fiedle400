@@ -77,9 +77,17 @@ class TestViewerControls(unittest.TestCase):
         self.assertIn("window.print()", self.html)
         self.assertIn("@media print", self.html)
 
-    def test_time_below_level_is_adjustable_and_defaults_to_90(self):
-        self.assertIn('id="desatLevel"', self.html)
-        self.assertIn('value="90"', self.html)
+    def test_time_below_level_has_no_input_of_its_own(self):
+        # "Time below level" used to be its own independently adjustable
+        # input (T-008, defaulting to 90%, before desaturation events
+        # existed at all). The real SpO2 Assistant has no such separate
+        # control -- "Time (min) <88%" uses the same desaturation criteria
+        # level that classifies event severity (SPO2_FORMAT.md Sec7.1). Fixed
+        # to match: no separate #desatLevel input any more.
+        self.assertNotIn('id="desatLevel"', self.html)
+
+    def test_time_below_level_uses_the_criteria_level(self):
+        self.assertIn("analysis.params.criteria", self.html)
 
     def test_page_loads_nothing_from_the_network(self):
         for needle in ("http://", "https://", "src=\"//"):

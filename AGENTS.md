@@ -69,8 +69,13 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 - One patch per request. Findings and the fixes they call for go in that one patch, not in a
   list of proposed patches. A follow-up to a patch that has not been applied yet is merged
   into it instead of getting a new number.
-- Version bumps only via `scripts/bump_version.py`, following RELEASE_PLAN §1. A patch that
-  changes product code bumps the patch version.
+- Version bumps only via `scripts/bump_version.py`, following RELEASE_PLAN §1. A cloud patch
+  that changes product code bumps the patch version as part of applying it. Outside the patch
+  workflow -- local, direct-instruction product-code changes made mid-conversation (small UI
+  tweaks, wording, reordering, bug fixes not yet tied to a ticket) -- do not bump the version
+  per change; bump once when the ticket that covers the work closes (or, for work with no
+  ticket, only if explicitly asked). Bumping on every small edit produces version churn with
+  no corresponding release.
 - `analysis/*.md` use CRLF line endings, and the German bytemap contains a NUL byte. Edit
   them without converting line endings (in Python: `open(p, newline="")`).
 - Definition of done: suite green, pyflakes clean, docs touched by the change updated

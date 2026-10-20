@@ -38,7 +38,6 @@ _TEMPLATE = """<!doctype html>
   #legend label { cursor: pointer; user-select: none; }
   #legend input[type=checkbox] { margin-right: 0.4em; }
   #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
-  #desatLevel { width: 3.5em; }
   #dropPct, #minDur, #critLevel { width: 3.5em; }
   #pulseDropBpm, #pulseMinDur { width: 3.5em; }
   .paramTable { border-collapse: collapse; margin: 0.4em 0; }
@@ -70,12 +69,6 @@ _TEMPLATE = """<!doctype html>
   <div id="tooltip"></div>
 </div>
 <table id="stats"></table>
-<div id="levelGroup" class="paramGroup">
-<table id="levelTable" class="paramTable" style="font-size:0.85em">
-  <tr><td colspan="2"><strong>Time-below level</strong></td></tr>
-  <tr><td id="levelRow">below</td><td><input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</td></tr>
-</table>
-</div>
 <div id="eventParamsGroup" class="paramGroup">
 <table id="eventParamsTable" class="paramTable" style="font-size:0.85em">
   <tr><td colspan="2"><strong>Desaturation event</strong></td></tr>
@@ -224,7 +217,6 @@ _TEMPLATE = """<!doctype html>
   // range covering rest through heavy exertion.
   var SPO2_LO = 50, SPO2_HI = 100;
   var HR_LO = 30, HR_HI = 220;
-  var DESAT_THRESHOLD = 90; // default level for "time below"; changeable in the page (vendor: a user-chosen level)
   var show = { spo2: true, heart_rate: true }; // per-channel switches (checkboxes in the legend)
 
   var canvas = document.getElementById('c');
@@ -418,7 +410,11 @@ _TEMPLATE = """<!doctype html>
     var spo2Vals = records.map(function (r) { return r.spo2; }).filter(function (v) { return v !== null && v !== undefined; });
     var hrVals = records.map(function (r) { return r.heart_rate; }).filter(function (v) { return v !== null && v !== undefined; });
     var invalidCount = n - spo2Vals.length;
-    var desatCount = spo2Vals.filter(function (v) { return v < DESAT_THRESHOLD; }).length;
+    // Time <criteria%, same criteria-level value the event detector uses to
+    // classify event severity (analysis.params.criteria) -- not a separately
+    // adjustable level. SPO2_FORMAT.md Sec7.1: "Time (min) <88%" is "Time below
+    // the desaturation criteria level" in SpO2 Assistant too, one input, two uses.
+    var desatCount = spo2Vals.filter(function (v) { return v < analysis.params.criteria; }).length;
     function avg(a) { return a.length ? (a.reduce(function (s, v) { return s + v; }, 0) / a.length) : null; }
     function fmtSec(s) {
       var m = Math.floor(s / 60), ss = s % 60;
@@ -440,7 +436,7 @@ _TEMPLATE = """<!doctype html>
       ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
       ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
       ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed)'],
-      ['Time below ' + DESAT_THRESHOLD + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
+      ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
     );
     var table = document.getElementById('stats');
     table.innerHTML = rows.map(function (r) {
@@ -454,11 +450,6 @@ _TEMPLATE = """<!doctype html>
   });
   document.getElementById('showHr').addEventListener('change', function (ev) {
     show.heart_rate = ev.target.checked; render();
-  });
-  document.getElementById('desatLevel').addEventListener('input', function (ev) {
-    var v = parseInt(ev.target.value, 10);
-    if (isNaN(v) || v < 50 || v > 99) return; // ignore half-typed or out-of-range values
-    DESAT_THRESHOLD = v; stats();
   });
   // Print uses the browser's own dialog; the canvas is redrawn at the print
   // width first (see the @media print rules above).
