@@ -73,7 +73,8 @@ _TEMPLATE = """<!doctype html>
 </div>
 <div id="eventParamsGroup" class="paramGroup">
 <table id="eventParamsTable" class="paramTable" style="font-size:0.85em">
-  <tr><td>Desaturation event: fall of at least</td><td><input type="number" id="dropPct" min="1" max="20" step="1"> %</td></tr>
+  <tr><td colspan="2">Desaturation event:</td></tr>
+  <tr><td>fall of at least</td><td><input type="number" id="dropPct" min="1" max="20" step="1"> %</td></tr>
   <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> -180 s</td></tr>
   <tr><td>criteria level</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
 </table>
