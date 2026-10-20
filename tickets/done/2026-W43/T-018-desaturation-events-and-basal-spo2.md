@@ -81,4 +81,16 @@ psytrap asked for "sync and execute T-018" without changing them.
   expected. The JavaScript is not unit-tested (no browser in CI).
 - **Not done.** Pulse-rate events (detector not decoded), changing the parameters in the
   page, the `drop=3,min_time=8` combination from the real program (T-019 did not run it).
+- **Gap in this validation, found afterward (T-022, 2026-10-20).** Everything checked above
+  used one continuous recording -- the T-019 probe. `detect_events`/`summarize` take a flat
+  `spo2` list and treat every adjacent pair of entries as one real second apart; so does the
+  viewer's chart (`x(i)`, index-based). Neither has any concept of a real time gap between
+  records. Fed a real multi-session download (two sessions, ~3 real minutes apart,
+  concatenated with no padding -- the exact data `fiedle400 download`'s "open in the HTML
+  viewer now?" path hands to the viewer), the detector reports a fabricated event spanning
+  the session boundary, and the chart draws a straight line through the gap. Not a flaw in
+  the per-second detection logic itself (that's still exactly validated against the real
+  program for continuous data) -- it's that nothing here was ever checked against
+  discontinuous data, and it turns out the implementation silently assumes continuity
+  everywhere. Tracked and to be fixed in T-022, not reopening this ticket.
 

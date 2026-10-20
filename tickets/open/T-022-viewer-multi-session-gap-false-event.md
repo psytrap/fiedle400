@@ -60,6 +60,18 @@ This also means a future `fiedle400 view FILE` (T-013), if it reads the
 saved (now-correct) file back, would **not** have this problem -- it's
 specific to the live, same-session, un-padded `all_records` path.
 
+**Broader than one call site.** `fiedle400/desat.py`'s `detect_events` and
+`summarize` make the identical assumption as the chart's `x(i)` -- every
+adjacent pair of `spo2` array entries is one real second apart -- with
+nothing in their signature or docstring saying otherwise. T-018's own
+validation (T-019) only ever exercised one continuous recording, so this
+was never caught there; see the note added to
+`tickets/done/2026-W43/T-018-desaturation-events-and-basal-spo2.md`. A fix
+scoped only to `cli.py`'s call site (e.g. pre-padding `all_records` before
+handing it to the viewer) would paper over the viewer but leave
+`desat.py`'s own assumption undocumented and still wrong for any other
+caller that passes it genuinely gapped data.
+
 ---
 
 ## Criteria
