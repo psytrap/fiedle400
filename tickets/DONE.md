@@ -30,6 +30,12 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-022](done/2026-W43/T-022-viewer-multi-session-gap-false-event.md) | HTML viewer draws a false desaturation event across a multi-session gap | Cloud |
 | [T-025](done/2026-W43/T-025-viewer-configurable-saturation-parameters.md) | Configurable desaturation analysis parameters in the viewer | Local |
 | [T-026](done/2026-W43/T-026-viewer-html-design-and-format-feedback.md) | HTML viewer design and format feedback | Local |
+| [T-006](done/2026-W43/T-006-remove-plot-command.md) | Remove `fiedle400 plot` once the HTML viewer supersedes it | Cloud |
+| [T-012](done/2026-W43/T-012-make-html-the-default-download-output.md) | Make the HTML viewer the default download output | Cloud |
+| [T-013](done/2026-W43/T-013-view-command-for-existing-recordings.md) | `fiedle400 view FILE` opens the HTML viewer for an existing recording | Cloud |
+| [T-027](done/2026-W43/T-027-js-detection-logic-test-coverage.md) | Automated test coverage for the viewer's ported JS detection logic | Cloud |
+| [T-029](done/2026-W43/T-029-pulse-rate-desaturation-decode.md) | Decode and validate the pulse-rate desaturation detector | Cloud |
+| [T-031](done/2026-W43/T-031-basal-spo2-rule-confirmation.md) | Confirm the exact Basal SpO2 calculation rule | Cloud |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with

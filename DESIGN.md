@@ -10,12 +10,12 @@ for building installers see [PACKAGING.md](PACKAGING.md).
 A command-line tool that talks to the Pulsox PO-400 / Contec CMS-50 pulse
 oximeter (USB HID, VID `0x28E9`, PID `0x028A`). It lists and downloads the
 sessions stored on the device, reads and sets its clock, and exports the data
-as `.SpO2`, CSV or JSON (and optionally a PNG plot). The package is
+as an HTML viewer page (default), `.SpO2`, CSV or JSON, and shows recordings already on disk (`view`). The package is
 `fiedle400`; the *device* is still called PO-400 in user-facing text.
 
 ```
- device ──USB HID──> hid_driver ──reports──> engine ──records──> export ──> .spo2/.csv/.json
-                    (hidraw | hid)     (detector + device)          └──> plot (PNG, optional)
+ device ──USB HID──> hid_driver ──reports──> engine ──records──> export ──> .html/.spo2/.csv/.json
+                    (hidraw | hid)     (detector + device)          └──> recording (read back) ──> spo2_viewer (HTML)
                                             ▲
                           protocol (commands, parsers, models) ── cli (argparse, prompts)
 ```
@@ -34,10 +34,11 @@ as `.SpO2`, CSV or JSON (and optionally a PNG plot). The package is
 | `engine/detector.py` | `SerialPacketDetector`: turns raw reports into `DecodedPacket` events (live stream frames and stored `0xED` series frames). |
 | `engine/device.py` | `SerialDeviceEngine`: the conversations with the device — handshake, list sessions, download one or all, set time, clear. |
 | `serial_engine.py` | Backward-compatible re-export of `engine`. Import from `fiedle400.engine` in new code. |
-| `export.py` | Writes records as `.SpO2` (Contec binary, see SPO2_FORMAT.md), CSV or JSON. |
+| `export.py` | Writes records as an HTML viewer page (default), `.SpO2` (Contec binary, see SPO2_FORMAT.md), CSV or JSON. |
 | `config.py` | Settings file (`%APPDATA%\fiedle400` or `$XDG_CONFIG_HOME/fiedle400`), working-directory resolution, `FIEDLE400_*` environment variables (legacy `PO400_*` still honoured). |
 | `console.py` | Windows console encoding and window handling. |
-| `plot.py` | Optional PNG plot; imports matplotlib lazily and prints an install hint if absent. |
+| `recording.py` | Stdlib-only readers for `.spo2`, `.csv`, `.json` recordings on disk (`load_session_file`, `find_latest_session_file`); feeds `view`. Replaced `plot.py` (T-006, T-013). |
+| `spo2_viewer.py` | Builds the self-contained HTML viewer page (chart, report, desaturation detection in JS, a port of `desat.py` that `tests/test_desat_js_parity.py` keeps in step). |
 
 ## 3. Download flow
 

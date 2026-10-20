@@ -1,6 +1,6 @@
 # T-012: Make the HTML viewer the default download output
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -61,27 +61,53 @@ re-debate:
 
 ## Criteria
 
-- [ ] Interactive wizard opens the HTML viewer by default after a
+- [x] *(Superseded by psytrap, 2026-10-20: the wizard saves the HTML by default and asks
+      "Open it in your browser now? [y/N]", default no; no raw file is written.)*
+      Interactive wizard opens the HTML viewer by default after a
       successful download (prompt default flipped, or prompt removed
       -- document which was chosen and why in Execution Notes), while
       still writing the raw data file every time.
-- [ ] Non-interactive `download -f/--format` behaviour is decided
+- [x] Non-interactive `download -f/--format` behaviour is decided
       explicitly: either it gains an `html` choice without changing
       the current default, or the default itself changes -- and if
       it changes, that's called out as a breaking CLI change in
       `CHANGELOG.md`, not a silent behaviour shift.
-- [ ] The HTML file is never the only output written; the raw
+- [x] *(Superseded by psytrap, 2026-10-20: by default the HTML file is the only output;
+      `.spo2`/csv/json only on request.)* The HTML file is never the only output written; the raw
       `.spo2`/`csv`/`json` data is always still saved.
-- [ ] A headless/no-browser environment (mirroring CI) still
+- [x] A headless/no-browser environment (mirroring CI) still
       completes a download without error when the viewer can't
       actually open -- verified via the existing `TestOpenInViewer`-
       style mocking, not assumed.
-- [ ] `README.md`/`RELEASE_PLAN.md` updated to describe the new
+- [x] `README.md`/`RELEASE_PLAN.md` updated to describe the new
       default.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Done 2026-10-20 (Claude, cloud copy). **psytrap's decision of 2026-10-20 overrides the ticket text:**
+the default download output is the HTML viewer file that the user can open later; by default no
+`.spo2` is written. This is a breaking CLI change (CHANGELOG 0.4.26, README, RELEASE_PLAN):
+- `download -f` choices are now `html`(default)/`spo2`/`csv`/`json` (`export.EXPORT_FORMATS`);
+  `-o x.html|.spo2|.csv|.json` picks the format by extension. `export_records(fmt="html")` writes
+  `spo2_viewer.build_viewer_html(records)`; the library default of `export_records` itself stays `"spo2"`.
+- Wizard format menu: `[1] html (default) [2] spo2 [3] csv [4] json`. After saving an html file it
+  asks "Open it in your browser now? [y/N]" (default No, so the prompt was kept and the default is
+  "no", rather than flipped to yes or removed). `y` opens the saved file; if no browser opens it
+  prints the path. For spo2 the old temp-viewer prompt is unchanged. png is gone (T-006).
+- Non-interactive `download` never opens a browser (tested: opener not called).
+
+Criteria as ticked: the first (viewer opens by default) and the third ("HTML never the only
+output") were deliberately overridden by psytrap and are ticked as **superseded**, not met as
+written: the HTML is the only file by default and opening is opt-in. The `-f` decision is the second
+criterion's second branch (default changed, breaking, in CHANGELOG). The headless criterion is met
+trivially for `download` (never opens) and for the wizard by the mocked opener returning False.
+
+Tests: wizard Enter at format saves via `_export_records_to_file(..., "html")` with a `.html` name and
+asks the [y/N] prompt without opening; `y` opens the saved path; opener False prints the path;
+`download` through `cli.main` with a mocked engine writes one `.html` containing the records and no
+`.spo2`; `-f spo2` still writes `.spo2`; `export_records("html")`. Existing wizard tests that assumed
+`.spo2` were updated (overwrite tests now key on `.html`; the spo2 viewer tests choose format "2").
+Suite: 358 run, 0 failures, 7 skipped (live device).

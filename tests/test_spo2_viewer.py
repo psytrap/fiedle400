@@ -114,8 +114,11 @@ class TestViewerDesaturationEvents(unittest.TestCase):
         analysis = self._analysis(spo2_viewer.build_viewer_html([]))
         self.assertEqual(analysis["events"], [])
 
-    def test_basal_spo2_is_labelled_as_an_estimate(self):
-        self.assertIn("Basal SpO2 (estimate)", spo2_viewer.build_viewer_html([]))
+    def test_basal_spo2_is_no_longer_labelled_as_an_estimate(self):
+        # T-031 decoded the program's rule, which is the one desat.py uses.
+        html = spo2_viewer.build_viewer_html([])
+        self.assertIn("'Basal SpO2'", html)
+        self.assertNotIn("estimate", html)
 
 
 class TestViewerAcrossSessionGap(unittest.TestCase):
@@ -191,10 +194,11 @@ class TestViewerConfigurableEventParameters(unittest.TestCase):
         self.assertIn("document.getElementById('minDur').value = analysis.params.min_time", self.html)
         self.assertIn("document.getElementById('critLevel').value = analysis.params.criteria", self.html)
 
-    def test_pulse_rate_events_explicitly_noted_as_not_implemented(self):
-        # T-025: no decoded pulse-event detector exists; the SpO2 row must say
-        # so (the pulse row itself is covered by TestViewerDummyPulseInputs).
-        self.assertIn("pulse-rate events: not decoded", self.html)
+    def test_pulse_rate_events_explicitly_noted_as_not_shown(self):
+        # T-029 decoded the pulse-event detector, but the viewer does not show
+        # pulse events until T-030; the SpO2 row must say so (the pulse row
+        # itself is covered by TestViewerDummyPulseInputs).
+        self.assertIn("pulse-rate events: decoded, not shown yet", self.html)
 
     def test_inputs_recompute_on_change(self):
         self.assertIn("addEventListener('input', recomputeEvents)", self.html)

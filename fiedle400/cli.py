@@ -3,7 +3,8 @@
 Commands:
   info     - Read hardware model, firmware version, and USB descriptors.
   sessions - List all stored recording sessions on device.
-  download - Extract recorded sessions from device and save to CSV or JSON.
+  download - Extract recorded sessions from device and save them (HTML viewer by default).
+  view     - Open the HTML viewer for a recording already on disk.
 """
 
 import argparse
@@ -284,23 +285,45 @@ def command_config(args) -> int:
     return 0
 
 
-def command_plot(args) -> int:
-    """Handler for 'plot' subcommand to generate PNG graph from recording file."""
-    try:
-        from fiedle400 import plot
-    except ImportError as e:
-        if getattr(e, "name", None) != "matplotlib":
-            raise
-        print("❌ Plotting needs matplotlib, which is not installed.")
-        print("   Install it with: pip install matplotlib   (or: pip install fiedle400[plot])")
+def command_view(args) -> int:
+    """Handler for 'view': show a recording on disk in the HTML viewer (T-013).
+
+    Default: open the viewer without leaving a file behind (same path as the
+    wizard's .spo2 option). With --convert: write <recording>.html (or -o)
+    next to the recording, open nothing.
+    """
+    from fiedle400 import recording, spo2_viewer
+    if args.output and not args.convert:
+        print("❌ -o/--output needs --convert (view alone leaves no file behind).")
         return 1
+    filepath = args.file
+    if not filepath:
+        search = [os.getcwd()]
+        workdir = config.get_workdir()
+        if workdir and os.path.abspath(workdir) != search[0]:
+            search.append(workdir)
+        filepath = next(filter(None, (recording.find_latest_session_file(d) for d in search)), None)
+        if not filepath:
+            print(f"❌ No recording (.spo2, .csv, .json) found in: {', '.join(search)}")
+            return 1
     try:
-        saved_path = plot.plot_session(filepath=args.file, output_png=args.output, dpi=args.dpi)
-        print(f"📊 Successfully generated session plot: {saved_path}")
+        _, records = recording.load_session_file(filepath)
+    except (OSError, ValueError) as e:
+        print(f"❌ Cannot read {filepath}: {e}")
+        return 1
+    if args.convert:
+        html_path = os.path.abspath(args.output or os.path.splitext(filepath)[0] + ".html")
+        try:
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(spo2_viewer.build_viewer_html(records))
+        except OSError as e:
+            print(f"❌ Cannot write {html_path}: {e}")
+            return 1
+        print(f"✅ Viewer page for {len(records):,} records of {filepath}: {html_path}")
         return 0
-    except Exception as e:
-        print(f"❌ Error generating plot: {e}")
-        return 1
+    print(f"Opening {len(records):,} records of {filepath} in the viewer...")
+    _open_spo2_viewer(records, filepath)
+    return 0
 
 
 def command_detect(args) -> int:
@@ -372,7 +395,7 @@ def _export_records_to_file(
     fmt: str = "spo2",
     output_dir: Optional[str] = None,
 ) -> str:
-    """Helper to save extracted records into .SpO2, CSV, or JSON format."""
+    """Helper to save extracted records as HTML viewer page, .SpO2, CSV, or JSON."""
     return export.export_records(
         records, output_filename=output_filename, fmt=fmt, output_dir=output_dir
     )
@@ -973,22 +996,19 @@ def run_interactive_wizard(args) -> int:
                     continue
 
             print("\nOutput format:")
-            print("  [1]   spo2 (default)")
-            print("  [2]   csv")
-            print("  [3]   json")
-            print("  [4]   png (plot) -- renders a chart, does not save the raw data")
-            _fmt_map = {"": "spo2", "1": "spo2", "spo2": "spo2",
-                        "2": "csv", "csv": "csv",
-                        "3": "json", "json": "json",
-                        "4": "png", "png": "png"}
+            print("  [1]   html (default) -- chart and report page, opens in any browser")
+            print("  [2]   spo2 -- for SpO2 Assistant and OSCAR")
+            print("  [3]   csv")
+            print("  [4]   json")
+            _fmt_map = {"": "html", "1": "html", "html": "html",
+                        "2": "spo2", "spo2": "spo2",
+                        "3": "csv", "csv": "csv",
+                        "4": "json", "json": "json"}
             fmt_input = clean_input("Select format [1-4; default: 1]: ").strip().lower()
             fmt_choice = _fmt_map.get(fmt_input)
             while fmt_choice is None:
                 fmt_input = clean_input(f"[!] Unknown format '{fmt_input}'. Enter 1, 2, 3 or 4: ").strip().lower()
                 fmt_choice = _fmt_map.get(fmt_input)
-
-            want_plot = fmt_choice == "png"
-            save_fmt = "spo2" if want_plot else fmt_choice
 
             default_fn = generate_iso_filename(selected_sessions, ext=fmt_choice)
             fn_input = clean_input(f"\nSave as [default: {default_fn}]: ")
@@ -1017,47 +1037,16 @@ def run_interactive_wizard(args) -> int:
                 recs = engine.download_session(s, debug=verbose_level)
                 all_records.extend(recs)
 
-            if want_plot:
-                # No .spo2 is kept on success -- only the plot. The data is
-                # written to a scratch file just to feed plot_session, then
-                # discarded; if plotting fails, that scratch copy is kept
-                # instead (renamed next to the requested plot) so a failed
-                # render never means a lost download.
-                tmp_fd, tmp_path = tempfile.mkstemp(suffix=".spo2")
-                os.close(tmp_fd)
-                try:
-                    _export_records_to_file(all_records, tmp_path, "spo2")
-                    try:
-                        from fiedle400 import plot
-                        plot_path = plot.plot_session(filepath=tmp_path, output_png=out_fn)
-                        print(f"\n📊 Successfully plotted {len(all_records):,} records across {len(selected_sessions)} session(s): {plot_path}")
-                        if clean_input("Open the plot now? [Y/n]: ").lower() in ("", "y", "yes"):
-                            if not _open_in_viewer(str(plot_path)):
-                                print(f"   Could not open a viewer; the plot is at: {plot_path}")
-                    except ImportError as e:
-                        if getattr(e, "name", None) != "matplotlib":
-                            raise
-                        fallback_fn = f"{os.path.splitext(out_fn)[0]}.spo2"
-                        shutil.copy(tmp_path, fallback_fn)
-                        print("❌ Plotting needs matplotlib, which is not installed.")
-                        print("   Install it with: pip install matplotlib   (or: pip install fiedle400[plot])")
-                        print(f"   Saved the data instead so it isn't lost: {fallback_fn}")
-                    except Exception as e:
-                        fallback_fn = f"{os.path.splitext(out_fn)[0]}.spo2"
-                        shutil.copy(tmp_path, fallback_fn)
-                        print(f"❌ Error generating plot: {e}")
-                        print(f"   Saved the data instead so it isn't lost: {fallback_fn}")
-                finally:
-                    try:
-                        os.remove(tmp_path)
-                    except OSError:
-                        pass
-            else:
-                saved_path = _export_records_to_file(all_records, out_fn, save_fmt)
-                print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
-                if save_fmt == "spo2":
-                    if clean_input("Open it in the HTML viewer now? [y/N]: ").lower() in ("y", "yes"):
-                        _open_spo2_viewer(all_records, saved_path)
+            saved_path = _export_records_to_file(all_records, out_fn, fmt_choice)
+            print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
+            if fmt_choice == "html":
+                # T-012: the page is the saved file; opening it now is optional (default no).
+                if clean_input("Open it in your browser now? [y/N]: ").lower() in ("y", "yes"):
+                    if not _open_in_viewer(saved_path):
+                        print(f"   Could not open a browser; the page is at: {saved_path}")
+            elif fmt_choice == "spo2":
+                if clean_input("Open it in the HTML viewer now? [y/N]: ").lower() in ("y", "yes"):
+                    _open_spo2_viewer(all_records, saved_path)
 
             # Offer flash erase with default = YES
             erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()
@@ -1114,9 +1103,9 @@ def main(argv: Optional[List[str]] = None):
     parser_dl.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
     parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
     parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
-    parser_dl.add_argument("-o", "--output", help="Output file path (default: fiedle400_all_sessions_<timestamp>.spo2 in the configured working directory).")
+    parser_dl.add_argument("-o", "--output", help="Output file path (default: fiedle400_all_sessions_<timestamp>.html in the configured working directory). Its extension (.html, .spo2, .csv, .json) picks the format.")
     parser_dl.add_argument("--workdir", help="Directory for this download only (overrides FIEDLE400_WORKDIR and the stored setting; not saved). Ignored with -o.")
-    parser_dl.add_argument("-f", "--format", choices=["spo2", "csv", "json"], default="spo2", help="Output format: 'spo2' (default), 'csv', or 'json'.")
+    parser_dl.add_argument("-f", "--format", choices=list(export.EXPORT_FORMATS), default="html", help="Output format: 'html' (default: the viewer page with the data inside), 'spo2' (SpO2 Assistant / OSCAR), 'csv', or 'json'.")
     parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
     parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
     parser_dl.add_argument("-v", "--verbose", "--debug", dest="verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
@@ -1155,12 +1144,12 @@ def main(argv: Optional[List[str]] = None):
     parser_cfg.add_argument("--workdir", help="Set the directory new recordings are saved in.")
     parser_cfg.set_defaults(func=command_config)
 
-    # Subcommand: plot
-    parser_plot = subparsers.add_parser("plot", help="Generate high-resolution PNG graph from .spo2, .csv, or .json recording files.")
-    parser_plot.add_argument("file", nargs="?", help="Path to recording file (.spo2, .csv, or .json). Defaults to the latest in the current directory.")
-    parser_plot.add_argument("-o", "--output", help="Output PNG file path (default: <filename>.png next to the recording).")
-    parser_plot.add_argument("--dpi", type=int, default=150, help="Resolution in DPI (default: 150).")
-    parser_plot.set_defaults(func=command_plot)
+    # Subcommand: view
+    parser_view = subparsers.add_parser("view", help="Open the HTML viewer for a recording on disk (.spo2, .csv, or .json).")
+    parser_view.add_argument("file", nargs="?", help="Recording file (.spo2, .csv, or .json). Defaults to the latest in the current directory, then the working directory.")
+    parser_view.add_argument("--convert", action="store_true", help="Write the viewer page as a file (<recording>.html next to the recording) and do not open a browser.")
+    parser_view.add_argument("-o", "--output", help="With --convert: where to write the page (default: <recording>.html next to the recording).")
+    parser_view.set_defaults(func=command_view)
 
     for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det, parser_selftest]:
         p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=argparse.SUPPRESS, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")

@@ -11,9 +11,9 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
 ## Features
 
 **Get your data off the device -- the main reason this tool exists**
-- **`fiedle400 download`**: extracts stored recordings to `.spo2`, `.csv`, or `.json`, non-destructively (device memory is untouched unless you separately choose to clear it).
-- **`fiedle400 plot`**: renders a `.spo2`/`.csv`/`.json` recording into a dual-axis SpO2 + heart-rate PNG chart (needs matplotlib: `pip install matplotlib` or `pip install fiedle400[plot]`; the stdlib-only commands below work without it).
-- **Interactive wizard (`fiedle400`, no arguments)**: the guided way to do both of the above in one pass -- a menu to inspect device status, download sessions, and manage device memory. The download flow asks for an output format (`spo2`/`csv`/`json`/`png`) as its own prompt before the filename; choosing `png` renders a chart directly without keeping the raw data file, falling back to saving it as `.spo2` if rendering fails so nothing is lost. After a successful plot it offers to open the image in your default viewer. The wizard header and `--help` show the project page.
+- **`fiedle400 download`**: extracts stored recordings and saves them, by default as a **self-contained HTML page** (`.html`: chart, desaturation report, print button; open it in any browser, now or later, no install). `-f spo2` (SpO2 Assistant / OSCAR), `-f csv` and `-f json` are still available. Since 0.4.26 no `.spo2` is written unless you ask for it; `-o name.spo2` (or any `.html`/`.csv`/`.json`) also picks the format by extension. The command never opens a browser. Non-destructive: device memory is untouched unless you separately choose to clear it.
+- **`fiedle400 view [FILE]`**: shows a `.spo2`/`.csv`/`.json` recording already on disk in the HTML viewer, without leaving a file behind (a temporary page is opened in your default browser and removed). Without FILE it takes the latest recording in the current directory, then in the working directory. `--convert [-o OUT]` instead writes the page as `<recording>.html` (or OUT) and does not open a browser. Standard library only. (This replaces the old `plot` command, which needed matplotlib and drew a PNG; see RELEASE_PLAN B1b and T-006.)
+- **Interactive wizard (`fiedle400`, no arguments)**: the guided way to do both of the above in one pass -- a menu to inspect device status, download sessions, and manage device memory. The download flow asks for an output format (`html` (default) / `spo2` / `csv` / `json`) as its own prompt before the filename. After saving an `html` page it asks "Open it in your browser now? [y/N]" (default no); for `spo2` it offers to open a temporary viewer page. The wizard header and `--help` show the project page.
 
 **Driver**
 - **Dual-backend**: Linux defaults to `hidraw` -- 100% standard library, zero external dependencies (`pip install` is NOT required). Windows and macOS default to `hid` (`import hid`, pulled in automatically on those platforms). Pass `--backend hid` on Linux to develop and test the cross-platform path locally.
@@ -170,8 +170,9 @@ fiedle400 set-time
 # 3. List all stored recording sessions
 fiedle400 sessions
 
-# 4. Download all sessions (defaults to Contec .SpO2 binary format)
-fiedle400 download -o all_sessions.spo2
+# 4. Download all sessions (default: an HTML viewer page you can open later)
+fiedle400 download                            # fiedle400_all_sessions_<timestamp>.html
+fiedle400 download -f spo2 -o all_sessions.spo2   # Contec .SpO2 binary (SpO2 Assistant / OSCAR)
 
 # 4b. Choose where recordings go
 fiedle400 config --workdir ~/Recordings          # stored setting (asked once on first interactive run)
@@ -183,9 +184,10 @@ FIEDLE400_WORKDIR=/tmp/run1 fiedle400 download       # same, for scripts and CI
 fiedle400 download -s 1 -o session_1.csv -f csv
 fiedle400 download -s 1 -o session_1.json -f json
 
-# 6. Generate high-resolution PNG plot of session
-fiedle400 plot                           # Automatically plots latest recording in output/
-fiedle400 plot output/session_1.spo2     # Explicit recording file (.spo2, .csv, or .json)
+# 6. Look at a recording that is already on disk
+fiedle400 view                           # latest recording in the current directory (then the working directory)
+fiedle400 view session_1.spo2            # explicit file (.spo2, .csv, or .json); opens a temporary page
+fiedle400 view session_1.spo2 --convert  # write session_1.html next to it instead, open nothing
 
 # 7. Format / delete stored recording sessions from device flash memory
 fiedle400 clear -y

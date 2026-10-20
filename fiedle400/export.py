@@ -1,7 +1,8 @@
 """Export module for Pulsox PO-400 session data.
 
 Supports exporting session records to:
-- Contec .SpO2 binary format (default, compatible with SpO2 Assistant and OSCAR)
+- HTML viewer page (default since T-012: a self-contained chart page, see spo2_viewer.py)
+- Contec .SpO2 binary format (compatible with SpO2 Assistant and OSCAR)
 - CSV (Comma-Separated Values)
 - JSON (JavaScript Object Notation)
 """
@@ -31,6 +32,9 @@ SPO2_INVALID_HR = 255    # 0xFF
 # A longer one is more likely a wrong device clock than a real pause: it is not padded, one
 # probe-out sample marks the break, and a warning says so (T-020).
 MAX_GAP_FILL_S = 12 * 3600
+
+# Formats export_records writes; the first is the download default (T-012).
+EXPORT_FORMATS = ("html", "spo2", "csv", "json")
 
 
 def parse_record_datetime(ts_val: Any) -> Optional[datetime]:
@@ -194,12 +198,12 @@ def export_records(
     fmt: str = "spo2",
     output_dir: Optional[str] = None,
 ) -> str:
-    """Save extracted records into the requested file format (.spo2, .csv, or .json).
+    """Save extracted records into the requested file format (.html, .spo2, .csv, or .json).
 
     Args:
         records: List of record dictionaries.
         output_filename: Target path or filename. If omitted, a timestamped name is generated.
-        fmt: Target format ('spo2', 'csv', or 'json'). Ignored if output_filename has a recognized extension.
+        fmt: Target format ('html', 'spo2', 'csv', or 'json'). Ignored if output_filename has a recognized extension.
         output_dir: Directory for the generated name. Ignored when output_filename is given;
             omitted means the current directory, preserving the plain-CLI behaviour.
 
@@ -212,7 +216,7 @@ def export_records(
     if output_filename:
         _, ext = os.path.splitext(output_filename)
         ext_clean = ext.lower().lstrip(".")
-        if ext_clean in ("spo2", "csv", "json"):
+        if ext_clean in EXPORT_FORMATS:
             clean_fmt = ext_clean
 
     if not output_filename:
@@ -224,7 +228,11 @@ def export_records(
     output_path = os.path.abspath(output_filename)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    if clean_fmt == "spo2":
+    if clean_fmt == "html":
+        from fiedle400 import spo2_viewer  # imports this module, so not at the top
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(spo2_viewer.build_viewer_html(records))
+    elif clean_fmt == "spo2":
         data = build_spo2_binary(records)
         with open(output_path, "wb") as f:
             f.write(data)
@@ -241,6 +249,6 @@ def export_records(
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(records, f, indent=2)
     else:
-        raise ValueError(f"Unsupported export format '{clean_fmt}'. Supported: 'spo2', 'csv', 'json'.")
+        raise ValueError(f"Unsupported export format '{clean_fmt}'. Supported: {', '.join(EXPORT_FORMATS)}.")
 
     return output_path

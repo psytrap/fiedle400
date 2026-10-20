@@ -77,7 +77,7 @@ _TEMPLATE = """<!doctype html>
   <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> - <input type="number" id="maxTimeFixed" value="180" readonly title="Fixed by SpO2 Assistant, not adjustable (SPO2_FORMAT.md Sec7.2)"> s</td></tr>
   <tr><td>count event as severe if under</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
 </table>
-<p id="eventParamsNote" style="font-size:0.85em;color:#666;margin:0.4em 0 0">(pulse-rate events: not decoded, SpO2 only -- T-025)</p>
+<p id="eventParamsNote" style="font-size:0.85em;color:#666;margin:0.4em 0 0">(pulse-rate events: decoded, not shown yet -- T-030)</p>
 </div>
 <div id="pulseParamsGroup" class="paramGroup">
 <table id="pulseParamsTable" class="paramTable" style="font-size:0.85em;color:#999">
@@ -111,6 +111,7 @@ _TEMPLATE = """<!doctype html>
   meta.textContent = fmtTs(records[0].timestamp) + ' to ' + fmtTs(records[n - 1].timestamp) + ' -- duration ' + fmtSec(n);
   var spo2Arr = records.map(function (r) { return r.spo2; });
 
+  // BEGIN desat-port (extracted and run under Node by tests/test_desat_js_parity.py, T-027)
   // Desaturation-event detection, ported from fiedle400/desat.py (SPO2_FORMAT.md
   // §7.2). max_time/max_avg/oscillation stay fixed, matching SpO2 Assistant's own
   // Analyseparameter dialog, which doesn't expose them either (T-019 screenshot).
@@ -173,8 +174,19 @@ _TEMPLATE = """<!doctype html>
     }
     var out = { samples: spo2.length, valid_samples: valid.length, total_event: events.length };
     if (!spo2.length) return out;
-    function r2(v) { return Math.round(v * 100) / 100; }
-    function r1(v) { return Math.round(v * 10) / 10; }
+    // Python's round(x, n): nearest, exact ties to even (Math.round is half-up and
+    // v * 100 is inexact). toFixed is exact; a tie is a value whose exact decimal
+    // expansion is the kept digits, a 5 and nothing else.
+    function pyRound(v, nd) {
+      var t = Math.abs(v).toFixed(nd + 40);
+      var cut = t.length - 40;
+      var down = Number(t.slice(0, cut)), up = Number(Math.abs(v).toFixed(nd));
+      var r = up;
+      if (t.slice(cut) === '5' + new Array(40).join('0') && Number(t.slice(cut - 1, cut)) % 2 === 0) r = down;
+      return v < 0 ? -r : r;
+    }
+    function r2(v) { return pyRound(v, 2); }
+    function r1(v) { return pyRound(v, 1); }
     function sum(a, f) { return a.reduce(function (s, e) { return s + f(e); }, 0); }
     var hours = spo2.length / 3600.0;
     out.index_per_hr = r2(events.length / hours);
@@ -188,10 +200,10 @@ _TEMPLATE = """<!doctype html>
     var inside = {};
     events.forEach(function (e) { for (var k = e.start; k <= e.nadir; k++) inside[k] = true; });
     var basal = valid.filter(function (i) { return !inside[i]; }).map(function (i) { return spo2[i]; });
-    if (!basal.length) basal = valid.map(function (i) { return spo2[i]; });
     out.basal_spo2 = basal.length ? r2(sum(basal, function (v) { return v; }) / basal.length) : null;
     return out;
   }
+  // END desat-port
 
   function recomputeEvents() {
     var drop = parseFloat(document.getElementById('dropPct').value);
@@ -436,7 +448,7 @@ _TEMPLATE = """<!doctype html>
       ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s)'],
       ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
       ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
-      ['Basal SpO2 (estimate)', f1(a.basal_spo2, '%') + ' (mean outside event falls; the exact SpO2 Assistant rule is not confirmed -- T-031)'],
+      ['Basal SpO2', f1(a.basal_spo2, '%') + ' (mean outside the event falls, as SpO2 Assistant computes it)'],
       ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
     );
     var table = document.getElementById('stats');

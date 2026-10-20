@@ -263,5 +263,21 @@ class TestPadRecords(unittest.TestCase):
         self.assertEqual(pad_records(recs), recs)
         self.assertEqual(pad_records([]), [])
 
+class TestExportHtml(unittest.TestCase):
+    def test_html_format_writes_viewer_page_with_the_records(self):
+        recs = [{"timestamp": "2026-10-16T08:00:00", "spo2": 97, "heart_rate": 70, "flags": "ok"}]
+        with tempfile.TemporaryDirectory() as d:
+            path = export_records(recs, fmt="html", output_dir=d)
+            self.assertTrue(path.endswith(".html"))
+            with open(path, encoding="utf-8") as f:
+                html = f.read()
+            self.assertIn('id="spo2-data"', html)
+            self.assertIn("2026-10-16T08:00:00", html)
+            # the extension also picks the format
+            path2 = export_records(recs, os.path.join(d, "x.html"), fmt="csv")
+            with open(path2, encoding="utf-8") as f:
+                self.assertIn('id="spo2-data"', f.read())
+
+
 if __name__ == "__main__":
     unittest.main()

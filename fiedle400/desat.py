@@ -7,11 +7,10 @@ taken as 1 Hz, as in the `.spo2` format: every neighbouring pair is one second a
 a recording with a pause in it (several stored sessions) must be padded to one entry per
 second first, `export.pad_records` (T-022).
 
-Basal SpO2 is the one value that is not confirmed: the plain mean of the valid
-samples reads about 0.8 points lower than the real program's figure on the
-probe. `basal_spo2` uses the mean outside the event descents, which matches the
-probe's figure to the printed precision, but the vendor's exact rule is not
-decoded (SPO2_FORMAT.md §7.1).
+Basal SpO2 is the mean of the valid samples outside the event descents (start to
+nadir), decoded from SpO2.exe in T-031 (SPO2_FORMAT.md §7.1). The program runs
+the same detector on the pulse rate with its own parameters (T-029, §7.3);
+`detect_pulse_events` gives those events, nothing displays them yet (T-030).
 """
 
 DROP = 4          # Percent Drop For Event (%)
@@ -23,11 +22,28 @@ CRITERIA = 88     # desaturation criteria level for the "below" counts (%)
 LO, HI = 0, 100   # a sample outside this range breaks an event
 INVALID = 127     # probe-out sentinel, used for missing readings
 
+PULSE_DROP = 6        # Pulse change for event (bpm), UI range 2-20
+PULSE_MIN_TIME = 8    # Minimum pulse event duration (s)
+PULSE_HI = 254        # pulse valid range is 0..254; the 255 sentinel breaks an event
+PULSE_INVALID = 255
+
 
 def detect_events(spo2, drop=DROP, min_time=MIN_TIME):
     """Return the accepted events as dicts: start, nadir (sample indices),
     from_pct, to_pct. `spo2` is a list of ints; None counts as probe-out."""
-    x = [INVALID if v is None else v for v in spo2]
+    return _detect(spo2, drop, min_time, HI, INVALID)
+
+
+def detect_pulse_events(pulse, drop=PULSE_DROP, min_time=PULSE_MIN_TIME):
+    """Pulse-rate events: the same detector on the pulse series (SpO2.exe builds a
+    second instance at 0x532b39 with these values), so an event is a *fall* of at
+    least `drop` bpm over `min_time`..180 s; a rise is never one. Same dict keys as
+    detect_events (from_pct/to_pct hold bpm). None counts as probe-out."""
+    return _detect(pulse, drop, min_time, PULSE_HI, PULSE_INVALID)
+
+
+def _detect(series, drop, min_time, hi, invalid):
+    x = [invalid if v is None else v for v in series]
     cands = []
     st = en = 0
 
@@ -38,7 +54,7 @@ def detect_events(spo2, drop=DROP, min_time=MIN_TIME):
         st = en = 0
 
     for i, v in enumerate(x):
-        if v > HI or v < LO:
+        if v > hi or v < LO:
             finish()
             continue
         if i == 0:
@@ -51,7 +67,7 @@ def detect_events(spo2, drop=DROP, min_time=MIN_TIME):
                 en = i
         elif st:
             en = i
-        elif LO < p < HI:
+        elif LO < p < hi:
             st, en = i - 1, i
     finish()
 
@@ -62,7 +78,7 @@ def detect_events(spo2, drop=DROP, min_time=MIN_TIME):
             and depth >= drop
             and min_time <= dur <= MAX_TIME
             and depth // dur < MAX_AVG
-            and all(LO <= x[k] <= HI for k in range(c[0], c[1] + 1))
+            and all(LO <= x[k] <= hi for k in range(c[0], c[1] + 1))
         )
 
     events = []
@@ -101,6 +117,8 @@ def summarize(spo2, events, criteria=CRITERIA):
     inside = set()
     for e in events:
         inside.update(range(e["start"], e["nadir"] + 1))
-    basal = [spo2[i] for i in valid if i not in inside] or [spo2[i] for i in valid]
+    # SpO2.exe 0x54ced1-0x54d059: (sum of valid samples - sum over every event's
+    # start..nadir) / (valid count - those samples); not computed when nothing is left.
+    basal = [spo2[i] for i in valid if i not in inside]
     out["basal_spo2"] = round(sum(basal) / len(basal), 2) if basal else None
     return out

@@ -81,7 +81,7 @@ T-022), so it never draws a fall across the pause.
      over SSH, opened `.spo2` files `fiedle400` wrote from real device downloads without error
      or rejection (including after the T-020 fix, a 371-sample multi-session file with a
      sentinel-padded gap, reported as the correct 6:11 duration). The reverse direction was
-     also checked: `fiedle400/plot.py`'s `read_spo2_file` correctly decoded a real
+     also checked: `fiedle400/recording.py`'s `read_spo2_file` (then in `plot.py`, moved by T-013) correctly decoded a real
      SpO2-Assistant-written capture (`archive/capture/..._joint.SpO2`, 11480 records,
      timestamp span matching exactly). Full details:
      `tickets/done/2026-W43/T-011-spo2-assistant-interop-check.md`.
@@ -241,7 +241,7 @@ marked *inferred*.
 
 | Report label | Definition | Source |
 | :--- | :--- | :--- |
-| Basal SpO2 (%) | "the average value of SpO2 total" -- the mean SpO2 of the recording, not a sleep or awake baseline. Whether excluded ranges and artifact samples are left out of the mean is *inferred* (likely, not verified). **T-019 real-run evidence (2026-10-20):** the probe's flat mean over all samples predicts 95.39 %, the real SpO2 Assistant reported 96.2 % -- a +0.8 pt difference consistent with event-affected ranges being excluded from the mean (not just artifact/sentinel samples), but not confirmed by disassembly. Still *inferred*, now with a real discrepancy pointing the same direction. `fiedle400/desat.py` (T-018) uses the mean outside the event falls (96.23 on the probe) and labels it an estimate; the mean of samples >= 88 % (96.21) fits equally well. | [M] §5.4.7.3 |
+| Basal SpO2 (%) | Mean of the valid SpO2 samples (any value but the `0x7F` sentinel) **outside every event's descent** (start to nadir, both included): (sum of valid samples - sum of the event samples) / (valid count - event sample count). Not computed when that count is 0; printed `%3.1f`. Decoded in T-031: the report object's field `+0x50` (getter `0x468a30`, XML `<basal>` written at `0x4fdbcd`) is set at `0x54ced1`-`0x54d059`, which sums a value/count list of the SpO2 channel skipping `0x7F` (`0x468920`), then walks the SpO2 event list (`start`, `duration`) and subtracts every sample from `start` to `start + duration`. This is the rule `fiedle400/desat.py` uses; T-019's real run (96.2 vs. 96.23 predicted, plain mean 95.39) fits it. A probe on which the candidate rules diverge is ready for a real-program check (T-035). Small difference: the program counts a raw 0 as valid, `desat.py` only 1..100 (fiedle400's own files never contain a 0). | [M] §5.4.7.3, [X] |
 | Total Event | Number of SpO2 desaturation events (7.2). | [M] §5.4.7.3 |
 | Index (1/hr) | "the event number per hour" (events / recording hours). | [M] §5.4.7.3 |
 | Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |
@@ -263,7 +263,7 @@ The detector is built at `0x532a43` (`call 0x533300`) with exactly these values:
 | `max_avg` | 2 | fixed | Average fall rate must be **below** 2 %/sample; steeper drops are rejected. | [X] `0x535e42` |
 | `oscillation` | 1 | fixed | Rebound tolerance in % for merging partial descents. | [X] `0x53580e` |
 | valid range | 0..100 | fixed | Samples outside it break an event (e.g. the `0x7F` probe-out sentinel). | [X] `0x535469`, `0x535f60` |
-| Pulse change / time | 6 bpm / 8 s | 2-20 bpm | Pulse-rate event parameters; that detector was not decoded. | [X] init routines |
+| Pulse change / time | 6 bpm / 8 s | 2-20 bpm | Pulse-rate event parameters (7.3). | [X] `0x531eb0`, `0x531ebd` (and `0x532175`, `0x532182`) |
 
 **Detection** (`0x535430`, per SpO2 sample; `.SpO2` data is 1 Hz, so a sample is a second):
 
@@ -288,8 +288,7 @@ turns a staircase descent with small rebounds into one event.
 (integer division), and every sample from start to nadir is inside 0..100.
 
 Not determined: whether user-excluded ranges are removed from the series before detection
-(*inferred*: probably, since the manual counts them as non-effective time), and how the
-pulse-rate events are detected. Note that "duration" is the **descent time to the nadir**,
+(*inferred*: probably, since the manual counts them as non-effective time). Note that "duration" is the **descent time to the nadir**,
 not the time spent below the start value, which differs from AASM-style scoring.
 
 **Validated (T-019, 2026-10-20).** `scripts/make_desat_probe.py` writes a synthetic
@@ -313,3 +312,29 @@ both matched exactly. The only discrepancy across all three runs: Basal SpO2 rea
 +0.8 pts higher than predicted every time (see §7.1's note on excluded ranges, still
 *inferred* not confirmed). Full comparison and raw report files:
 `tickets/done/2026-W43/T-019-validate-desat-algorithm-in-spo2-assistant.md`.
+
+### 7.3 Pulse-rate events
+
+Decoded in T-029 from [X]. There is no separate pulse detector: right after the SpO2 run,
+`0x532b39`-`0x532c20` builds a **second instance of the same detector class** (constructor
+`0x533300`, run `0x5350a0`, detection `0x535430`, merging `0x535710`, acceptance
+`0x535df0`/`0x535f60`) on the pulse channel and stores its events in the pulse event list
+(`+0xa4`; the SpO2 list is `+0x94`). The constructor takes seven values; the two instances
+differ only in these:
+
+| Constructor value | SpO2 instance (`0x532a43`) | Pulse instance (`0x532b39`) |
+| :--- | :---: | :---: |
+| `drop` | Percent Drop For Event (4 %) | Pulse change (6 bpm), `[+0xc4]` via `0x53326c(0)` |
+| valid range (hi / lo) | 100 / 0 | **254** (`push 0xfe`) / 0 |
+| `min_time` | 10 s | Pulse time (8 s), `[+0xc8]` via `0x53326c(1)` |
+| `max_time`, `max_avg`, `oscillation` | 180 s, 2, 1 | 180 s, 2, 1 (same pushes) |
+
+So the steps of 7.2 apply unchanged to the pulse series in bpm: an event is a **fall** of at
+least 6 bpm (start value minus nadir), lasting 8-180 s to the nadir, with an average fall below
+2 bpm per second (integer division), merged across rebounds of at most 1 bpm; a pulse value
+above 254 (the `0xFF` sentinel) breaks it. A rise in pulse rate is never an event, because
+step 2 of the detection ends a candidate on any rise. The pulse event list feeds the pulse
+columns of the report XML (`0x4fd8e1`-`0x4fdb63`): event count, total and average event
+duration, index and adjusted index, artifact %. `fiedle400/desat.py`'s `detect_pulse_events`
+implements it; nothing displays pulse events yet (T-030). Not yet checked against the real
+program: `scripts/make_pulse_basal_probe.py` writes a probe with predicted counts (T-035).

@@ -4,7 +4,7 @@
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**
-  - `fiedle400/plot.py` (`read_spo2_file`, the shipped reader)
+  - `fiedle400/recording.py` (`read_spo2_file`, the shipped reader; moved from `plot.py`, T-013)
   - `archive/capture/raw/`, `archive/capture/realtime/` (existing real
     captures not yet exercised)
   - `tickets/done/2026-W43/T-011-spo2-assistant-interop-check.md` (this
@@ -25,7 +25,7 @@ blocking T-011's close:
 
 - The other existing real captures in `archive/capture/raw/` and
   `archive/capture/realtime/` haven't been round-tripped through
-  `fiedle400/plot.py`'s `read_spo2_file` yet -- different capture modes
+  `fiedle400/recording.py`'s `read_spo2_file` yet -- different capture modes
   (raw vs. realtime vs. joint) might expose a decode difference the one
   `joint.SpO2` file tested didn't.
 - Longer real recordings (the one read-direction test was ~3h11m; nothing

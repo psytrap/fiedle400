@@ -3,8 +3,10 @@
 - **Status:** Open
 - **Priority:** Low
 - **Owner:** Cloud
-- **Blocked by:** [T-029](T-029-pulse-rate-desaturation-decode.md) (needs a
-  validated algorithm before there's anything to implement)
+- **Blocked by:** [T-035](T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md)
+  (the real-program check of T-029's decode). T-029 is done: the decode is
+  `SPO2_FORMAT.md` §7.3 and `desat.detect_pulse_events` already exists (2026-10-20);
+  what is left here is the pulse summary values and the viewer.
 - **Scope & Relevant Files:**
   - `fiedle400/desat.py` (SpO2-side detector to mirror; `DROP`/`MIN_TIME`/
     etc. constants and `detect_events`/`summarize`)

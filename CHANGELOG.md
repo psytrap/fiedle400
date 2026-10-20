@@ -8,6 +8,39 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.26 (2026-10-20)
+
+**Breaking CLI change (T-012, psytrap's decision):** `fiedle400 download` now writes the
+self-contained HTML viewer page by default, and **no `.spo2` is written unless asked for**.
+`-f spo2|csv|json` (or an `-o` name with that extension) still gives the old files; the
+wizard's format menu is now `[1] html (default) [2] spo2 [3] csv [4] json`, and after saving
+an html page it asks "Open it in your browser now? [y/N]" (default no). Non-interactive
+`download` never opens a browser. Scripts that relied on the `.spo2` default must pass `-f spo2`.
+
+- **T-013:** new `fiedle400 view [FILE]` shows an existing `.spo2`/`.csv`/`.json` recording in
+  the viewer (temporary page, no file left behind; `--convert [-o OUT]` writes `<recording>.html`
+  instead). The readers moved from `plot.py` to the stdlib-only `recording.py`.
+- **T-006:** `fiedle400 plot`, `plot.py`, `plot_session` and the `fiedle400[plot]` extra are
+  removed; matplotlib is no longer bundled or installed in CI (expected binary saving: about 35 MB,
+  RELEASE_PLAN B1b). The viewer has no 95/90 % and 60/100 bpm reference lines; it has a print
+  button instead of the PNG.
+- **T-027:** `tests/test_desat_js_parity.py` runs the viewer's JS detector under Node and compares
+  it with `desat.py` (skipped without `node`). It found real drift: the JS rounded with
+  `Math.round` (half-up, inexact `v * 100`) where Python's `round` goes to the even digit on exact
+  ties, so values such as an average event duration of 10.25 s showed as 10.3 instead of 10.2.
+  The JS now rounds exactly like Python.
+- **T-031:** Basal SpO2's rule decoded from `SpO2.exe` (`0x54ced1`-`0x54d059`): the mean of the
+  valid samples outside every event's fall, which is what `desat.py` already computed. The
+  viewer drops the "(estimate)" label; when nothing is left outside events the value is now
+  n/a instead of the mean of all samples. SPO2_FORMAT.md §7.1.
+- **T-029:** pulse-rate events decoded: SpO2 Assistant runs the same detector on the pulse rate
+  (6 bpm / 8 s, range 0..254), so only falls count. `desat.detect_pulse_events`; not shown in
+  the viewer yet (T-030). SPO2_FORMAT.md §7.3.
+- **T-035** (Local, new): `scripts/make_pulse_basal_probe.py` writes a probe recording to check
+  both decodes in the real SpO2 Assistant.
+
+---
+
 ## Findings T1-T8 (hardware investigation log)
 
 Found while building the simulated-hardware tests (`tests/hwsim.py`,

@@ -1,6 +1,5 @@
 """The CLI exits with a short message instead of a traceback when something goes wrong."""
 
-import builtins
 import io
 import os
 import sys
@@ -56,33 +55,69 @@ class TestRunGuarded(unittest.TestCase):
         self.assertIn("RuntimeError: no ack", err.getvalue())
 
 
-class TestPlotWithoutMatplotlib(unittest.TestCase):
-    def test_plot_prints_install_hint(self):
-        real_import = builtins.__import__
+class TestWithoutMatplotlib(unittest.TestCase):
+    """matplotlib is not a dependency any more (T-006): nothing may import it."""
 
-        def fake_import(name, *args, **kwargs):
-            if name == "matplotlib" or name.startswith("matplotlib."):
-                raise ModuleNotFoundError("No module named 'matplotlib'", name="matplotlib")
-            return real_import(name, *args, **kwargs)
+    def test_package_import_and_view_help_work_without_matplotlib(self):
+        import subprocess
+        code = (
+            "import sys; sys.modules['matplotlib'] = None\n"  # any import of it raises ImportError
+            "import fiedle400\n"
+            "from fiedle400 import cli\n"
+            "try:\n"
+            "    cli.main(['view', '--help'])\n"
+            "except SystemExit as e:\n"
+            "    sys.exit(e.code)\n"
+        )
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        env = dict(os.environ, PYTHONPATH=root)
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, cwd=root)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("--convert", proc.stdout)
 
+    def test_plot_session_is_gone(self):
         import fiedle400
-        saved = {k: sys.modules.pop(k) for k in list(sys.modules) if k == "fiedle400.plot" or k.startswith("matplotlib")}
-        saved_attr = vars(fiedle400).pop("plot", None)
-        try:
-            out = io.StringIO()
-            with mock.patch("builtins.__import__", side_effect=fake_import), redirect_stdout(out):
-                rc = cli.command_plot(SimpleNamespace(file=None, output=None, dpi=100))
-        finally:
-            sys.modules.pop("fiedle400.plot", None)
-            sys.modules.update(saved)
-            if saved_attr is not None:
-                fiedle400.plot = saved_attr
-        self.assertEqual(rc, 1)
-        self.assertIn("pip install matplotlib", out.getvalue())
+        self.assertFalse(hasattr(fiedle400, "plot_session"))
+        self.assertNotIn("plot_session", fiedle400.__all__)
 
-    def test_package_import_does_not_need_matplotlib(self):
-        import fiedle400
-        self.assertNotIn("plot_session", vars(fiedle400))  # lazy, resolved via __getattr__
+
+class TestDownloadDefaultFormat(unittest.TestCase):
+    """T-012: `download` writes the HTML viewer page by default, never a .spo2 unless asked."""
+
+    RECORDS = [
+        {"timestamp": "2026-10-01T22:00:00", "spo2": 97, "heart_rate": 60, "flags": None},
+        {"timestamp": "2026-10-01T22:00:01", "spo2": 96, "heart_rate": 61, "flags": None},
+    ]
+
+    def _download(self, extra):
+        import tempfile
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        engine = mock.MagicMock()
+        engine.download_all_sessions.return_value = list(self.RECORDS)
+        out = io.StringIO()
+        with mock.patch.dict(os.environ), mock.patch("fiedle400.cli.PulsoxHidDevice"), \
+                mock.patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=engine), \
+                mock.patch("fiedle400.cli._open_in_viewer") as opener, \
+                redirect_stdout(out), self.assertRaises(SystemExit) as cm:
+            scrub_env()
+            cli.main(["download", "--workdir", tmp.name, *extra])
+        self.assertEqual(cm.exception.code, 0)
+        opener.assert_not_called()  # a non-interactive download never opens a browser
+        return tmp.name, sorted(os.listdir(tmp.name))
+
+    def test_default_is_one_html_file_with_the_records_and_no_spo2(self):
+        folder, files = self._download([])
+        self.assertEqual(len(files), 1)
+        self.assertTrue(files[0].endswith(".html"), files)
+        with open(os.path.join(folder, files[0]), encoding="utf-8") as f:
+            html = f.read()
+        self.assertIn("2026-10-01T22:00:01", html)
+
+    def test_format_flag_still_writes_spo2(self):
+        _, files = self._download(["-f", "spo2"])
+        self.assertEqual(len(files), 1)
+        self.assertTrue(files[0].endswith(".spo2"), files)
 
 
 class TestProbeOutAlert(unittest.TestCase):

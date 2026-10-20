@@ -34,7 +34,7 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
   is detected from out-of-range decoded values (the vendor's 127 / 255 sentinels), never from a
   flag byte; no real recording has shown one yet (T1 is open). (Details: PROTOCOL.md §3.5, DESIGN.md §3.)
 - Failures end in one clear line and a nonzero exit code, not a traceback
-  (`cli.run_guarded`). Missing optional pieces (matplotlib, `hid`) print an install hint.
+  (`cli.run_guarded`). A missing optional piece (`hid` on Windows/macOS) prints an install hint.
 - The tool is `fiedle400`; the device stays "PO-400" in user text. `PO400_*` variables
   and `po400` settings migration are intentional compatibility shims.
 - The Linux backend (`hidraw`) uses the standard library only. Do not add dependencies

@@ -8,8 +8,8 @@ to bump them: [RELEASE_PLAN.md](RELEASE_PLAN.md).
 
 `fiedle400` ships as a **self-contained binary** built with PyInstaller from
 `fiedle400.spec`; no Python is needed on the user's machine. PyInstaller cannot
-cross-compile, so CI builds one binary per OS. `matplotlib` is bundled so that `plot`
-works (+35 MB, decision recorded in RELEASE_PLAN B1b). The workflow smoke-tests every
+cross-compile, so CI builds one binary per OS. The binary no longer bundles `matplotlib` (T-006:
+`plot` was replaced by the stdlib-only `view`; RELEASE_PLAN B1b has the size history, about 35 MB less). The workflow smoke-tests every
 binary (`--version`, `--help`, `config`).
 
 | Artifact | Built on | Contents |

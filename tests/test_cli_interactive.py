@@ -1,6 +1,5 @@
 """Unit tests for PO-400 interactive CLI wizard, range parsing, and ISO filename generation."""
 
-import importlib.util
 import io
 import os
 import unittest
@@ -10,8 +9,6 @@ from unittest.mock import MagicMock, patch
 
 from fiedle400 import protocol
 from fiedle400.cli import generate_iso_filename, parse_session_selection, run_interactive_wizard
-
-HAS_MATPLOTLIB = importlib.util.find_spec("matplotlib") is not None
 
 
 class TestCliInteractive(unittest.TestCase):
@@ -138,7 +135,7 @@ class TestCliInteractive(unittest.TestCase):
         self.assertIn("Device Descriptor     : 50F", text)
         self.assertNotIn("v2.0", text)
 
-    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.csv")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.html")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1-2", "", "", "n", "y", "n"])
@@ -168,83 +165,8 @@ class TestCliInteractive(unittest.TestCase):
         mock_export.assert_called_once()
         args_export = mock_export.call_args[0]
         self.assertEqual(len(args_export[0]), 2)  # 2 sessions * 1 record each
-        self.assertTrue(args_export[1].endswith(".spo2"))
-
-    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
-    @patch("fiedle400.cli._open_in_viewer", return_value=True)
-    @patch("fiedle400.plot.plot_session", return_value="/tmp/test.png")
-    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
-    @patch("fiedle400.cli.PulsoxHidDevice")
-    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1-2", "4", "", "", "y", "n"])
-    def test_wizard_download_format_png_generates_plot(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export, mock_plot, mock_open):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
-
-        mock_engine = MagicMock()
-        mock_engine.read_device_info.return_value = {
-            "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
-        }
-        mock_engine.list_sessions.return_value = self.sessions
-        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        mock_engine_cls.return_value = mock_engine
-
-        args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
-
-        # png format writes the data to a scratch file just to feed the plot ...
-        mock_export.assert_called_once()
-        self.assertEqual(mock_export.call_args[0][2], "spo2")
-        tmp_path = mock_export.call_args[0][1]
-        self.assertTrue(tmp_path.endswith(".spo2"))
-        # ... the plot is rendered from that same scratch file ...
-        mock_plot.assert_called_once()
-        plot_kwargs = mock_plot.call_args.kwargs
-        self.assertEqual(plot_kwargs["filepath"], tmp_path)
-        # ... "Save as" and the plot output stay .png, matching what was chosen ...
-        self.assertTrue(plot_kwargs["output_png"].endswith(".png"))
-        # ... and the scratch file does not survive a successful plot.
-        self.assertFalse(os.path.exists(tmp_path))
-        # Pressing Enter at "Open the plot now? [Y/n]" (default yes) opens the PNG.
-        mock_open.assert_called_once_with("/tmp/test.png")
-
-    def _run_png_wizard(self, open_answer, opener_result=True):
-        """Runs the wizard's png path with a stubbed plot; returns (printed output, opener mock)."""
-        mock_engine = MagicMock()
-        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
-        mock_engine.list_sessions.return_value = self.sessions
-        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        answers = iter(["1-2", "4", "", open_answer, "n", "q"])
-        prompts = []
-
-        def fake_input(prompt=""):
-            prompts.append(prompt)
-            return next(answers)
-
-        buf = io.StringIO()
-        with patch("fiedle400.cli.PulsoxHidDevice"), \
-                patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=mock_engine), \
-                patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2"), \
-                patch("fiedle400.plot.plot_session", return_value="/tmp/test.png"), \
-                patch("fiedle400.cli._open_in_viewer", return_value=opener_result) as opener, \
-                patch("builtins.input", side_effect=fake_input), redirect_stdout(buf):
-            run_interactive_wizard(MagicMock(device=None, verbose=0))
-        return buf.getvalue() + "".join(prompts), opener
-
-    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
-    def test_wizard_png_does_not_open_the_plot_when_declined(self):
-        out, opener = self._run_png_wizard("n")
-        self.assertIn("Open the plot now?", out)
-        opener.assert_not_called()
-
-    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib not installed (optional 'plot' extra)")
-    def test_wizard_png_names_the_file_when_no_viewer_can_be_opened(self):
-        out, opener = self._run_png_wizard("y", opener_result=False)
-        opener.assert_called_once_with("/tmp/test.png")
-        self.assertIn("Could not open a viewer; the plot is at: /tmp/test.png", out)
+        self.assertTrue(args_export[1].endswith(".html"))
+        self.assertEqual(args_export[2], "html")
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
@@ -256,13 +178,52 @@ class TestCliInteractive(unittest.TestCase):
             run_interactive_wizard(MagicMock(device=None, verbose=0))
         self.assertIn("https://github.com/psytrap/fiedle400", out.getvalue())
 
+    def _run_html_wizard(self, open_answer, opener_result=True, fmt_answer=""):
+        """Runs the wizard's default (html) path with a stubbed opener; returns (output, opener, export mock)."""
+        mock_engine = MagicMock()
+        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
+        mock_engine.list_sessions.return_value = self.sessions
+        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
+        answers = iter(["1", fmt_answer, "", open_answer, "n", "n"])
+        prompts = []
+
+        def fake_input(prompt=""):
+            prompts.append(prompt)
+            return next(answers)
+
+        buf = io.StringIO()
+        with patch("fiedle400.cli.PulsoxHidDevice"), \
+                patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=mock_engine), \
+                patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.html") as export, \
+                patch("fiedle400.cli._open_in_viewer", return_value=opener_result) as opener, \
+                patch("builtins.input", side_effect=fake_input), redirect_stdout(buf):
+            ret = run_interactive_wizard(MagicMock(device=None, verbose=0))
+        self.assertEqual(ret, 0)
+        return buf.getvalue() + "".join(prompts), opener, export
+
+    def test_wizard_default_format_saves_html_and_does_not_open_it(self):
+        out, opener, export = self._run_html_wizard("")
+        export.assert_called_once()
+        self.assertEqual(export.call_args[0][2], "html")
+        self.assertTrue(export.call_args[0][1].endswith(".html"))
+        self.assertIn("Open it in your browser now? [y/N]", out)
+        opener.assert_not_called()
+
+    def test_wizard_opens_the_saved_html_when_accepted(self):
+        out, opener, export = self._run_html_wizard("y", fmt_answer="1")
+        opener.assert_called_once_with("/tmp/test.html")
+
+    def test_wizard_names_the_html_when_no_browser_can_be_opened(self):
+        out, opener, export = self._run_html_wizard("y", opener_result=False)
+        self.assertIn("Could not open a browser; the page is at: /tmp/test.html", out)
+
     def _run_spo2_viewer_wizard(self, viewer_answer, opener_result=True):
         """Runs the wizard's spo2 path with a stubbed viewer opener; returns (printed output, opener mock)."""
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        answers = iter(["1", "", "", viewer_answer, "n", "n"])
+        answers = iter(["1", "2", "", viewer_answer, "n", "n"])
         prompts = []
 
         def fake_input(prompt=""):
@@ -297,61 +258,6 @@ class TestCliInteractive(unittest.TestCase):
         out, opener = self._run_spo2_viewer_wizard("y", opener_result=False)
         opener.assert_called_once()
         self.assertIn("Could not open a viewer; the data is still at: /tmp/test.spo2", out)
-
-    @patch("fiedle400.cli.shutil.copy")
-    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
-    @patch("fiedle400.cli.PulsoxHidDevice")
-    @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
-    @patch("builtins.input", side_effect=["1-2", "4", "", "y", "n"])
-    def test_wizard_download_format_png_without_matplotlib(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export, mock_copy):
-        import builtins as _builtins
-        import sys as _sys
-
-        real_import = _builtins.__import__
-
-        def fake_import(name, *args, **kwargs):
-            if name == "matplotlib" or name.startswith("matplotlib."):
-                raise ModuleNotFoundError("No module named 'matplotlib'", name="matplotlib")
-            return real_import(name, *args, **kwargs)
-
-        import fiedle400
-        saved = {k: _sys.modules.pop(k) for k in list(_sys.modules) if k == "fiedle400.plot" or k.startswith("matplotlib")}
-        saved_attr = vars(fiedle400).pop("plot", None)
-
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
-
-        mock_engine = MagicMock()
-        mock_engine.read_device_info.return_value = {
-            "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
-        }
-        mock_engine.list_sessions.return_value = self.sessions
-        mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        mock_engine_cls.return_value = mock_engine
-
-        buf = io.StringIO()
-        try:
-            with patch("builtins.__import__", side_effect=fake_import), redirect_stdout(buf):
-                args = MagicMock(device=None, verbose=0)
-                ret = run_interactive_wizard(args)
-        finally:
-            _sys.modules.pop("fiedle400.plot", None)
-            _sys.modules.update(saved)
-            if saved_attr is not None:
-                fiedle400.plot = saved_attr
-
-        self.assertEqual(ret, 0)
-        out = buf.getvalue()
-        self.assertIn("pip install matplotlib", out)
-        self.assertIn("Saved the data instead so it isn't lost", out)
-        mock_export.assert_called_once()  # the scratch save itself still succeeded
-        # Falls back to persisting the data (as .spo2, next to the requested .png)
-        # instead of losing the download when the plot can't be rendered.
-        mock_copy.assert_called_once()
-        fallback_fn = mock_copy.call_args[0][1]
-        self.assertTrue(fallback_fn.endswith(".spo2"))
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
@@ -401,7 +307,8 @@ class TestCliInteractive(unittest.TestCase):
         mock_export.assert_called_once()
         args_export = mock_export.call_args[0]
         self.assertEqual(len(args_export[0]), 4)
-        self.assertTrue(args_export[1].endswith(".spo2"))
+        self.assertTrue(args_export[1].endswith(".html"))
+        self.assertEqual(args_export[2], "html")
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
@@ -531,7 +438,7 @@ class TestCliInteractive(unittest.TestCase):
         mock_engine_cls.return_value = mock_engine
 
         def fake_exists(p):
-            return p.endswith(".spo2") and "_1" not in p
+            return p.endswith(".html") and "_1" not in p
 
         with patch("os.path.exists", side_effect=fake_exists):
             args = MagicMock(device=None, verbose=0)
@@ -540,7 +447,7 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_export.assert_not_called()
 
-    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test_1.spo2")
+    @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test_1.html")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "", "n", "", "n", "n", "n"])
@@ -561,9 +468,9 @@ class TestCliInteractive(unittest.TestCase):
         # Mock os.path.exists so that initial file exists, but suffixed _1 does not
         orig_exists = os.path.exists
         def fake_exists(p):
-            if "_1.spo2" in p:
+            if "_1.html" in p:
                 return False
-            if p.endswith(".spo2"):
+            if p.endswith(".html"):
                 return True
             return orig_exists(p)
 
@@ -574,7 +481,7 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(ret, 0)
         mock_export.assert_called_once()
         saved_fn = mock_export.call_args[0][1]
-        self.assertTrue(saved_fn.endswith("_1.spo2"))
+        self.assertTrue(saved_fn.endswith("_1.html"))
 
     def test_get_next_available_filename(self):
         import tempfile

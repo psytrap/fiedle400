@@ -86,7 +86,7 @@ cat > "$DESKTOP_FILE" <<EOF
 Version=1.0
 Type=Application
 Name=fiedle400
-Comment=Pulsox PO-400 pulse oximeter: download and plot recordings
+Comment=Pulsox PO-400 pulse oximeter: download and view recordings
 Exec=$BIN_DIR/fiedle400
 Path=$WORK_DIR
 Icon=utilities-system-monitor
