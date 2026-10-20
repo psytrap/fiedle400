@@ -69,11 +69,14 @@ _TEMPLATE = """<!doctype html>
 </div>
 <table id="stats"></table>
 <div id="levelGroup" class="paramGroup">
-<p id="levelRow" style="font-size:0.85em;color:#666;margin:0">Time-below level: <input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</p>
+<table id="levelTable" class="paramTable" style="font-size:0.85em">
+  <tr><td colspan="2"><strong>Time-below level</strong></td></tr>
+  <tr><td id="levelRow">below</td><td><input type="number" id="desatLevel" min="50" max="99" step="1" value="90"> % SpO2</td></tr>
+</table>
 </div>
 <div id="eventParamsGroup" class="paramGroup">
 <table id="eventParamsTable" class="paramTable" style="font-size:0.85em">
-  <tr><td colspan="2">Desaturation event:</td></tr>
+  <tr><td colspan="2"><strong>Desaturation event</strong></td></tr>
   <tr><td>fall of at least</td><td><input type="number" id="dropPct" min="1" max="20" step="1"> %</td></tr>
   <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> -180 s</td></tr>
   <tr><td>criteria level</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
@@ -82,7 +85,7 @@ _TEMPLATE = """<!doctype html>
 </div>
 <div id="pulseParamsGroup" class="paramGroup">
 <table id="pulseParamsTable" class="paramTable" style="font-size:0.85em;color:#999">
-  <tr><td colspan="2">Pulse-rate event (dummy, not functional -- T-029/T-030):</td></tr>
+  <tr><td colspan="2"><strong>Pulse-rate event (dummy, not functional -- T-029/T-030)</strong></td></tr>
   <tr><td>change of at least</td><td><input type="number" id="pulseDropBpm" min="2" max="20" step="1" value="6" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> bpm</td></tr>
   <tr><td>over</td><td><input type="number" id="pulseMinDur" min="1" max="180" step="1" value="8" disabled title="Dummy input: no pulse-rate detector is implemented yet, this value is not used (T-029/T-030)"> s</td></tr>
 </table>
