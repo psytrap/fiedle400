@@ -47,7 +47,7 @@ _TEMPLATE = """<!doctype html>
   .paramGroup:first-of-type { border-top: none; }
   @media print {
     body { margin: 0.5em; background: #fff; }
-    #resetZoom, #printBtn, #legend input[type=checkbox], #levelGroup, #eventParamsGroup, #pulseParamsGroup { display: none !important; }
+    #resetZoom, #printBtn, #legend input[type=checkbox] { display: none !important; }
     .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #tooltip { display: none !important; }
     canvas { border: 1px solid #999; }
