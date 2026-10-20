@@ -1,6 +1,6 @@
 # T-020: Multi-session `.spo2` export silently discards the gap between sessions
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -62,19 +62,39 @@ fixing the symptom.
 
 ## Criteria
 
-- [ ] One of the two directions above (or a third) is chosen and the reason
+- [x] One of the two directions above (or a third) is chosen and the reason
       recorded here.
-- [ ] `fiedle400/export.py` updated so a multi-session `.spo2` export never
+- [x] `fiedle400/export.py` updated so a multi-session `.spo2` export never
       silently misrepresents real elapsed time between sessions.
-- [ ] A test with records from two sessions with a real gap between their
+- [x] A test with records from two sessions with a real gap between their
       timestamps, asserting the fix (either sentinel-filled duration, or
       one file per session, matching whichever direction was chosen).
-- [ ] `SPO2_FORMAT.md` updated if the multi-session behavior changes.
-- [ ] Version bumped via `scripts/bump_version.py` (product-code change).
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] `SPO2_FORMAT.md` updated if the multi-session behavior changes.
+- [x] Version bumped via `scripts/bump_version.py` (product-code change).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Done 2026-10-20 (cloud, patch 0025, v0.4.21).
+
+- **Direction chosen: 1, pad the gap.** It keeps `download --all` as one file, which is
+  what users already get, and needs no CLI change. Direction 2 (one file per session) would
+  change what the default means; it stays open as a later product decision, and the new
+  `ValueError` message points at it for the one case padding cannot handle.
+- **Change.** `fiedle400/export.py`: new `_sample_positions()` places each record at its
+  real second since the first record; skipped seconds are written as the probe-out pair
+  `[0x7F, 0xFF]`, and the header's sample count covers the elapsed time. Records with a
+  missing, unparsable, repeated or earlier timestamp follow the previous one by one second,
+  exactly as before, so ordinary single sessions are byte-identical. A gap over 7 days
+  (`MAX_GAP_FILL_S`, 2 bytes per second) raises `ValueError` instead of writing a huge file.
+- **Tests.** `tests/test_export_spo2.py::TestMultiSessionGap` (5 tests), including T-020's
+  real numbers: session 2 starting 181 s after session 1 ends lands at its real time and
+  the file covers 343 s. 321 tests pass (316 before).
+- **Docs.** `SPO2_FORMAT.md` section 4, "Several sessions in one file".
+- **Effect on the viewer.** A padded gap shows as probe-out and counts as artifact in the
+  T-018 statistics, which is what SpO2 Assistant does with invalid samples.
+- **Not done.** Not re-run against the real SpO2 Assistant: the T-011 file would show the
+  3-minute pause as an invalid stretch; worth a look when T-011 is picked up.
+

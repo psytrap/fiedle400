@@ -186,5 +186,48 @@ class TestExportSpO2(unittest.TestCase):
             export_records(self.sample_records, output_filename="test.xml", fmt="xml")
 
 
+
+class TestMultiSessionGap(unittest.TestCase):
+    """T-020: the pause between two stored sessions must not be squeezed out of the file."""
+
+    def _rec(self, ts, spo2=97):
+        return {"timestamp": ts, "spo2": spo2, "heart_rate": 70, "flags": "ok"}
+
+    def test_gap_between_sessions_is_padded_with_probe_out(self):
+        # Real numbers from T-020: session 1 ends 08:40:11, session 2 starts 08:43:12 (181 s later).
+        recs = [self._rec("2026-10-16T08:37:31"), self._rec("2026-10-16T08:37:32"),
+                self._rec("2026-10-16T08:43:12"), self._rec("2026-10-16T08:43:13")]
+        data = build_spo2_binary(recs)
+        meta = parse_header(data)
+        self.assertEqual(meta["start_time"], datetime(2026, 10, 16, 8, 37, 31))
+        # 08:37:31 .. 08:43:13 inclusive = 343 s, not 4.
+        self.assertEqual(meta["sample_count"], 343)
+        samples = parse_samples(data, meta["start_time"], header_count=meta["sample_count"])
+        self.assertEqual(len(samples), 343)
+        self.assertEqual(samples[1]["spo2"], 97)
+        self.assertEqual(samples[2]["status"], "probe-out")
+        self.assertEqual(samples[340]["status"], "probe-out")
+        self.assertEqual(samples[341]["spo2"], 97)   # 08:43:12 at its real time
+        self.assertEqual(samples[342]["spo2"], 97)
+
+    def test_continuous_session_is_unchanged(self):
+        recs = [self._rec("2026-10-16T08:37:%02d" % s) for s in range(31, 41)]
+        data = build_spo2_binary(recs)
+        self.assertEqual(parse_header(data)["sample_count"], 10)
+
+    def test_repeated_or_missing_timestamps_follow_one_second_apart(self):
+        recs = [self._rec("2026-10-16T08:37:31"), self._rec("2026-10-16T08:37:31"),
+                {"spo2": 96, "heart_rate": 70}, self._rec("garbage")]
+        data = build_spo2_binary(recs)
+        self.assertEqual(parse_header(data)["sample_count"], 4)
+
+    def test_absurd_gap_is_refused(self):
+        recs = [self._rec("2026-10-16T08:37:31"), self._rec("2027-10-16T08:37:31")]
+        with self.assertRaises(ValueError):
+            build_spo2_binary(recs)
+
+    def test_empty_records(self):
+        self.assertEqual(parse_header(build_spo2_binary([]))["sample_count"], 0)
+
 if __name__ == "__main__":
     unittest.main()

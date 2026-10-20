@@ -26,6 +26,10 @@ SPO2_TAG_BLE = b"B\x00L\x00E\x00"
 SPO2_INVALID_SPO2 = 127  # 0x7F
 SPO2_INVALID_HR = 255    # 0xFF
 
+# Longest between-session gap that is padded with sentinel samples (2 bytes per second);
+# a bigger one means a wrong device clock, not a real pause, so it is refused (T-020).
+MAX_GAP_FILL_S = 7 * 86400
+
 
 def parse_record_datetime(ts_val: Any) -> Optional[datetime]:
     """Helper to parse a timestamp from ISO string or datetime object."""
@@ -39,6 +43,37 @@ def parse_record_datetime(ts_val: Any) -> Optional[datetime]:
     return None
 
 
+def _sample_positions(records: List[Dict[str, Any]]) -> List[int]:
+    """File position (second since the first record) of each record.
+
+    A .SpO2 file has one start time and one sample per second, so a pause between
+    two stored sessions has to be written as samples too, or every later record
+    lands earlier than it happened (T-020). A record whose timestamp is later than
+    the next free position is placed at its real time; the skipped seconds stay
+    probe-out. Missing, unparsable or non-advancing timestamps just follow the
+    previous record by one second, as before.
+    """
+    first = parse_record_datetime(records[0].get("timestamp")) if records else None
+    positions: List[int] = []
+    for i, r in enumerate(records):
+        pos = positions[-1] + 1 if i else 0
+        ts = parse_record_datetime(r.get("timestamp")) if first is not None and i else None
+        if ts is not None:
+            try:
+                real = int((ts - first).total_seconds())
+            except TypeError:  # naive vs aware datetimes
+                real = pos
+            if real - pos > MAX_GAP_FILL_S:
+                raise ValueError(
+                    f"Gap of {real - pos} s before record {i + 1} is too large to pad into one "
+                    f".SpO2 file (limit {MAX_GAP_FILL_S} s); the timestamps look wrong. "
+                    "Export the sessions separately."
+                )
+            pos = max(pos, real)
+        positions.append(pos)
+    return positions
+
+
 def build_spo2_binary(
     records: List[Dict[str, Any]],
     start_dt: Optional[datetime] = None,
@@ -50,7 +85,8 @@ def build_spo2_binary(
         start_dt: Explicit recording start datetime. If None, derived from records[0] or datetime.now().
 
     Returns:
-        bytes: Complete binary .SpO2 file payload (1084-byte header + N * 2 bytes).
+        bytes: Complete binary .SpO2 file payload (1084-byte header + N * 2 bytes, where N
+            covers the elapsed seconds, gaps between sessions included).
     """
     if start_dt is None:
         if records and records[0].get("timestamp"):
@@ -58,7 +94,8 @@ def build_spo2_binary(
         if start_dt is None:
             start_dt = datetime.now()
 
-    sample_count = len(records)
+    positions = _sample_positions(records)
+    sample_count = positions[-1] + 1 if positions else 0
     hdr = bytearray(SPO2_HEADER_SIZE)
 
     # 0x0000: Magic (0x0358 = 856), 0x0004: Version (1)
@@ -85,8 +122,9 @@ def build_spo2_binary(
     )
 
     # Payload: 2 bytes per second [SpO2 (uint8), Heart Rate (uint8)]
-    payload = bytearray(sample_count * 2)
-    for i, r in enumerate(records):
+    # Seconds with no record (a pause between sessions) stay probe-out.
+    payload = bytearray([SPO2_INVALID_SPO2, SPO2_INVALID_HR] * sample_count)
+    for pos, r in zip(positions, records):
         spo2 = r.get("spo2")
         hr = r.get("heart_rate")
 
@@ -106,8 +144,8 @@ def build_spo2_binary(
             s_byte = SPO2_INVALID_SPO2
             h_byte = SPO2_INVALID_HR
 
-        payload[i * 2] = s_byte
-        payload[i * 2 + 1] = h_byte
+        payload[pos * 2] = s_byte
+        payload[pos * 2 + 1] = h_byte
 
     return bytes(hdr + payload)
 

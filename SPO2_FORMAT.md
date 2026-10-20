@@ -58,6 +58,13 @@ Each record represents 1 second of continuous measurement. Each record is exactl
 - The official Windows application `SpO2.exe` writes `[0x7F, 0xFF]` (`127, 255`) when the sensor probe is detached or signal is lost.
 - Any values where $\text{SpO}_2 > 100$ or $\text{Pulse Rate} > 250$ (or equal to $0$) are treated as **probe-out / invalid** by decoders.
 
+### Several sessions in one file
+The format has one start time and one sample per second; it cannot describe several
+recordings. `fiedle400`'s multi-session export (`download --all`) therefore writes the pause
+between two stored sessions as probe-out samples (`[0x7F, 0xFF]`), so each record sits at its
+real time and OSCAR's alignment with CPAP data stays correct (T-020). A pause longer than
+7 days (`MAX_GAP_FILL_S`) is refused as a wrong device clock instead of writing a huge file.
+
 ---
 
 ## 5. Software & Tooling Compatibility
