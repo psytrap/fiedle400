@@ -2,7 +2,7 @@
 
 Replaces the old `handoff/` convention (loose `<topic>.md` +
 `<topic>-response.md` pairs, no status, no numbering). See
-[T-001](done/T-001-adopt-ticket-strategy.md) for why, and what was
+[T-001](done/2026-W43/T-001-adopt-ticket-strategy.md) for why, and what was
 deliberately *not* carried over from the source this was adapted from
 (`github.com/psytrap/refdiff`'s `tickets/`).
 
@@ -14,11 +14,12 @@ tickets/
 ├── INDEX.md     # live list of open tickets
 ├── DONE.md      # archive register of completed tickets
 ├── open/        # active tickets: T-NNN-slug.md
-└── done/        # completed tickets, moved here via `git mv`
+└── done/        # completed tickets, one folder per ISO week: done/<ISO-year>-W<week>/
 ```
 
-A ticket stays at the same filename for its whole life except for the
-`open/` -> `done/` move, so links into it never break.
+A ticket stays at the same filename for its whole life. It moves once, from
+`open/` to `done/<ISO-year>-W<week>/` (the week it was closed, Monday-start ISO 8601,
+`date +%G-W%V`), so a link into `done/` has to name that week folder.
 
 ## When to open a ticket
 
@@ -35,15 +36,16 @@ you're told to do something, do it; open the ticket alongside the work
 
 ## Lifecycle
 
-1. Create `tickets/open/T-NNN-<slug>.md` from the template below.
+1. Create `tickets/open/T-NNN-<slug>.md` from the template below, and apply the model
+   check in `.agents/rules/coordinator-and-model-checks.md` (one advisory line).
 2. Do the work (local hardware, or write the brief and hand it to the
    cloud per the `Owner` field).
 3. Append an `## Execution Notes` section: what was actually done, test
    results, what was deliberately left out and why.
 4. Check off every `Criteria` item that's actually met.
-5. `git mv tickets/open/T-NNN-<slug>.md tickets/done/T-NNN-<slug>.md`,
+5. `git mv tickets/open/T-NNN-<slug>.md tickets/done/<ISO-year>-W<week>/T-NNN-<slug>.md`,
    set `Status: Done`, update `INDEX.md` (remove it) and `DONE.md` (add
-   it).
+   it under that week's heading).
 6. Commit and push as usual (this project pushes after every applied
    change — no separate manual-release gate on top of that).
 

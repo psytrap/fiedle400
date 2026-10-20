@@ -11,7 +11,7 @@
 
 ## Description & Context
 
-Follow-up from [T-007](../done/T-007-html-viewer-feature-evaluation.md). The
+Follow-up from [T-007](T-007-html-viewer-feature-evaluation.md). The
 evaluation compared the viewer with SpO2 Assistant's own feature labels (strings in
 `archive/bruteforce/SpO2.exe`) and adopted four items, against the viewer as of
 **v0.4.12**. T-006 (remove `plot`) waits on this ticket for parity.

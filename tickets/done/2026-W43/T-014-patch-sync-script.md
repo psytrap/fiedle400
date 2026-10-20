@@ -1,6 +1,6 @@
 # T-014: Script to apply and generate the local/cloud sync patches
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -59,24 +59,52 @@ silently pick one without updating the other.
 
 ## Criteria
 
-- [ ] One script handles both directions (apply and generate), or two
+- [x] One script handles both directions (apply and generate), or two
       clearly-paired scripts if that reads better -- implementer's
       call, but documented either way in `AGENTS.md`.
-- [ ] Apply direction: dry-run check before applying, preserves the
+- [x] Apply direction: dry-run check before applying, preserves the
       original patch's authorship (via `git am`, not a hand-written
       commit), runs the full test suite before anything is left
       committed, and refuses (does not partially apply) on a failed
       dry-run or a red suite.
-- [ ] Generate direction: produces a patch numbered correctly from the
+- [x] Generate direction: produces a patch numbered correctly from the
       actual existing files on disk, not a separately-tracked counter
       that could fall out of sync with them.
-- [ ] `AGENTS.md`'s "Delivery" section is corrected to describe the
+- [x] `AGENTS.md`'s "Delivery" section is corrected to describe the
       path patches actually use (root-level), and references the new
       script(s).
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Found when this ticket was picked up:** `scripts/sync_patch.py` already existed locally,
+uncommitted and without tests (written during the T-008/T-009 apply). This patch
+takes that file as its base and finishes it; nothing was rewritten from scratch.
+
+**`scripts/sync_patch.py`** (changes to the local draft):
+- `apply` now refuses when tracked files have uncommitted changes, because its rollback after a red
+  suite (`git reset --hard`) would otherwise discard them. Untracked files do not count.
+- `apply` keeps a copy of a successful patch in the repo root (gitignored by `*.patch`). Reason: the
+  cloud's numbering is ahead of this root (`0016` to `0021` were applied from elsewhere, so
+  `generate` would have started at `0016` and collided with them).
+- `generate` looks for numbers in the repo root, `changes/` and any `--dir`, and takes `--number N`
+  as an override. It prints a reminder when it numbered from disk. The patch that delivers this
+  script is 0022, so the first `generate` in this repo should use `--number 23` (or whatever the
+  cloud announces); after that the copies kept by `apply` carry the numbering.
+- The default `root` arguments are read at call time (they were fixed at import, which made the
+  functions untestable).
+- The ticket's "path mismatch" is settled as follows: the cloud keeps patches in its own `changes/`
+  folder, locally they are plain files, usually in the repo root. `AGENTS.md` "Delivery" now says
+  so and names both script commands.
+
+**Tests:** `tests/test_sync_patch.py` (11 tests): numbering from root, `changes/` and extra directories,
+slugging, zero padding, and against throwaway git repositories: apply keeps the patch author and a
+copy, refuses on a failed dry-run, refuses with uncommitted tracked changes, rolls back to the
+previous commit on a red suite; generate numbers from disk, honours `--number` and refuses to
+overwrite. They need `git` (skipped when absent; present on the three CI runners) and no network.
+
+**Not done:** no automatic push, and no cloud-side counterpart (the cloud has no git history of
+this repo; it builds patches by hand against the files it has synced). No version bump: scripts, tests
+and docs only.

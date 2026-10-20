@@ -58,8 +58,14 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 
 ## Delivery
 
-- Work in the cloud copy; deliver `git`-applicable patches `changes/NNNN-short-name.patch`
-  (next free number). Local applies, tests, commits.
+- Work in the cloud copy; deliver `git`-applicable patches named `NNNN-short-name.patch`
+  (next free number; the cloud keeps them in its own `changes/` folder). Locally a patch is
+  a plain file, usually in the repo root, where `*.patch` is gitignored.
+- Local applies with `python3 scripts/sync_patch.py apply <patch>`: dry-run, `git am` (keeps
+  the patch's author and trailers), full suite, automatic rollback on a red suite, and a copy
+  of the patch kept in the repo root. The other direction (local commit for the cloud) is
+  `python3 scripts/sync_patch.py generate [REF] --name SLUG`, numbered from the patch files on
+  disk; pass `--number N` when the cloud's latest patches are not in this repo's root.
 - One patch per request. Findings and the fixes they call for go in that one patch, not in a
   list of proposed patches. A follow-up to a patch that has not been applied yet is merged
   into it instead of getting a new number.
@@ -122,9 +128,13 @@ recommends a fix — it just does not implement it.
 Delegate investigations to the cloud by opening a ticket in `tickets/open/`
 (`Owner: Cloud`, see `tickets/README.md`), then telling the cloud it is
 there. Do not spawn local subagents for this. This replaced the old
-`handoff/` convention (see `tickets/done/T-001-adopt-ticket-strategy.md`);
+`handoff/` convention (see `tickets/done/2026-W43/T-001-adopt-ticket-strategy.md`);
 `handoff/` itself is frozen, not deleted, and still cited by filename
 elsewhere in these docs.
+
+While working through several tickets, or when opening one, follow
+`.agents/rules/coordinator-and-model-checks.md` (advisory `/clear`/`/compact` hint and a
+one-line model suggestion; the user always decides).
 
 `tickets/` is tracked in git on purpose. Do NOT use `output/` for anything the
 cloud must read — it is gitignored and therefore invisible to a git-based sync.

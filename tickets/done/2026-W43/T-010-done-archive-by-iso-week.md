@@ -1,6 +1,6 @@
 # T-010: Group `tickets/done/` by ISO week and reconstruct the project timeline in `DONE.md`
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -59,25 +59,25 @@ Two distinct pieces, both into `DONE.md`:
 
 ## Criteria
 
-- [ ] `tickets/done/` is reorganized into `<ISO-year>-W<week>/`
+- [x] `tickets/done/` is reorganized into `<ISO-year>-W<week>/`
       subfolders, moved with `git mv` (not delete+recreate) so
       `git log --follow` on every ticket still resolves back through
       its full history.
-- [ ] `DONE.md`'s ticket table is regrouped under one heading per ISO
+- [x] `DONE.md`'s ticket table is regrouped under one heading per ISO
       week, using each ticket's actual `done/` move date -- not
       invented or left ungrouped.
-- [ ] `DONE.md` gains a project-timeline section reconstructed from
+- [x] `DONE.md` gains a project-timeline section reconstructed from
       `git log`, grouped by the same ISO weeks, covering the project's
       full history (2026-09-03 onward) -- not just the weeks that
       happen to contain a ticket closure.
-- [ ] `tickets/README.md`'s documented layout and lifecycle step 5
+- [x] `tickets/README.md`'s documented layout and lifecycle step 5
       (`git mv tickets/open/... tickets/done/...`) are updated to
       show the week-subfolder destination path.
-- [ ] Every existing link into a `done/` ticket (from `INDEX.md`,
+- [x] Every existing link into a `done/` ticket (from `INDEX.md`,
       other tickets, `RELEASE_PLAN.md`, etc.) is updated to the new
       path -- grep for `done/T-` across the repo before calling this
       done, not just the obvious files.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`) --
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`) --
       docs/tickets-only change, but confirm nothing references a
       ticket path from test fixtures.
 
@@ -85,4 +85,21 @@ Two distinct pieces, both into `DONE.md`:
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Done in the cloud copy** (the cloud has no `git log` for this repo, so the history work used
+`.git/logs/HEAD`, the reflog, which lists every commit with its UTC time and subject).
+- `tickets/done/` is now `tickets/done/2026-W43/`. The files are moved without content changes, except
+  for the link fixes below, so git records them as renames and `git log --follow` should still resolve.
+  Check that on your side after applying, since the cloud could not run it.
+- Every ticket closed so far was closed in 2026-W43 (10-19 to 10-20), so there is exactly one folder.
+  The close dates came from the closing commits' subjects, not from `git log --follow`.
+- `DONE.md` has a heading per ISO week with the ticket table, and a project timeline for 2026-W36 to
+  W43 built from the reflog (digest of what each week did, from commit subjects only).
+- `tickets/README.md`: layout, the one-move rule and lifecycle step 5 name the week folder; step 1 now
+  points at the model check from T-015.
+- Links fixed: `README.md` (T-001), `AGENTS.md` (T-001), T-008 (to T-007, now the same folder),
+  T-009 (two links to the open T-012, one level deeper), and T-012's link to T-009. Grep for `done/T-`
+  and `](../` across `*.md` found nothing else; no test reads a ticket path.
+- T-010 and T-014 and T-015 are closed by this same patch, so they moved into the new folder as well.
+
+**Left out on purpose:** the `done/` week of T-010 itself is 2026-W43 because it is closed on 2026-10-20;
+a different week for a later ticket will simply create a new folder.

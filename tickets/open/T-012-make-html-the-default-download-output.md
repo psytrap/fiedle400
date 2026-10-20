@@ -23,7 +23,7 @@ separately ask "Open it in the HTML viewer now? [y/N]"
 (`fiedle400/cli.py:1059`), defaulting to *not* opening it.
 
 **This is a direct instruction to change the default, not a repeat of
-[T-009](T-009-html-viewer-as-default-output.md).** T-009 is still open
+[T-009](../done/2026-W43/T-009-html-viewer-as-default-output.md).** T-009 is still open
 as the evaluation of *whether* to do this; this ticket is the
 follow-up it already anticipated ("any recommended change is filed as
 its own follow-up ticket rather than implemented inline"). T-009's own

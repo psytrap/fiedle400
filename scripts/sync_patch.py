@@ -5,23 +5,29 @@ for the convention this automates.
 
 Usage:
     python3 scripts/sync_patch.py apply <patch-file>
-    python3 scripts/sync_patch.py generate [<ref>] --name <short-name>
+    python3 scripts/sync_patch.py generate [<ref>] --name <short-name> [--number N] [--dir DIR ...]
 
-`apply` (cloud -> local): dry-run checks the patch, applies it with
-`git am` (preserving the patch's own author/date/Subject/Co-Authored-By),
-runs the full test suite, and rolls back to the pre-apply commit if the
-suite is not green -- nothing is left half-applied.
+`apply` (cloud -> local): refuses if tracked files have uncommitted changes,
+dry-run checks the patch, applies it with `git am` (preserving the patch's
+own author/date/Subject/Co-Authored-By), runs the full test suite, and rolls
+back to the pre-apply commit if the suite is not green -- nothing is left
+half-applied. On success the patch file is copied into the repo root
+(gitignored by `*.patch`), so the numbers the cloud has used stay visible to
+`generate`.
 
 `generate` (local -> cloud): formats one commit (or a `<rev>..<rev>`
 range) as a patch, numbered with the next free number found among the
-existing root-level `NNNN-*.patch` files -- not a separately tracked
-counter that could drift from what's actually on disk.
+`NNNN-*.patch` files on disk (repo root, `changes/`, and any `--dir`) -- not a
+separately tracked counter that could drift from what is actually there.
+`--number N` overrides it, for a repo whose root has not seen the cloud's
+latest patches yet.
 """
 
 import argparse
 import glob
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -29,18 +35,21 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 PATCH_RE = re.compile(r"^(\d{4})-.*\.patch$")
 
 
-def existing_patch_numbers(root=ROOT):
-    """Numeric prefixes of every NNNN-*.patch file actually on disk."""
+def existing_patch_numbers(root=None, extra_dirs=()):
+    """Numeric prefixes of every NNNN-*.patch file actually on disk: the repo
+    root, its `changes/` folder (if any) and each directory in `extra_dirs`."""
+    root = root or ROOT
     numbers = []
-    for path in glob.glob(os.path.join(root, "*.patch")):
-        m = PATCH_RE.match(os.path.basename(path))
-        if m:
-            numbers.append(int(m.group(1)))
+    for directory in (root, os.path.join(root, "changes"), *extra_dirs):
+        for path in glob.glob(os.path.join(directory, "*.patch")):
+            m = PATCH_RE.match(os.path.basename(path))
+            if m:
+                numbers.append(int(m.group(1)))
     return numbers
 
 
-def next_patch_number(root=ROOT):
-    numbers = existing_patch_numbers(root)
+def next_patch_number(root=None, extra_dirs=()):
+    numbers = existing_patch_numbers(root, extra_dirs)
     return (max(numbers) + 1) if numbers else 1
 
 
@@ -51,8 +60,8 @@ def slugify(name):
     return slug
 
 
-def patch_filename(number, name, root=ROOT):
-    return os.path.join(root, f"{number:04d}-{slugify(name)}.patch")
+def patch_filename(number, name, root=None):
+    return os.path.join(root or ROOT, f"{number:04d}-{slugify(name)}.patch")
 
 
 def _run(cmd, capture=False):
@@ -69,10 +78,26 @@ def _git_head():
     ).stdout.strip()
 
 
+def _tracked_changes():
+    """Uncommitted changes to tracked files (untracked files do not count)."""
+    out = _run(["git", "status", "--porcelain", "--untracked-files=no"], capture=True)
+    return out.stdout.strip()
+
+
 def cmd_apply(args):
     patch_path = os.path.abspath(args.patch)
     if not os.path.isfile(patch_path):
         print(f"Patch not found: {patch_path}", file=sys.stderr)
+        return 1
+
+    dirty = _tracked_changes()
+    if dirty:
+        print(dirty)
+        print(
+            "Tracked files have uncommitted changes -- commit or stash them first "
+            "(a rollback after a red suite would discard them).",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"[1/4] git apply --check {patch_path}")
@@ -113,11 +138,16 @@ def cmd_apply(args):
         return 1
 
     print(f"[4/4] OK: {os.path.basename(patch_path)} applied as {new_head}, suite green.")
+    kept = os.path.join(ROOT, os.path.basename(patch_path))
+    if not os.path.exists(kept):
+        shutil.copyfile(patch_path, kept)
+        print(f"Kept a copy at {kept} (its number now counts for `generate`).")
     return 0
 
 
 def cmd_generate(args):
-    number = next_patch_number()
+    extra_dirs = [os.path.abspath(d) for d in args.dirs]
+    number = args.number if args.number is not None else next_patch_number(extra_dirs=extra_dirs)
     out_path = patch_filename(number, args.name)
     if os.path.exists(out_path):
         print(f"Refusing to overwrite existing {out_path}", file=sys.stderr)
@@ -135,6 +165,11 @@ def cmd_generate(args):
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(fmt.stdout)
     print(f"Wrote {out_path}")
+    if args.number is None:
+        print(
+            "Numbered from the patch files found on disk; if the cloud has delivered "
+            "patches that are not in this repo's root, rerun with --number."
+        )
     return 0
 
 
@@ -159,6 +194,14 @@ def main(argv=None):
     )
     p_gen.add_argument(
         "--name", required=True, help="Short slug for the filename, e.g. 'fix-sentinel-sync'."
+    )
+    p_gen.add_argument(
+        "--number", type=int, default=None,
+        help="Use this patch number instead of the next free one found on disk.",
+    )
+    p_gen.add_argument(
+        "--dir", dest="dirs", action="append", default=[],
+        help="Also look for NNNN-*.patch files in this directory (repeatable).",
     )
     p_gen.set_defaults(func=cmd_generate)
 

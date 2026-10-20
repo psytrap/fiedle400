@@ -1,6 +1,6 @@
 # T-015: Coordinator `/compact`/`/clear` cadence rule, and a model check at ticket creation
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -63,27 +63,27 @@ automated switch.
 
 ## Criteria
 
-- [ ] Decide where this rule lives: `AGENTS.md` (new "Rule: Coordinator
+- [x] Decide where this rule lives: `AGENTS.md` (new "Rule: Coordinator
       /compact / /clear cadence" section) vs. a new `.agents/rules/*.md`
       file in the existing style, and say why.
-- [ ] Rule is restated accurately for this harness: it tells the agent to
+- [x] Rule is restated accurately for this harness: it tells the agent to
       *emit an advisory message* recommending `/clear` or `/compact` to the
       human operator under the stated thresholds (milestone of N tickets
       done, or an estimated/self-reported context size) — not to execute
       either command itself.
-- [ ] Thresholds (sub-200-token subagent returns, 15-20 ticket milestone,
+- [x] Thresholds (sub-200-token subagent returns, 15-20 ticket milestone,
       ~50k token coordinator context) are carried over or explicitly
       adjusted for this project's actual ticket volume and subagent usage,
       with reasoning either way.
-- [ ] Model-check rule added for ticket creation: a short checklist of what
+- [x] Model-check rule added for ticket creation: a short checklist of what
       signals should prompt a model-switch suggestion (ticket priority,
       scope size, whether it's a hardware/protocol finding vs. a doc/ticket
       bookkeeping task), stated as a suggestion to the user, never a
       self-switch.
-- [ ] Both rules cross-reference `tickets/README.md`'s "When to open a
+- [x] Both rules cross-reference `tickets/README.md`'s "When to open a
       ticket" / lifecycle sections if they modify ticket-creation behaviour,
       so the two docs don't disagree.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`) — expected
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`) — expected
       no code change, doc-only ticket, but confirm the suite is still green
       after the edit.
 
@@ -91,4 +91,29 @@ automated switch.
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Where it lives:** a new rule file `.agents/rules/coordinator-and-model-checks.md`, in the style
+of the two existing rule files, with a three-line pointer in `AGENTS.md` (next to "Delegation Path")
+and a one-line step in `tickets/README.md` (Lifecycle step 1). Why a rule file and not an `AGENTS.md`
+section: `AGENTS.md` is the contract for the product code; this concerns how an agent session behaves,
+which is what `.agents/rules/` is for, and it keeps `AGENTS.md` short.
+
+**Restated for this harness:** an agent cannot run `/clear`, `/compact` or switch its own model, and
+cannot read its own context size. The rule therefore produces one advisory line for the user and
+nothing else, and the triggers use only things an agent can observe.
+
+**Thresholds, explicitly adjusted:**
+- Sub-200-token subagent returns: kept as a request to subagents (one short paragraph), not measured.
+  This project uses few subagents.
+- 15 to 20 ticket milestone: replaced by "about 10 tickets in one session", because this project closes a
+  handful of tickets a day (9 closed in two days) and 15 to 20 would never trigger before the context
+  is long.
+- 50k tokens: kept as the intent, not as a trigger, since it cannot be measured. Observable triggers
+  instead: a compaction summary has already appeared, or files are being re-read.
+- The German hint line is kept verbatim, as supplied.
+
+**Model check:** a short stronger/lighter checklist (protocol and hardware findings, release-gating
+design work and High priority go stronger; bookkeeping, renumbering and single-file changes go lighter),
+emitted as one line "Suggested model: ... because ..." at ticket creation. The user decides.
+
+**Not done:** no code, and nothing in a session can enforce it; the rule only works as far as the agent
+follows it. No version bump. Suite passes.

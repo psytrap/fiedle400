@@ -2,7 +2,7 @@
 
 **Superseded by direct instruction, 2026-10-20:** psytrap decided this
 directly rather than waiting on the evaluation below -- see
-[T-012](../open/T-012-make-html-the-default-download-output.md), which carries
+[T-012](../../open/T-012-make-html-the-default-download-output.md), which carries
 out the change and absorbs this ticket's open questions (non-interactive
 `-f/--format` behaviour, keeping the raw data file, headless/CI safety)
 as its own criteria. Kept as a record, closed 2026-10-20 (see Execution Notes): the CI-testability
@@ -102,7 +102,7 @@ layer CI doesn't have today, where HTML-in-a-string does not.
 
 **Outcome (written 2026-10-20, after psytrap's T-012).** Nothing was changed in
 code for this ticket. psytrap decided the question directly in
-[T-012](../open/T-012-make-html-the-default-download-output.md), so the follow-up
+[T-012](../../open/T-012-make-html-the-default-download-output.md), so the follow-up
 this ticket asked for already exists and no further ticket is filed for it.
 Status is Done; the note at the top about this ticket staying a citable
 record still holds.
