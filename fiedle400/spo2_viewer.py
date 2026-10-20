@@ -38,7 +38,8 @@ _TEMPLATE = """<!doctype html>
   #legend label { cursor: pointer; user-select: none; }
   #legend input[type=checkbox] { margin-right: 0.4em; }
   #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
-  #dropPct, #minDur, #critLevel { width: 3.5em; }
+  #dropPct, #minDur, #critLevel, #maxTimeFixed { width: 3.5em; }
+  #maxTimeFixed { color: #999; background: #f5f5f5; }
   #pulseDropBpm, #pulseMinDur { width: 3.5em; }
   .paramTable { border-collapse: collapse; margin: 0.4em 0; }
   .paramTable td { padding: 1px 8px 1px 0; }
@@ -73,7 +74,7 @@ _TEMPLATE = """<!doctype html>
 <table id="eventParamsTable" class="paramTable" style="font-size:0.85em">
   <tr><td colspan="2"><strong>Desaturation event</strong></td></tr>
   <tr><td>fall of at least</td><td><input type="number" id="dropPct" min="1" max="20" step="1"> %</td></tr>
-  <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> -180 s</td></tr>
+  <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> -<input type="number" id="maxTimeFixed" value="180" readonly title="Fixed by SpO2 Assistant, not adjustable (SPO2_FORMAT.md Sec7.2)"> s</td></tr>
   <tr><td>count event as severe if under</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
 </table>
 <p id="eventParamsNote" style="font-size:0.85em;color:#666;margin:0.4em 0 0">(pulse-rate events: not decoded, SpO2 only -- T-025)</p>
