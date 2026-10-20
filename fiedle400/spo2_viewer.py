@@ -59,8 +59,8 @@ _TEMPLATE = """<!doctype html>
 <h1>fiedle400 recording</h1>
 <div id="meta"></div>
 <div id="legend">
-  <label><input type="checkbox" id="showSpo2" checked><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, fixed 50-100)</label>
-  <label><input type="checkbox" id="showHr" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, fixed 30-220)</label>
+  <label><input type="checkbox" id="showSpo2" checked><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, 50-100)</label>
+  <label><input type="checkbox" id="showHr" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, 30-220)</label>
   <button id="resetZoom">Reset zoom</button>
   <button id="printBtn" type="button">Print</button>
 </div>
