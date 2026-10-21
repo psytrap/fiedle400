@@ -44,6 +44,10 @@ Source: `packaging/windows/fiedle400.iss`, built by CI with `/DAppVersion=<__ver
   changing the decision first.
 - No driver step: the device enumerates as a standard HID device and `hidapi` works
   out of the box (verified on Windows 8.1, RELEASE_PLAN D4).
+- Ships a synthetic demo recording (`demo.SpO2`, no real device data, T-055) into
+  `Documents\PO-400` on first install, plus a "View Demo Recording" Start Menu entry
+  (`fiedle400.exe view demo.SpO2`) -- lets a new user see the viewer without a device.
+  Regenerate with `scripts/make_demo_recording.py` if it ever needs to change.
 - CI installs the installer silently, checks the exe, folder and `--version`, then uninstalls.
 
 ## Checklist when changing packaging

@@ -30,6 +30,12 @@
   #define SourceExe "..\..\dist\fiedle400.exe"
 #endif
 
+; Synthetic (no real device data) demo recording, T-055; regenerate with
+; scripts/make_demo_recording.py if it ever needs to change.
+#ifndef DemoSpo2
+  #define DemoSpo2 "demo.SpO2"
+#endif
+
 ; RENAME (po400 -> fiedle400): the AppId is unchanged on purpose, so this
 ; installer upgrades an existing po400 install instead of installing beside it.
 ; UsePreviousAppDir=no moves it to the new folder; [InstallDelete] removes the
@@ -74,9 +80,12 @@ Type: filesandordirs; Name: "{localappdata}\Programs\po400"
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DemoSpo2}"; DestDir: "{userdocs}\PO-400"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
 Name: "{group}\PO-400 Oximeter"; Filename: "{app}\fiedle400.exe"; WorkingDir: "{userdocs}\PO-400"
+Name: "{group}\View Demo Recording"; Filename: "{app}\fiedle400.exe"; \
+    Parameters: "view ""{userdocs}\PO-400\demo.SpO2"""; WorkingDir: "{userdocs}\PO-400"
 Name: "{group}\Uninstall PO-400"; Filename: "{uninstallexe}"
 
 [Tasks]

@@ -15,6 +15,9 @@ po400_all_sessions_*.csv
 po400_all_sessions_*.spo2
 *.spo2
 *.SpO2
+# Exception: the synthetic demo shipped with the Windows installer (T-055), not a
+# real capture -- regenerate with scripts/make_demo_recording.py, don't hand-edit.
+!packaging/windows/demo.SpO2
 *.dump
 session.csv
 test_parse_stored_dump.py
