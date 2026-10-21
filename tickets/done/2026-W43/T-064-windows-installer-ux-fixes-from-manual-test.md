@@ -108,7 +108,13 @@ association directly (`assoc .html=htmlfile`) so it could keep testing
 in the meantime -- that was a one-off fix to the machine, not something
 this code change depends on.
 
+First `workflow_dispatch` re-build (run 39603457237) caught a miss: the
+installer job's own smoke test in `build-release.yml` still hardcoded
+the old `\PO-400` data-folder path, so it failed on the folder rename
+(`throw "data folder was not created at ...\PO-400"`) before an installer
+artifact was even produced. Fixed the one remaining reference (line 180)
+to `\fiedle400`; the other `PO-400` mentions in that file are release-note
+prose about the device itself and are correctly left alone.
+
 Not yet re-verified against a freshly rebuilt installer on the real
-Windows machine -- the installer psytrap is testing right now predates
-all of these fixes. Needs another `workflow_dispatch` build + transfer
-once ready to re-check.
+Windows machine -- rebuilding now. Needs transfer once ready to re-check.

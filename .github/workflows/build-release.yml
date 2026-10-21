@@ -177,7 +177,7 @@ jobs:
           if (-not (Test-Path $installed)) { throw "fiedle400.exe was not installed to $installed" }
 
           # The shortcut's WorkingDir must exist, or Explorer silently falls back.
-          $datadir = [Environment]::GetFolderPath("MyDocuments") + "\PO-400"
+          $datadir = [Environment]::GetFolderPath("MyDocuments") + "\fiedle400"
           if (-not (Test-Path $datadir)) { throw "data folder was not created at $datadir" }
 
           # The installed binary must actually run, not merely exist.
