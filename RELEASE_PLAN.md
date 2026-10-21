@@ -183,7 +183,10 @@ the way, and the delta-decode investigation) now live there. This section
 keeps only current, live status.
 
 **T2-T7:** fixed in patch 0013, verified on the real device (`sessions`/
-`download` correct, `info` honest about unanswered fields).
+`download` correct, `info` honest about unanswered fields). **Re-checked
+2026-10-21 (T-052), no regression:** `info`/`sessions`/`download` against
+the real device during T-047's G5 pass -- 2 real sessions (160 + 30
+records), `download` clean across all four formats, 0 sequence gaps.
 
 **T1: marked unfixed (psytrap, 2026-10-16), downgraded from "fixed in
 patch 0013."** The sentinel decode (SpO2 127 / pulse 255 -> `probe-out`)
@@ -205,6 +208,10 @@ report with the capture attached. Covered by
 it just guarantees the first real occurrence can't pass unnoticed.
 **Won't fix in the next release (psytrap, 2026-10-16):** ships with the
 alert-only mitigation above; not a blocker.
+**Re-checked 2026-10-21 (T-052):** still never fired -- no deliberate
+finger-out moment tried this cycle, and none occurred on its own during
+T-047's testing (0 probe-out samples in the G7 download). No change to
+status.
 
 **T8 (open):** the Linux `hid` (libusb) backend's unlock handshake and RTC
 read get no usable reply on this machine (`hidraw` is unaffected, and the

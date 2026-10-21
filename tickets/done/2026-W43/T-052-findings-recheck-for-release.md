@@ -1,6 +1,6 @@
 # T-052: Re-check findings T1-T8 against this release's hardware testing
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -41,18 +41,29 @@ What is NOT known:
 
 ## Criteria
 
-- [ ] T1: during this cycle's real-device testing, note whether the
+- [x] T1: during this cycle's real-device testing, note whether the
       probe-out alert ever fires for the first time (or deliberately try
       a finger-out moment to test it on purpose); record either way.
-- [ ] T2-T7: spot-checked against this cycle's real-device runs (T-047's
+- [x] T2-T7: spot-checked against this cycle's real-device runs (T-047's
       `info`/`sessions`/`download`), no regression found -- or a
       regression found and filed as its own ticket.
-- [ ] `RELEASE_PLAN.md` §3d updated with this cycle's re-check results for
+- [x] `RELEASE_PLAN.md` §3d updated with this cycle's re-check results for
       T1-T7 (T8 already updated by T-047).
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**T1:** no deliberate finger-out moment tried this cycle; the alert did
+not fire on its own during T-047's testing (session 1/2 downloads, no
+probe-out samples -- 0 in the G7 CSV pre-check). Staying with the
+existing decision (`RELEASE_PLAN.md` §3d): unfixed, mitigation-only,
+won't-fix for this release. No further action pursued this cycle.
+
+**T2-T7:** spot-checked via T-047's real-device runs -- `info` and
+`sessions` correct (2 real sessions, 160 + 30 records, matching what's
+expected), `download` across all four formats clean (0 sequence gaps,
+SpO2/HR ranges plausible). No regression found. Still fixed.
+
+`RELEASE_PLAN.md` §3d update still pending.

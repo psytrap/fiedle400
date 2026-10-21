@@ -46,6 +46,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-032](done/2026-W43/T-032-desaturation-algorithm-review.md) | Review the desaturation-event algorithm against the decoded spec | Local or Cloud |
 | [T-044](done/2026-W43/T-044-viewer-artifact-and-time-below-discrepancies.md) | Viewer shows a different "artifact"/"time below" than it computes | Cloud |
 | [T-034](done/2026-W43/T-034-repo-clean-up.md) | Repo clean-up -- basic pass (duplicate file, launcher wording, stale build artifacts) | Either |
+| [T-052](done/2026-W43/T-052-findings-recheck-for-release.md) | Re-check findings T1-T8 against this release's hardware testing | Local |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
