@@ -106,7 +106,7 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
       pattern as T-019), since T-032/T-044 changed report-value wiring
       (`artifact_pct`, the new `time_below_criteria_s`) after T-019's
       original run -- that run never exercised the fixed display path
-- [ ] Ring 0: annotated tag created locally once the above all pass
+- [x] Ring 0: annotated tag created locally once the above all pass
 - [ ] Ring 1: `workflow_dispatch` dry run; all three binaries smoke-tested
       on their own OS
 - [ ] Ring 2: tag pushed; GitHub Release published
@@ -172,8 +172,11 @@ real Windows 8.1 machine):**
 - Full `download` end-to-end: both sessions, 190 records, 0 sequence
   gaps -- matches the Linux pass's numbers exactly.
 
-Still not done: tagging/rings, Phase 2 version bump. (G7 visual
-confirmation done 2026-10-21, see T-051.)
+Still not done: Ring 1-3, Phase 2 version bump. (G7 visual confirmation
+done 2026-10-21, see T-051.)
+
+**2026-10-21, Ring 0:** `git tag -a v0.4.38 -m "Release v0.4.38"` on
+`a5fbbf5` (the commit G10 was confirmed on). Tag stays local until Ring 1.
 
 **2026-10-21, G10 confirmed on the exact pushed commit (`7655266`):**
 ubuntu-latest and windows-latest both green (14s/30s); macOS also green
