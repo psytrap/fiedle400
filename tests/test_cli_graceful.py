@@ -248,8 +248,72 @@ class TestOpenInViewer(unittest.TestCase):
             self.assertTrue(cli._open_in_viewer("/tmp/a.png"))
         self.assertEqual(popen.call_args[0][0], ["open", "/tmp/a.png"])
 
-    def test_windows_uses_startfile(self):
+    def _fake_winreg(self, keys):
+        """A stand-in `winreg` module: `keys` maps (root, subkey) -> {valuename: value}."""
+        class _Key:
+            def __init__(self, values):
+                self.values = values
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        class _Winreg:
+            HKEY_CURRENT_USER = "HKCU"
+            HKEY_CLASSES_ROOT = "HKCR"
+
+            def OpenKey(self, root, subkey):
+                found = keys.get((root, subkey))
+                if found is None:
+                    raise OSError("not found")
+                return _Key(found)
+
+            def QueryValueEx(self, key, name):
+                if name not in key.values:
+                    raise OSError("value not found")
+                return key.values[name], 1
+
+        return _Winreg()
+
+    def test_windows_uses_startfile_when_browser_cannot_be_resolved(self):
+        fake = self._fake_winreg({})  # no UserChoice key at all
         with mock.patch.object(sys, "platform", "win32"), \
+                mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch.object(os, "startfile", create=True) as startfile:
+            self.assertTrue(cli._open_in_viewer("C:/a.png"))
+        startfile.assert_called_once_with("C:/a.png")
+
+    def test_windows_resolves_the_real_default_browser_not_file_association(self):
+        # Mirrors the real bug found live (T-064): a Windows 8.1 test machine had
+        # no .html file association at all (os.startfile raised every time), even
+        # though a default browser was properly set for http links via UserChoice.
+        fake = self._fake_winreg({
+            ("HKCU", r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"):
+                {"ProgId": "ChromeHTML"},
+            ("HKCR", "ChromeHTML\\shell\\open\\command"):
+                {"": r'"C:\Program Files\Google\Chrome\Application\chrome.exe" -- "%1"'},
+        })
+        with mock.patch.object(sys, "platform", "win32"), \
+                mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch("fiedle400.cli.subprocess.Popen") as popen:
+            self.assertTrue(cli._open_in_viewer("C:/viewer.html"))
+        self.assertEqual(
+            popen.call_args[0][0],
+            [r"C:\Program Files\Google\Chrome\Application\chrome.exe", "--", "C:/viewer.html"],
+        )
+
+    def test_windows_falls_back_to_startfile_when_resolved_browser_fails_to_launch(self):
+        fake = self._fake_winreg({
+            ("HKCU", r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"):
+                {"ProgId": "ChromeHTML"},
+            ("HKCR", "ChromeHTML\\shell\\open\\command"):
+                {"": r'"C:\Chrome\chrome.exe" "%1"'},
+        })
+        with mock.patch.object(sys, "platform", "win32"), \
+                mock.patch.dict(sys.modules, {"winreg": fake}), \
+                mock.patch("fiedle400.cli.subprocess.Popen", side_effect=OSError("denied")), \
                 mock.patch.object(os, "startfile", create=True) as startfile:
             self.assertTrue(cli._open_in_viewer("C:/a.png"))
         startfile.assert_called_once_with("C:/a.png")

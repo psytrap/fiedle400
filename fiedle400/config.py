@@ -112,7 +112,7 @@ def default_workdir() -> str:
     conventional CLI behaviour and stays the default.
     """
     if sys.platform == "win32":
-        return os.path.join(os.path.expanduser("~"), "Documents", "PO-400")
+        return os.path.join(os.path.expanduser("~"), "Documents", "fiedle400")
     return os.getcwd()
 
 

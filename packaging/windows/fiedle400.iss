@@ -40,8 +40,10 @@
 ; installer upgrades an existing po400 install instead of installing beside it.
 ; UsePreviousAppDir=no moves it to the new folder; [InstallDelete] removes the
 ; old folder and the [Registry] deletekey lines remove the old context-menu keys.
-; The device is still the PO-400, so the shortcut and the recordings folder keep
-; that name.
+; The recordings folder was kept as "PO-400" at first (the device's name), but
+; psytrap later asked for the app's own name there too (T-064) -- it must stay
+; in lock-step with fiedle400/config.py's default_workdir(), which hardcodes
+; the same path for the same reason (its docstring explains why).
 
 [Setup]
 AppId={{1C4AFF42-942E-45D2-ACF1-908840BCC434}
@@ -70,22 +72,23 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Dirs]
 ; Default landing folder for the Start Menu shortcut. uninsneveruninstall keeps
-; the user's recordings when fiedle400 is uninstalled.
-Name: "{userdocs}\PO-400"; Flags: uninsneveruninstall
+; the user's recordings when fiedle400 is uninstalled. Must match
+; fiedle400/config.py's default_workdir() (T-064).
+Name: "{userdocs}\fiedle400"; Flags: uninsneveruninstall
 
 [InstallDelete]
 ; Leftovers of a po400 install (pre-rename). Only the old program folder; the
-; recordings live in {userdocs}\PO-400 and are never touched.
+; recordings live in {userdocs}\fiedle400 and are never touched.
 Type: filesandordirs; Name: "{localappdata}\Programs\po400"
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#DemoSpo2}"; DestDir: "{userdocs}\PO-400"; Flags: onlyifdoesntexist uninsneveruninstall
+Source: "{#DemoSpo2}"; DestDir: "{userdocs}\fiedle400"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
-Name: "{group}\fiedle400"; Filename: "{app}\fiedle400.exe"; WorkingDir: "{userdocs}\PO-400"
+Name: "{group}\fiedle400"; Filename: "{app}\fiedle400.exe"; WorkingDir: "{userdocs}\fiedle400"
 Name: "{group}\View Demo Recording"; Filename: "{app}\fiedle400.exe"; \
-    Parameters: "view ""{userdocs}\PO-400\demo.SpO2"""; WorkingDir: "{userdocs}\PO-400"
+    Parameters: "view ""{userdocs}\fiedle400\demo.SpO2"""; WorkingDir: "{userdocs}\fiedle400"
 Name: "{group}\Uninstall PO-400"; Filename: "{uninstallexe}"
 
 [Tasks]

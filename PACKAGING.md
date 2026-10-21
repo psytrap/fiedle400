@@ -38,14 +38,15 @@ Source: `packaging/windows/fiedle400.iss`, built by CI with `/DAppVersion=<__ver
 - Start Menu entry runs `fiedle400.exe`; with no arguments it opens the interactive wizard.
 - Explorer right-click entries ("Open PO-400 here", on folders and folder backgrounds) under
   `HKCU\SOFTWARE\Classes\Directory\{Background\,}shell\fiedle400`; removed on uninstall.
-- Creates `Documents\PO-400` as the default working folder for the shortcut.
+- Creates `Documents\fiedle400` as the default working folder for the shortcut (T-064;
+  must match `fiedle400/config.py`'s `default_workdir()`).
 - **PATH is deliberately not modified** and no command-line shim is shipped (UX decision,
   2026-10-15, pinned in a comment at the top of the `.iss`). Changing that means
   changing the decision first.
 - No driver step: the device enumerates as a standard HID device and `hidapi` works
   out of the box (verified on Windows 8.1, RELEASE_PLAN D4).
 - Ships a synthetic demo recording (`demo.SpO2`, no real device data, T-055) into
-  `Documents\PO-400` on first install, plus a "View Demo Recording" Start Menu entry
+  `Documents\fiedle400` on first install, plus a "View Demo Recording" Start Menu entry
   (`fiedle400.exe view demo.SpO2`) -- lets a new user see the viewer without a device.
   Regenerate with `scripts/make_demo_recording.py` if it ever needs to change.
 - CI installs the installer silently, checks the exe, folder and `--version`, then uninstalls.

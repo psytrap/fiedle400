@@ -12,6 +12,7 @@ import codecs
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -155,16 +156,71 @@ def _resolve_linux_browser_argv(path: str):
     return None
 
 
+def _resolve_windows_browser_argv(path: str):
+    """Resolves the real default *web browser* on Windows via the registry
+    (the user's `http` URL-association choice) and returns the argv to open
+    `path` with it, or None if that fails for any reason (caller falls back
+    to `os.startfile`).
+
+    `os.startfile`/`ShellExecute` opens `path` through its *file-extension*
+    association (`.html` -> some ProgId), which is a separate setting from
+    "default browser" (`http`'s URL association, used for web links) and can
+    be missing even when a default browser is perfectly well configured --
+    observed live on a real Windows 8.1 machine (T-064): `assoc .html`
+    reported no association at all, so every `os.startfile(...)` on a
+    generated viewer page failed outright, even though a browser was
+    installed and usable. Asking for the browser specifically (mirrors
+    _resolve_linux_browser_argv's same reasoning on Linux) sidesteps that.
+    """
+    try:
+        import winreg
+    except ImportError:
+        return None
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice",
+        ) as key:
+            prog_id, _ = winreg.QueryValueEx(key, "ProgId")
+    except OSError:
+        return None
+    if not prog_id:
+        return None
+    try:
+        with winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, f"{prog_id}\\shell\\open\\command") as key:
+            command, _ = winreg.QueryValueEx(key, "")
+    except OSError:
+        return None
+    if not command:
+        return None
+    parts = shlex.split(command, posix=False)
+    if not parts:
+        return None
+    # posix=False preserves backslashes (needed for Windows paths) but leaves the
+    # quote characters themselves in each token, so strip a matching pair by hand.
+    parts = [p[1:-1] if len(p) >= 2 and p[0] == p[-1] == '"' else p for p in parts]
+    return [path if p == "%1" else p for p in parts]
+
+
 def _open_in_viewer(path: str) -> bool:
     """Open a file in the system's default viewer. Returns False if that did not work.
 
-    Uses what each OS already ships: os.startfile (Windows), `open` (macOS) and,
-    on Linux, the real default browser resolved via `xdg-settings` when possible
-    (see _resolve_linux_browser_argv), falling back to plain `xdg-open`. Never
-    raises, so a missing viewer cannot lose a download.
+    Uses what each OS already ships: `open` (macOS) and, on Linux and
+    Windows, the real default *browser* resolved explicitly when possible
+    (see _resolve_linux_browser_argv / _resolve_windows_browser_argv), each
+    falling back to that platform's generic opener (`xdg-open`, `os.startfile`)
+    if resolution fails. Never raises, so a missing viewer cannot lose a download.
     """
     try:
         if sys.platform.startswith("win"):
+            browser_argv = _resolve_windows_browser_argv(path)
+            if browser_argv:
+                try:
+                    subprocess.Popen(browser_argv, stdin=subprocess.DEVNULL,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return True
+                except OSError:
+                    pass  # fall through to os.startfile below
             os.startfile(path)  # type: ignore[attr-defined]
             return True
         if sys.platform != "darwin":
