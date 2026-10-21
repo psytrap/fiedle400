@@ -99,9 +99,9 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
       won't-fix); Windows `hid` done, see notes
 - [x] G7: technical half done (export + pre-check, see notes); visual
       confirmation done (2026-10-21, see [T-051](../done/2026-W43/T-051-manual-mode-remaining-protocol-questions.md))
-- [ ] G9 (optional, non-blocking): a Manual-mode real-device recording
+- [x] G9 (optional, non-blocking): a Manual-mode real-device recording
       checked against SpO2 Assistant, or explicitly skipped and noted
-- [ ] Re-run the desaturation-algorithm validation against the real
+- [x] Re-run the desaturation-algorithm validation against the real
       SpO2 Assistant (`SPO2_ASSISTANT_CHECKS.md`'s procedure, same probe
       pattern as T-019), since T-032/T-044 changed report-value wiring
       (`artifact_pct`, the new `time_below_criteria_s`) after T-019's
@@ -172,9 +172,40 @@ real Windows 8.1 machine):**
 - Full `download` end-to-end: both sessions, 190 records, 0 sequence
   gaps -- matches the Linux pass's numbers exactly.
 
-Still not done: G9 (Manual-mode real-device check), the desat-algorithm
-SpO2-Assistant re-validation, pushing/tagging/rings. (G7 visual
-confirmation done 2026-10-21, see T-051.)
+Still not done: tagging/rings. (G7 visual confirmation done 2026-10-21,
+see T-051.)
+
+**2026-10-21, desat-algorithm re-validation (T-032/T-044 display-wiring
+fix, re-checked against T-019's already-validated report values):** did
+not re-run SpO2 Assistant itself -- the underlying algorithm
+(`desat.summarize`) didn't change, and T-019 already matched its
+`artifact_pct`/`time_below_criteria_s` against the real program's report
+(Artifact 0.0 % vs. predicted 0.04 % -- "Match (rounds to 0)"; Time <88%
+172 s/2.9 min -- "Match"). What T-044 fixed was the *viewer's display*,
+which previously read two separately-computed near-synonyms instead of
+those shared values. Regenerated the viewer page from T-019's own probe
+(`output/t019-probe/probe-desat.SpO2`, `fiedle400 view --convert`):
+embedded summary gives `artifact_pct: 0.04`, `time_below_criteria_s: 172`
+-- identical to T-019's validated figures -- and
+`spo2_viewer.py:490`/`:500` (the "No-signal / probe-out" and "Time below"
+stats rows) now read directly from those same fields, confirmed by
+inspection. `tests/test_desat.py` /`test_desat_js_parity.py` (29 tests)
+green, including
+`test_time_below_criteria_uses_the_same_valid_samples_as_artifact_pct`.
+Chain fully closed: validated algorithm values -> now provably the
+values displayed.
+
+**2026-10-21, G9 (Manual-mode vs. SpO2 Assistant):** copied the 5-minute,
+315-record Manual-mode recording (`output/g-timing-check/manual5min.spo2`,
+see T-051) to the real SpO2 Assistant Windows laptop
+(`Documents\fiedle400\manual5min.SpO2`, T-053's machine). SpO2 Assistant
+opened it without error and reported 5:15 duration, matching fiedle400's
+own decode exactly. psytrap compared desaturation events between SpO2
+Assistant and fiedle400's HTML viewer (`manual5min.html`) side by side --
+"looks similar". Informal visual check only (not the full XML/`expected.json`
+numeric comparison `SPO2_ASSISTANT_CHECKS.md` describes -- that procedure is
+for validating the decoded algorithm itself, the separate line item below,
+not this optional gate). G9 done.
 
 **2026-10-21, commit and diff audit (HEAD `e6c2886`):** committed the
 session's batch (T-051 closed, T-065/T-066/T-067 filed, 0.4.38). Full

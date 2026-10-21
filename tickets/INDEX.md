@@ -29,6 +29,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-060](open/T-060-reevaluate-spo2-viewer-architecture.md) | Re-evaluate `spo2_viewer.py`'s architecture | Either | Open (deferred) |
 | [T-065](open/T-065-installer-english-only.md) | Installer should only offer English, not German | Either | Open (deferred) |
 | [T-067](open/T-067-viewer-grey-out-no-signal-periods.md) | HTML viewer should grey out no-signal/probe-out periods on the chart | Either | Open (deferred) |
+| [T-068](open/T-068-viewer-desaturation-event-legend.md) | Legend entry for desaturation/pulse event markers in the HTML viewer | Either | Open (deferred) |
 | [T-061](open/T-061-po250-po300-support-via-spo2-analysis.md) | PO-250 / PO-300 support via `.spo2` analysis | Either | Open (deferred) |
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
 | [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open (deferred) |
