@@ -21,8 +21,8 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
 **Everyday use**
 - **`fiedle400 selftest`**: a one-command, read-only hardware check (detection, connect, handshake, clock, sessions) against the real device -- no env var needed, unlike the test suite's opt-in live tests; running this command is itself the signal that a check is wanted. Automatically probes every backend this platform supports (e.g. both `hidraw` and `hid` on Linux) in one run; only the primary backend's result affects the exit code, so a known-flaky secondary backend never masks an otherwise-healthy device.
 - **`fiedle400 info`**: auto-detects the connected PO-400 (`VID 0x28E9`, `PID 0x028A`) and reports its hardware model, firmware version, serial number, user profile, and storage geometry -- printing "not reported by the device" rather than guessing at whatever it doesn't actually answer (most likely a device firmware limitation, not something more reverse-engineering would fix -- see `PROTOCOL.md` §3.3).
-- **`fiedle400 sessions`**: lists every recorded session in device memory from the stored index table.
-- **`fiedle400 clear`**: deletes stored sessions from device flash memory -- the only destructive command, confirmed by default.
+- **`fiedle400 sessions`**: lists every recorded session in device memory from the stored index table. A session recorded in the PO-400's Manual mode (as opposed to its default Auto/flash-storage mode) is tagged `(Manual mode)`; `download` picks it up automatically, no separate flag needed.
+- **`fiedle400 clear`**: deletes stored sessions from device flash memory -- the only destructive command, confirmed by default. Does not erase a Manual-mode recording; `clear` reports this if one is still listed afterward.
 
 **Clock**
 - **`fiedle400 read-time` / `fiedle400 set-time`**: sends the clock read (`0x82`) / set (`0x83`) commands. The PO-400's clock reply never varies, so `read-time` shows it raw and says the clock isn't reported rather than decoding it into a fabricated date; `set-time` is unverified against real hardware. Stored sessions carry their own correct timestamps regardless.
