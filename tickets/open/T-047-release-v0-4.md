@@ -62,6 +62,11 @@ not separate from it -- doing them *is* most of what's left below.
   hasn't been re-checked since).
 - Whether a Manual-mode real-device recording is available this cycle for
   G9 (optional, non-blocking either way).
+- Whether `artifact_pct`/`time_below_criteria_s`'s fixed display wiring
+  (T-044) still matches the real SpO2 Assistant's report -- T-019's
+  original validation ran before that fix existed, so it only confirmed
+  the underlying `desat.summarize` values, never the corrected display
+  path the viewer actually shows.
 
 **Named CI/workflow debt, checked against the actual workflow files on
 2026-10-21, deliberately not made part of this release:** `ubuntu-latest`
@@ -96,6 +101,11 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
       plausible (per `.agents/rules/implausible_data_warning.md`)
 - [ ] G9 (optional, non-blocking): a Manual-mode real-device recording
       checked against SpO2 Assistant, or explicitly skipped and noted
+- [ ] Re-run the desaturation-algorithm validation against the real
+      SpO2 Assistant (`SPO2_ASSISTANT_CHECKS.md`'s procedure, same probe
+      pattern as T-019), since T-032/T-044 changed report-value wiring
+      (`artifact_pct`, the new `time_below_criteria_s`) after T-019's
+      original run -- that run never exercised the fixed display path
 - [ ] Ring 0: annotated tag created locally once the above all pass
 - [ ] Ring 1: `workflow_dispatch` dry run; all three binaries smoke-tested
       on their own OS
