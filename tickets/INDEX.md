@@ -24,6 +24,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-046](open/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either | Open (deferred) |
 | [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either | Open (deferred) |
 | [T-049](open/T-049-ci-workflow-debt.md) | CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper) | Either | Open (deferred) |
+| [T-050](open/T-050-ubuntu-lts-compat-check.md) | Check the Linux binary against an older Ubuntu LTS in CI | Either | Open (deferred) |
 
 ## Open questions
 

@@ -25,7 +25,8 @@ recorded here so they aren't lost.
    future hypothetical. Decide: pin `ubuntu-24.04` in both workflows, or
    accept 26 and specifically check whether the PyInstaller Linux binary
    needs a newer glibc than target systems have (the concern
-   `RELEASE_PLAN.md` raised but never checked).
+   `RELEASE_PLAN.md` raised but never checked -- the check itself is
+   [T-050](T-050-ubuntu-lts-compat-check.md)).
 2. **GitHub Actions Node 20 deprecation warnings -- status unknown, not
    fixed.** `tests.yml`/`build-release.yml` still pin only major versions
    (`actions/checkout@v4`, `actions/setup-python@v5`,
