@@ -54,6 +54,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-051](done/2026-W43/T-051-manual-mode-remaining-protocol-questions.md) | Local inspection -- G7 visual confirmation and Manual-mode protocol questions | Local |
 | [T-066](done/2026-W43/T-066-0xec-byte1-low-nibble.md) | Decode `0xEC` byte 1, bits 0..3 (third data series; `clear -s` sends the whole delete sequence) | Cloud |
 | [T-075](done/2026-W43/T-075-auto-session-duration-reads-half-the-real-time.md) | Auto-mode session duration/record count reads ~half the real recording time (the count is seconds; T3 reversed) | Either |
+| [T-047](done/2026-W43/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with

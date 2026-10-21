@@ -1,6 +1,6 @@
 # T-047: Ship the next release (v0.4.x) -- re-run the Runbook Checklist
 
-- **Status:** Open
+- **Status:** Done (psytrap, 2026-10-21)
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -117,8 +117,9 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 - [x] Gate results recorded in `CHANGELOG.md`'s "Gate re-verification log"
       (same convention as the 0.3.9 cycle)
 - [ ] Phase 2 (minor bump, after psytrap's review of the feature work):
-      `scripts/bump_version.py minor`
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+      `scripts/bump_version.py minor` -- **moved out of this ticket**;
+      see the follow-on ticket below.
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ### v0.4.41 sub-cycle (restarted 2026-10-21 -- critical fixes since v0.4.38)
 
@@ -340,3 +341,10 @@ Diff audit re-run: `git diff --stat v0.3.9..HEAD` -- 130 files changed;
 no `output/` captures, `.dump`, stray `.spo2`, `egg-info`, or `.zip` --
 the one `.SpO2` hit is `packaging/windows/demo.SpO2`, the intentional
 synthetic demo asset from T-055. Not yet pushed to `origin/master`.
+
+**Closed (psytrap, 2026-10-21).** `v0.4.38` and `v0.4.41` both shipped
+and are published, tagged, verified. Phase 2 (the minor version bump)
+is deliberately left undone here -- it needs psytrap's review of this
+cycle's feature work first, and that review is now its own ticket,
+[T-079](T-079-final-beta-testing-before-phase-2.md) (see `tickets/open/`
+or `tickets/INDEX.md` for its current location).

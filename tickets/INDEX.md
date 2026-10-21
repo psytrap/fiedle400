@@ -5,7 +5,7 @@ protocol; `DONE.md` for the archive.
 
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
-| [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
+| [T-079](open/T-079-final-beta-testing-before-phase-2.md) | Final beta testing before Phase 2 (the minor version bump) | Local | Open |
 
 ## Backlog (deferred)
 
