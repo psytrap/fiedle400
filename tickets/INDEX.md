@@ -5,14 +5,13 @@ protocol; `DONE.md` for the archive.
 
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
-| [T-032](open/T-032-desaturation-algorithm-review.md) | Review the desaturation-event algorithm against the decoded spec | Local or Cloud | Open |
 | [T-034](open/T-034-repo-clean-up.md) | Repo clean-up (tracked leftovers and local clutter) | Either | Open |
+| [T-044](open/T-044-viewer-artifact-and-time-below-discrepancies.md) | Viewer shows a different "artifact"/"time below" than it computes | Cloud | Open |
 
 ## Before next beta release
 
 What must be done before the next beta. Proposed 2026-10-21; psytrap to confirm or change.
 
-- [T-032](open/T-032-desaturation-algorithm-review.md): desaturation-event algorithm review.
 - Local check: `fiedle400 clear` on the device (see "Open questions" below).
 - Local check: manual mode on the real device (see "Open questions" below).
 
@@ -28,16 +27,13 @@ Open tickets parked until psytrap picks them up again.
 | [T-035](open/T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md) | Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant | Local | Open (deferred) |
 | [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud | Open (deferred) |
 | [T-041](open/T-041-key-sessions-by-user-and-entry.md) | Key stored recordings by user and entry, not entry alone | Cloud | Open (deferred) |
+| [T-043](open/T-043-coding-conventions.md) | Write down coding conventions, starting with identifier names | Either | Open (deferred) |
 
 ## Open questions
 
 Questions waiting on a decision from psytrap or on a check only the local side can run, each
 with its source. When one is answered, move the answer to the source ticket or doc and delete
 the line here.
-
-### Waiting on a decision (psytrap)
-
-- **Windows console window** behind the tkinter wizard: keep or hide. [T-040](open/T-040-tkinter-wizard.md).
 
 ### Waiting on a local check (device or Windows)
 

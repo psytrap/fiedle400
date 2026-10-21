@@ -266,27 +266,57 @@ The detector is built at `0x532a43` (`call 0x533300`) with exactly these values:
 | valid range | 0..100 | fixed | Samples outside it break an event (e.g. the `0x7F` probe-out sentinel). | [X] `0x535469`, `0x535f60` |
 | Pulse change / time | 6 bpm / 8 s | 2-20 bpm | Pulse-rate event parameters (7.3). | [X] `0x531eb0`, `0x531ebd` (and `0x532175`, `0x532182`) |
 
-**Detection** (`0x535430`, per SpO2 sample; `.SpO2` data is 1 Hz, so a sample is a second):
+**The algorithm.** One walk over the samples (`.SpO2` data is 1 Hz, so a sample is a second),
+carrying two descents and nothing more:
 
-1. A sample outside 0..100 ends the current candidate.
-2. A rise (`s[i] > s[i-1]`) ends the current candidate.
-3. A fall (`s[i] < s[i-1]`) starts a candidate at `i-1` if none is open and `s[i-1]` is
-   between 1 and 99; otherwise it extends the open candidate to `i`. A flat sample extends
-   an open candidate.
-4. So the **baseline is the last sample before the fall starts (the local peak)**, not a
-   moving average or a rolling baseline. A candidate records start index/value, nadir
-   index/value, `duration = nadir_idx - start_idx` and `depth = start_val - nadir_val`
-   (`0x535d60`).
+- the **active descent**, still growing -- its peak index and value, its running nadir index and
+  value;
+- the **pending descent**, already closed and waiting to learn whether the next one merges into
+  it. There is never more than one: the merge test closes over exactly these two descents and
+  nothing further ahead, so the decision is always made the moment a descent closes;
+- a **dropout flag**, set by any sample outside 0..100 and captured onto the next descent that
+  opens, so each descent knows whether a dropout immediately preceded it.
 
-**Merging** (`0x535710`, active because `oscillation` = 1). Consecutive candidates are joined
-when the next one starts at most `oscillation` (1 %) above where the current one ended, ends
-lower and starts lower than the current one, and begins at most `min_time` samples after the
-current one's nadir. The joined event keeps the first start and takes the later nadir. This
-turns a staircase descent with small rebounds into one event.
+Per sample, against the previous one:
 
-**Acceptance** (`0x535df0` + `0x535f60`). An event counts when all hold:
-`depth >= drop`, `min_time <= duration <= max_time`, `depth / duration < max_avg`
-(integer division), and every sample from start to nadir is inside 0..100.
+1. Outside 0..100: set the dropout flag and close the active descent.
+2. A rise (`s[i] > s[i-1]`): close the active descent.
+3. A flat sample: extend the active descent's nadir index.
+4. A fall (`s[i] < s[i-1]`): extend the active descent; or, if none is active and `s[i-1]` is
+   between 1 and 99, open one with its peak at `i-1`.
+
+So the **baseline is the last sample before the fall starts (the local peak)**, not a moving
+average or a rolling baseline -- and a plateau before the fall leaves the peak on its last sample,
+while a plateau at the bottom extends the descent.
+
+**Closing a descent is where merging happens.** One whose nadir never moved past its peak is
+dropped. Otherwise it becomes the pending descent if there is none. If there is, the two are
+joined when the closing one starts at most `oscillation` (1 %) above where the pending one ended,
+ends lower and starts lower than it, and begins at most `min_time` samples after its nadir. On a
+join the pending descent keeps its peak, adopts the new nadir and *stays pending* -- which is what
+lets a staircase chain through any number of steps without a second pending slot. Joining in a
+descent whose dropout flag was set marks the pending descent as spanning a dropout. A descent that
+does not join resolves the pending one and takes its place. At the end of the series the active
+descent is closed, then the pending one resolved.
+
+**Resolving a pending descent** counts it as an event when all of these hold, with
+`duration = nadir_idx - peak_idx` and `depth = peak_val - nadir_val`: `depth >= drop`,
+`min_time <= duration <= max_time`, `depth / duration < max_avg` (integer division), and it is not
+marked as spanning a dropout. Everything else is discarded silently.
+
+That last rule is the decoded "every sample from start to nadir is inside 0..100" in bounded form:
+a dropout cannot fall inside a single descent, since it would have closed it, so the only way one
+lands inside an event is a join bridging the gap it sits in -- which is what the mark records.
+
+**Implementation detail.** `SpO2.exe` splits the above across three functions, and
+`fiedle400/desat.py` mirrors that split: one walk over the samples builds a complete candidate
+list, a second walk joins and resolves it, and the dropout rule stays a literal re-read of each
+surviving span instead of a propagated flag. That form is easier to write and to check against the
+disassembly, and it buys no extra lookahead over the single walk. The addresses are **detection**
+`0x535430`, per sample, with a candidate's start index/value, nadir index/value, `duration` and
+`depth` recorded at `0x535d60`; **merging** `0x535710`, active because `oscillation` = 1; and
+**acceptance** `0x535df0` + `0x535f60`. The single-pass equivalence above is argued from the code,
+not separately checked against the real program.
 
 Not determined: whether user-excluded ranges are removed from the series before detection
 (*inferred*: probably, since the manual counts them as non-effective time). Note that "duration" is the **descent time to the nadir**,

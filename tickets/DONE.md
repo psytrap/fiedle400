@@ -43,6 +43,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-042](done/2026-W43/T-042-manual-mode-download.md) | Download Manual-mode recordings | Cloud |
 | [T-038](done/2026-W43/T-038-fiedle400-vs-spo2-assistant-erase-behavior.md) | fiedle400 and the vendor SpO2 Assistant differ on auto-erase after download | Either |
 | [T-037](done/2026-W43/T-037-clear-command-undefined-behavior.md) | `fiedle400 clear` sends the vendor's erase commands | Either |
+| [T-032](done/2026-W43/T-032-desaturation-algorithm-review.md) | Review the desaturation-event algorithm against the decoded spec | Local or Cloud |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
