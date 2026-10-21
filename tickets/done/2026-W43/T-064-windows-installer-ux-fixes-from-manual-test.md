@@ -167,3 +167,10 @@ it mid-test). Suite is back to 406 tests in ~8s. `test_console.py`'s
 behaviour (was: 6 tests of the owned-console logic; now: confirms the
 test-suite skip, and that it pauses/respects a custom duration once that
 env var is removed).
+
+psytrap then ran a full manual download test with the installed 0.4.37
+app on the real Windows machine (recording download end-to-end through
+the installed binary, not over SSH) and confirmed it all good: the
+session downloaded cleanly, opened in the resolved default browser
+automatically, and landed in `Documents\fiedle400` as expected. All four
+findings from this ticket are now verified against a real install.

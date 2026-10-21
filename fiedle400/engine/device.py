@@ -726,7 +726,9 @@ class SerialDeviceEngine:
 
     def clear_memory(self, session_id: int = 0, debug: Union[bool, int] = 0) -> bool:
         """Erases one recording (`session_id` > 0) or all of them, with SpO2 Assistant's own
-        commands (PROTOCOL.md 3.13): `9D 7F 02 [user] [entry]` or `9D 7F 7F 7F 7F`.
+        commands (PROTOCOL.md 3.13): `9D 7F 7F 7F 7F` for all; for one, `9D 7F 02 [user] [entry]`
+        (pulse series), then `9D 7F 01 [user] [entry]` (SpO2 series) once the device has
+        confirmed the first, as the vendor tool does.
 
         Like the vendor tool, it lists the recordings and opens the storage transfer (`9D 02`)
         first. Afterwards it lists them again: returns True only if what should be gone is gone.
@@ -744,15 +746,21 @@ class SerialDeviceEngine:
         while self.dev.read_report(64): pass
         if session_id > 0:
             t = targets[0]
-            cmd = Commands.delete_entry(t.user_id, t.session_id)
-            desc = f"Delete user {t.user_id} entry {t.session_id} (0x9D 0x7F 0x02)"
+            steps = [(Commands.delete_entry(t.user_id, t.session_id, series),
+                      f"Delete user {t.user_id} entry {t.session_id}, series {series} (0x9D 0x7F 0x0{series})")
+                     for series in (2, 1)]
         else:
-            cmd, desc = Commands.delete_all(), "Delete All (0x9D 0x7F)"
-        if int(debug) >= 1:
-            print(f"[DEBUG OUT] {desc}: {cmd[:16].hex()}")
-        self._write_report(cmd, desc)
-        self._sleep(0.5)
-        while self.dev.read_report(64): pass
+            steps = [(Commands.delete_all(), "Delete All (0x9D 0x7F)")]
+        for cmd, desc in steps:
+            if int(debug) >= 1:
+                print(f"[DEBUG OUT] {desc}: {cmd[:16].hex()}")
+            self._write_report(cmd, desc)
+            self._sleep(0.5)
+            status = self._erase_status()
+            if int(debug) >= 1:
+                print(f"[DEBUG] Erase reply status: {'none' if status is None else status}")
+            if status not in (None, 0):
+                break
 
         after = self.list_sessions(debug=debug)
         gone = {(t.user_id, t.session_id) for t in targets}
@@ -761,3 +769,16 @@ class SerialDeviceEngine:
             # Entries are renumbered after a delete; compare start times, not numbers.
             left = [s for s in after if not s.manual and s.timestamp == targets[0].timestamp]
         return not left
+
+    def _erase_status(self) -> Optional[int]:
+        """Reads what the device sent after an erase command and returns the status byte of its
+        `ED 7F [series] [user] [entry] [status] [chk]` reply (0 = done), or None if none came."""
+        status = None
+        while True:
+            rep = self.dev.read_report(64)
+            if not rep:
+                return status
+            r = bytes(rep)
+            i = r.find(b"\xed\x7f")
+            if i >= 0 and i + 7 <= len(r) and (sum(r[i:i + 6]) & 0x7F) == r[i + 6]:
+                status = r[i + 5]

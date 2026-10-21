@@ -140,10 +140,11 @@ def build_delete_all_command() -> bytes:
     return bytes(b + [0x00] * (64 - len(b)))
 
 
-def build_delete_entry_command(user_id: int, entry: int) -> bytes:
-    """DESTRUCTIVE: `9D 7F 02 [user] [entry] 00 00 [chk]`, SpO2 Assistant's "Delete" for one
-    recording (PROTOCOL.md 3.13). Decoded from SpO2.exe; never captured on the wire."""
-    b = [0x9D, 0x7F, 0x02, user_id & 0x7F, entry & 0x7F, 0x00, 0x00]
+def build_delete_entry_command(user_id: int, entry: int, series: int = 2) -> bytes:
+    """DESTRUCTIVE: `9D 7F [series] [user] [entry] 00 00 [chk]`, SpO2 Assistant's "Delete" of one
+    data series (2 = pulse, 1 = SpO2) of one recording (PROTOCOL.md 3.13). Decoded from SpO2.exe;
+    never captured on the wire."""
+    b = [0x9D, 0x7F, series & 0x7F, user_id & 0x7F, entry & 0x7F, 0x00, 0x00]
     b.append(calc_checksum_7bit(b))
     return bytes(b + [0x00] * (64 - len(b)))
 
@@ -253,8 +254,8 @@ class Commands:
         return build_delete_all_command()
 
     @staticmethod
-    def delete_entry(user_id: int, entry: int) -> bytes:
-        return build_delete_entry_command(user_id, entry)
+    def delete_entry(user_id: int, entry: int, series: int = 2) -> bytes:
+        return build_delete_entry_command(user_id, entry, series)
 
     @staticmethod
     def read_time() -> bytes:

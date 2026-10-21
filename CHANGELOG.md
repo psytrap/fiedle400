@@ -8,6 +8,15 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.38 (2026-10-21)
+
+- **T-066** done: `0xEC` byte 1 bits 0..3 = 1 means the recording has a third data series
+  (type `0x03`, probably perfusion index), which SpO2 Assistant reads after SpO2 and pulse.
+  0 in all 11 recorded headers; `fiedle400` keeps reading SpO2 and pulse. PROTOCOL.md 3.2, 3.5, 3.9.
+- `clear -s N` now sends SpO2 Assistant's whole delete-one sequence, `9D 7F 02` (pulse) then
+  `9D 7F 01` (SpO2), each after the device's erase reply; before, it sent only the first. The
+  erase reply `ED 7F … [status]` is decoded (PROTOCOL.md 3.13 said there was none).
+
 ## 0.4.29 (2026-10-21)
 
 - **T-040** (deferred): psytrap decided the wizard's erase default stays `[Y/n]` (default yes),

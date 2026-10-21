@@ -45,7 +45,7 @@ hypothesis until a recording shows it.
 | **0x9D [0x02]** | `STORAGE_INIT` / `SEGMENT_ACK` | `9D 02 7F 7F 7F 00 00 1C` | none | Vendor, CLI | Sent before and after a download; no recording shows a reply (§3.5) |
 | **0x9D [0x04 0x01]** | `READ_SPO2_BLOCK` | `9D 04 01 01 01 [off lo] [off hi] 00 [chk]` | `0xED` | Vendor, CLI | SpO2 series from a raw-sample offset (§3.5) |
 | **0x9D [0x04 0x02]** | `READ_PULSE_BLOCK` | `9D 04 02 01 01 [off lo] [off hi] 00 [chk]` | `0xED` | Vendor, CLI | Pulse series from a raw-sample offset (§3.5) |
-| **0x9D [0x7F]** | `DELETE_ALL` / `DELETE_ENTRY` | `9D 7F 7F 7F 7F 00 00 19` / `9D 7F 02 [user] [entry] 00 00 [chk]` | not identified | Vendor | **Destructive** (decoded in T-037; §3.13). The vendor sent `DELETE_ALL` three times after the recorded download (its auto-delete). `fiedle400` has a builder (`storage_finalize`) but never sends it |
+| **0x9D [0x7F]** | `DELETE_ALL` / `DELETE_ENTRY` | `9D 7F 7F 7F 7F 00 00 19` / `9D 7F 02 [user] [entry] 00 00 [chk]`, then `9D 7F 01 …` | `ED 7F … [status]` (§3.13) | Vendor | **Destructive** (decoded in T-037; §3.13). The vendor sent `DELETE_ALL` three times after the recorded download (its auto-delete). `fiedle400 clear` sends them since 0.4.29 |
 | **0x81** | `QUERY_DEVICE_INFO` | `81 01` | `0xF1` | Vendor, CLI | Hardware model descriptor `"50F"` (§3.6) |
 | **0xAD** | (device info, variant) | `AD` | `F0 70` | CLI | Bare ACK on this device (T7 note before §3.6) |
 | **0x80** | `FIRMWARE_QUERY` | `80 00` | `F0 70` | Vendor, CLI | Bare ACK on this device; the documented `0xCF` reply is *RE only* (§3.7) |
@@ -69,6 +69,7 @@ The Manual-mode commands (`0xA0`, `0xA3`, standalone `0xA2`, `0xA7 00/01`) are d
 | **`0xF0`** | `COMMAND_ACK` | 2 B | handshake, `9C 80`, `0xAD`, `0x80`, `0x9E` | Vendor, CLI | `F0 70`. Also the reply to several queries the device does not support (T7 note before §3.6). |
 | **`0xEC`** | `SESSION_INDEX` | 21 B | `9C 01` | Vendor, CLI | Session header: start date/time, 28-bit raw sample count, user name, checksum (§3.2). |
 | **`0xED`** | `STORAGE_SUBFRAME` | 30 B (stream)* | `9D 04 [01/02]` | Vendor, CLI | Stored data: 14-bit sequence, 3 MSB masks (`m0..m2`), 21 data bytes, checksum (§3.5). |
+| **`0xED 7F`** | (erase reply) | 7 B | `9D 7F …` | Vendor | `ED 7F [series] [user] [entry] [status] [chk]`, status 0 = done (§3.13). |
 | **`0xEB`** | `LIVE_STREAM` | 6 B / 8 B / 3 B | `9B 00` | Vendor | Live stream; the three lengths and the field map are discussed in §3.4. |
 | **`0xF2`** | `RTC_REPORT` | 8 B | `82 02` | Vendor, CLI | Same bytes in every recording, see §3.3. |
 | **`0xF3`** | (set-clock reply) | 3 B | `83 …` | Vendor | `F3 00 73`. |
@@ -153,7 +154,7 @@ checksum form above is unrecorded.
 | Offset | Field | Format | Description |
 | :--- | :--- | :--- | :--- |
 | `0x00` | Header Opcode | `0xEC` | Session metadata packet identifier |
-| `0x01` | Flags | Bitmask | Bit 6 (`0x40`): **last header**. While it is clear, `SpO2.exe` asks for the next one with `9C 01`; `fiedle400` stops on it too. Bits 0..3: stored separately and compared with 1 (selects a download path); meaning not decoded, `0` in every recording (T-039) |
+| `0x01` | Flags | Bitmask | Bit 6 (`0x40`): **last header**. While it is clear, `SpO2.exe` asks for the next one with `9C 01`; `fiedle400` stops on it too. Bits 0..3: `1` = the recording has a **third data series** (type `0x03`, probably perfusion index), which `SpO2.exe` then downloads after SpO2 and pulse; any other value = SpO2 and pulse only. `0` in all 11 recorded headers (T-066, below) |
 | `0x02` | User | `uint8` | 1-based user number: `SpO2.exe` keeps one username and one list of entries per value, and sends it back as byte 3 of the `0x9D` page request. `fiedle400`'s `user_id`. Not a segment count (T-039) |
 | `0x03` | Entry | `uint8` | 1-based entry (one recording) **within that user**; byte 4 of the `0x9D` page request. `fiedle400`'s `session_id`. The vendor captures show entries 1..4 for user 1; a second user has never been seen (§3.13, T-039) |
 | `0x04` | Year | `uint8` | Years since 2000 (`26` = 2026) |
@@ -188,6 +189,23 @@ byte 3 and `byte3` in its byte 4 (`0x4b8fd2`-`0x4b9059`; `fiedle400` builds the 
 - a **user** is byte 2;
 - an **entry** is byte 3, numbered per user;
 - a `fiedle400` **session** is one entry, identified by both numbers.
+
+**Byte 1, bits 0..3: third data series (T-066, static analysis plus every capture).** The
+handler stores `byte1 & 0x0F`; the recording-list dialog (`0x4b8ce3`) sets its flag `+0x11c` to
+`nibble == 1`, header by header, so the last header listed decides. With the flag set:
+- buffers and progress count samples x 3 instead of x 2 (`0x4b7575`, `0x4b9329`, `0x4b98a2` and others);
+- the download reads a third series with data type `0x03` (`9D 04 03 [user] [entry] lo hi`, §3.5),
+  and Delete erases it as a third step (`9D 7F 03 [user] [entry]`, §3.13);
+- the `0xED` parser hands type 3 to its own decoder (`0x4ec07a`): same subframe layout and deltas
+  as SpO2 and pulse (27 samples), valid 1..220 (`0xDC`), stored times 10 as 16 bits, `0xFFFF`
+  invalid.
+
+What the series measures is not named in the code. The 0.1 steps up to 22.0 and the strings
+`PI Graph Enabled` and `PI%` in `SpO2.exe` point to perfusion index in percent (inference).
+The `0xEF` capability bytes can set the same flag on another path (§3.9). All 11 headers in
+the captures (`bum400`, `bum400__2`, `bum400_download`, `raw/bum400_raw`, `realtime/bum400_realtime`)
+have bits 0..3 = 0, and every `9D 04` asks for type 1 or 2. `fiedle400` ignores the nibble and
+reads SpO2 and pulse, which stays correct for such a recording; it only leaves the third series out.
 
 Still open: whether any PO-400 ever reports more than one user or entry. The "User 1..6" that
 §3.13 once gave for `0x91`..`0x96` has no support (T-037).
@@ -299,7 +317,7 @@ Packed consecutively in 64-byte HID input reports:
 | :--- | :--- | :--- | :--- |
 | `0x00` | Opcode | `0x9D` | Storage transfer command opcode |
 | `0x01` | Mode | `0x02` / `0x04` | `0x02` = Init / ACK, `0x04` = Read block |
-| `0x02` | Data Type | `0x01` / `0x02` / `0x7F` | `0x01` = SpO2 series, `0x02` = Pulse Rate, `0x7F` = Init / ACK |
+| `0x02` | Data Type | `0x01` / `0x02` / `0x03` / `0x7F` | `0x01` = SpO2 series, `0x02` = Pulse Rate, `0x03` = third series, only when `0xEC` byte 1 bits 0..3 = 1 (§3.2, T-066; never seen), `0x7F` = Init / ACK |
 | `0x03` | User | `0x01` / `0x7F` | User number, byte 2 of the `0xEC` header (`0x7F` for Init / ACK; T-039) |
 | `0x04` | Entry | `0x01` / `0x7F` | Entry within that user, byte 3 of the `0xEC` header (`0x7F` for Init / ACK; T-039) |
 | `0x05` | Offset Low | `0x00..0x7F` | Sample offset (bits 0..6) -- **not** a block/page index, see note below |
@@ -316,7 +334,7 @@ Packed consecutively in 64-byte HID input reports:
 | `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | offset | `0x25` at offset 0 | Reads Pulse Rate flash series |
 | `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` *at `[0x07]`* | Same bytes as `STORAGE_INIT`, sent after the download; no reply |
 | `DELETE_ALL` | `0x7F` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x19` *at `[0x07]`* | **Destructive.** Erases every recording (§3.13). Vendor tool only, three times after the recorded download; reply not identified |
-| `DELETE_ENTRY` | `0x7F` | `0x02` | user | entry | `0x00 0x00` | `sum % 128` | **Destructive.** Erases one recording (§3.13). Static analysis only |
+| `DELETE_ENTRY` | `0x7F` | `0x02`, then `0x01` (then `0x03`) | user | entry | `0x00 0x00` | `sum % 128` | **Destructive.** Erases one series of one recording; the vendor sends one per series, each after the device confirms the last (§3.13). Static analysis only |
 
 The `0x02`/`0x7F` commands are **8 bytes** in the vendor capture (`9D 02 7F 7F 7F 00 00 1C`): no
 reserved byte, checksum at `[0x07]`. `fiedle400` sends a 9-byte variant with the reserved `0x00`
@@ -520,6 +538,10 @@ download path from it (`0x4b0d27`-`0x4b0f30`, `0x4ba6c7`):
 The recorded `40` matches what the vendor then sent (`90 06`, then `9C`/`9D`). So these bytes are a
 capability mask, not flash geometry; the name of this section is historical.
 
+In the download dialog (`0x4ba6c7`), when the first copied byte has neither `0x40` nor `0x01` but
+the third has bits 0 and 1 set, that third byte's bit 4 (`0x10`) sets the same third-series flag
+as `0xEC` byte 1 (§3.2, T-066). The recorded reply never takes that path.
+
 ---
 
 ### 3.10 FLASH_SECTOR_QUERY (`0x94`)
@@ -589,7 +611,7 @@ Delete User and Delete All.
 | What | Bytes | Where in `SpO2.exe` |
 | :--- | :--- | :--- |
 | Delete All, and the automatic delete after saving | `9D 7F 7F 7F 7F 00 00 19` | `0x4af695`. Called by the Delete All button (`0x453`, `0x4a3e76`) and, after a download, when the setting `bAutoDeleteSegmentSaveData` is unset or non-zero (`0x4a48fc`-`0x4a494b`). Only in Auto mode (category `0x40`, §3.9) |
-| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]`, one per recording | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`). `user`/`entry` as in the `0xEC` header (§3.2) |
+| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]` (pulse series), then `9D 7F 01 …` (SpO2), then `9D 7F 03 …` if the recording has a third series (§3.2) | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`), sends the first. The reply handler sends the next one when the device confirms the last (`0x4b9e19`-`0x4ba07d`, T-066). `user`/`entry` as in the `0xEC` header (§3.2) |
 | Delete User | no command for this device | `0x4af5ef` sends `A1 00`, or `0xAE` in a `7D 80` frame, on other device types, and nothing on the `0x9C`/`0x9D` path |
 | Delete for the `0x91`..`0x96` data category | `91 7F` | `0x4af547` |
 
@@ -608,8 +630,16 @@ automatic delete-all, after the last `9D 04` page request. (`fiedle400` delibera
 
 Every capture after an erase starts again at entry 1 with only newer recordings, and the one
 capture without an erase (`bum400__2`) left its recording in place for the next. So
-`9D 7F 7F 7F 7F 00 00 19` erases every recording, and the device renumbers from 1. The device
-sends no reply of its own to it (the `0xEB` frames around it are the live stream). No capture
+`9D 7F 7F 7F 7F 00 00 19` erases every recording, and the device renumbers from 1.
+
+**Erase reply (T-066).** The device confirms an erase with `ED 7F [series] [user] [entry] [status]
+[chk]`, 7 bytes; status `0` = done. `bum400.pcapng` and `raw/bum400_raw.pcapng` show
+`ED 7F 7F 7F 7F 00 69` right after the delete-all (behind an `EF 00 00 00 00 00 00 6F` frame in
+the same report). `SpO2.exe` parses it at `0x4ea813` (bytes 2..4 kept, byte 5 == 0 as "OK"):
+- after delete-all with status 0 it clears its tables;
+- after delete-one it sends the next series' delete, and reports an error on a non-zero status.
+
+No capture
 contains `9D 7F 02` (delete one), `0xAA`, `0xAB`, `0xAC`, `0xAF` or `0x91`..`0x96`.
 
 Notes on the other candidates:
@@ -624,8 +654,10 @@ Notes on the other candidates:
 
   §A.6's "user erase after every download" reading is wrong, and "User 1..6" has no support.
 - **`fiedle400 clear`** (`engine/device.py`, since 0.4.29) sends the vendor's commands: after
-  listing the recordings and `9D 02`, `9D 7F 7F 7F 7F 00 00 19` for all or `9D 7F 02 [user]
-  [entry] ...` for one, then lists them again and reports whether they are gone. Up to 0.4.28 it
+  listing the recordings and `9D 02`, `9D 7F 7F 7F 7F 00 00 19` for all, or for one
+  `9D 7F 02 [user] [entry] ...` and then `9D 7F 01 …`, like the vendor (since 0.4.38; 0.4.29 to
+  0.4.37 sent only the first, T-066). It stops if an erase reply has a non-zero status. Then it
+  lists them again and reports whether they are gone. Up to 0.4.28 it
   sent `0xAF`, `0xAB`, `0xAA`, `0xAC`, none of which the vendor sends (T-037).
 - Switching the device between Auto and Manual recording mode on the device itself erases its memory
   (CHANGELOG.md, "Manual-mode protocol").
@@ -805,6 +837,29 @@ reading exactly that many samples; a stopwatch-timed recording would confirm it.
 > data in a 59-sample stream" and on `0x7F` padding. The decoder in §F settles them: the base is
 > at `0x05`, bytes 3..4 are not read, high nibble first, and the 41 s are the 27 no-finger plus
 > 14 measured seconds of the capture above. See git history for the old text.
+
+**2026-10-21, second capture: a 5-minute, 315-sample manual recording** (psytrap, real
+hardware, `fiedle400` CLI `download`, not SpO2 Assistant). One deliberate finger-out partway
+through. Resolves the "one per second" timing question and tests the bytes-3..4 hypothesis
+above against more than one data point:
+
+- **Timing confirmed.** All 315 downloaded records carry the device's own RTC timestamp,
+  incrementing by exactly one second with no gaps or repeats across the whole recording
+  (`15:48:16` to `15:53:30`). The `0xD0` header's 21-bit sample count (315) matches the
+  downloaded record count and the first timestamp exactly. This settles "one sample per
+  second" without needing an independently-timed stopwatch: the device's own clock already
+  shows uniform 1 Hz spacing for 315 consecutive samples.
+- **Bytes 3..4 hypothesis from the single-sample capture above does not hold.** That capture
+  (one `7F 7F` no-finger subframe, one `08 7E`/`04 7E` finger-on subframe) suggested these
+  bytes mark finger-on/off per subframe. Across this recording's 12 subframes, bytes 3..4
+  vary subframe-to-subframe (`20 00`, `10 00`, `40 00`, `20 02`, `00 08`, `00 20`, `02 20`,
+  `00 00`, `02 00`, `40 00`, `02 7a`, SpO2 side) even though every sample in those subframes
+  has the finger on -- so this is not a simple per-subframe finger-status flag. The one
+  subframe spanning the finger-out transition (subframe 9, valid samples followed by invalid
+  ones) comes closest to the old `7F 7F` pattern at `70 7F`, but isn't an exact match either.
+  Still unknown; likely some kind of running counter or checksum rather than a status marker.
+- **`D0` kind byte:** still `0x00` in this capture too; kinds `1` and `4` remain unobserved,
+  with no known way to trigger them.
 
 
 ### 3.15 Reverse-engineering `SpO2.exe` -- what works, what does not

@@ -20,12 +20,23 @@ class TestBytes(unittest.TestCase):
         self.assertEqual({bytes(o) for o in vendor}, {Commands.delete_all()})
         self.assertEqual(Commands.delete_all()[:8].hex(" "), "9d 7f 7f 7f 7f 00 00 19")
 
-    def test_delete_one_names_user_and_entry(self):
+    def test_delete_one_names_series_user_and_entry(self):
         self.assertEqual(Commands.delete_entry(1, 3)[:8], bytes([0x9D, 0x7F, 0x02, 1, 3, 0, 0, (0x9D + 0x7F + 2 + 1 + 3) & 0x7F]))
+        self.assertEqual(Commands.delete_entry(1, 3, 1)[:3], bytes([0x9D, 0x7F, 0x01]))
 
     def test_both_count_as_destructive_in_the_simulator(self):
         for cmd in (Commands.delete_all(), Commands.delete_entry(1, 1)):
             self.assertEqual(command_key(cmd), ("destructive", 0x9D))
+
+
+class TestEraseReply(unittest.TestCase):
+    def test_the_vendor_captures_erase_reply_reads_as_done(self):
+        # bum400_raw.pcapng / bum400.pcapng: the device answers 9D 7F 7F 7F 7F with ED 7F 7F 7F 7F 00 69.
+        from fiedle400.engine.device import SerialDeviceEngine
+        reports = [bytes.fromhex("ef 00 00 00 00 00 00 6f ed 7f 7f 7f 7f 00 69") + bytes(49)]
+        eng = SerialDeviceEngine.__new__(SerialDeviceEngine)
+        eng.dev = type("D", (), {"read_report": lambda self, n: reports.pop(0) if reports else b""})()
+        self.assertEqual(eng._erase_status(), 0)
 
 
 class TestClear(base.FlowCase):
@@ -37,9 +48,24 @@ class TestClear(base.FlowCase):
         self.assertEqual(keys[i - 1], (0x9D, 2))
         self.assertFalse(ok)  # the simulator did not erase, and clear noticed
 
-    def test_clear_one_deletes_that_user_and_entry(self):
+    def test_clear_one_deletes_pulse_then_spo2_of_that_user_and_entry(self):
         self.engine.clear_memory(1)
-        self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1)])
+        self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1, 2), Commands.delete_entry(1, 1, 1)])
+
+    def test_clear_one_stops_when_the_device_reports_a_failed_erase(self):
+        frame = [0xED, 0x7F, 0x02, 1, 1, 0x05]
+        failed = bytes(frame + [sum(frame) & 0x7F] + [0] * 57)
+        real_read = self.engine.dev.read_report
+        sent = []
+
+        def read_report(n):
+            if self.fake.destructive and not sent:
+                sent.append(1)
+                return failed
+            return real_read(n)
+        self.engine.dev.read_report = read_report
+        self.engine.clear_memory(1)
+        self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1, 2)])
 
     def test_nothing_is_sent_for_a_session_that_does_not_exist(self):
         self.engine.clear_memory(7)

@@ -97,8 +97,8 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 - [x] G6: `FIEDLE400_LIVE=1` tests pass, Linux (`hidraw` + `hid`) and
       Windows (`hid`) -- Linux `hidraw` done (Linux `hid` fails, T8,
       won't-fix); Windows `hid` done, see notes
-- [ ] G7: technical half done (export + pre-check, see notes); visual
-      confirmation tracked in [T-051](T-051-manual-mode-remaining-protocol-questions.md)
+- [x] G7: technical half done (export + pre-check, see notes); visual
+      confirmation done (2026-10-21, see [T-051](../done/2026-W43/T-051-manual-mode-remaining-protocol-questions.md))
 - [ ] G9 (optional, non-blocking): a Manual-mode real-device recording
       checked against SpO2 Assistant, or explicitly skipped and noted
 - [ ] Re-run the desaturation-algorithm validation against the real
@@ -172,6 +172,7 @@ real Windows 8.1 machine):**
 - Full `download` end-to-end: both sessions, 190 records, 0 sequence
   gaps -- matches the Linux pass's numbers exactly.
 
-Still not done: G7 visual confirmation (tracked in T-051), G9 (Manual-mode
-real-device check), the desat-algorithm SpO2-Assistant re-validation,
-diff audit re-confirm immediately before tagging, pushing/tagging/rings.
+Still not done: G9 (Manual-mode real-device check), the desat-algorithm
+SpO2-Assistant re-validation, diff audit re-confirm immediately before
+tagging, pushing/tagging/rings. (G7 visual confirmation done 2026-10-21,
+see T-051.)

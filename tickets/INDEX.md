@@ -6,7 +6,6 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
-| [T-051](open/T-051-manual-mode-remaining-protocol-questions.md) | Local inspection -- G7 visual confirmation and Manual-mode protocol questions | Local | Open |
 
 ## Backlog (deferred)
 
@@ -28,6 +27,8 @@ Open tickets parked until psytrap picks them up again.
 | [T-050](open/T-050-ubuntu-lts-compat-check.md) | Check the Linux binary against an older Ubuntu LTS in CI | Either | Open (deferred) |
 | [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either | Open (deferred) |
 | [T-060](open/T-060-reevaluate-spo2-viewer-architecture.md) | Re-evaluate `spo2_viewer.py`'s architecture | Either | Open (deferred) |
+| [T-065](open/T-065-installer-english-only.md) | Installer should only offer English, not German | Either | Open (deferred) |
+| [T-067](open/T-067-viewer-grey-out-no-signal-periods.md) | HTML viewer should grey out no-signal/probe-out periods on the chart | Either | Open (deferred) |
 | [T-061](open/T-061-po250-po300-support-via-spo2-analysis.md) | PO-250 / PO-300 support via `.spo2` analysis | Either | Open (deferred) |
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
 | [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open (deferred) |
@@ -45,6 +46,9 @@ the line here.
 
 - **`fiedle400 clear` on the device** and **Manual mode on the real device**: folded into
   [T-047](open/T-047-release-v0-4.md)'s G5/G6/G9 gates, not tracked separately any more.
-- **Manual-mode sample timing, unknown bytes, and `0xEC` byte 1 bits 0..3**: now
-  [T-051](open/T-051-manual-mode-remaining-protocol-questions.md), tracked alongside T-047,
-  not deferred.
+- **Manual-mode sample timing and unknown bytes**: resolved in
+  [T-051](done/2026-W43/T-051-manual-mode-remaining-protocol-questions.md) (2026-10-21): timing
+  confirmed via the device's own RTC; subframe bytes 3..4 and `D0` bytes 8..9 remain unknown
+  (documented in `PROTOCOL.md` §3.14); `D0` kinds 1/4 never reproduced.
+- **`0xEC` byte 1 bits 0..3**: decoded in
+  [T-066](done/2026-W43/T-066-0xec-byte1-low-nibble.md) (a third data series; never seen on a PO-400).

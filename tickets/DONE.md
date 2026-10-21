@@ -51,6 +51,8 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-062](done/2026-W43/T-062-windows-test-failures-viewer-tmp-dir.md) | `TestViewerTmpDir` fails on real Windows -- tests mock the wrong thing | Local |
 | [T-063](done/2026-W43/T-063-pyproject-hid-dependency-wrong-package.md) | `pyproject.toml` declares the wrong `hid`-family package | Local |
 | [T-064](done/2026-W43/T-064-windows-installer-ux-fixes-from-manual-test.md) | Windows installer UX fixes found during manual install testing | Local |
+| [T-051](done/2026-W43/T-051-manual-mode-remaining-protocol-questions.md) | Local inspection -- G7 visual confirmation and Manual-mode protocol questions | Local |
+| [T-066](done/2026-W43/T-066-0xec-byte1-low-nibble.md) | Decode `0xEC` byte 1, bits 0..3 (third data series; `clear -s` sends the whole delete sequence) | Cloud |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
