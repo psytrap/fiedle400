@@ -88,7 +88,7 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
       zero-dependency smoke test) on the current `HEAD`
 - [x] Diff audit re-confirmed immediately before tagging (not just the one
       above, if more commits land before this closes)
-- [ ] Commit pushed to `origin/master`; **G10 checked and recorded** on
+- [x] Commit pushed to `origin/master`; **G10 checked and recorded** on
       that exact commit (ubuntu/windows/macos) -- pre-flight doesn't count
       as done until this reports back
 - [x] G5: built binary (`pyinstaller fiedle400.spec`) runs `info`/
@@ -172,8 +172,15 @@ real Windows 8.1 machine):**
 - Full `download` end-to-end: both sessions, 190 records, 0 sequence
   gaps -- matches the Linux pass's numbers exactly.
 
-Still not done: tagging/rings. (G7 visual confirmation done 2026-10-21,
-see T-051.)
+Still not done: tagging/rings, Phase 2 version bump. (G7 visual
+confirmation done 2026-10-21, see T-051.)
+
+**2026-10-21, G10 confirmed on the exact pushed commit (`7655266`):**
+ubuntu-latest and windows-latest both green (14s/30s); macOS also green
+this run, though psytrap confirmed macOS is non-blocking for this gate.
+`RELEASE_PLAN.md`'s stale header and `CHANGELOG.md`'s gate log updated in
+the same commit. All criteria above G10 are now done; only Ring 0-3 and
+Phase 2 remain.
 
 **2026-10-21, desat-algorithm re-validation (T-032/T-044 display-wiring
 fix, re-checked against T-019's already-validated report values):** did
