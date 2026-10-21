@@ -40,4 +40,4 @@ jobs:
           fi
 
       - name: Unit & mock tests (stdlib only, zero-dependency check)
-        run: python -m unittest discover tests -v
+        run: python -m unittest discover -s tests -t . -v

@@ -199,7 +199,7 @@ fiedle400 clear -y
 
 Run the complete test suite (all tests use mocks and require 0 external dependencies):
 ```bash
-python3 -m unittest discover -s tests
+python3 -m unittest discover -s tests -t .
 ```
 The suite must give the same result on any machine: it does not touch real hardware, the real
 `/dev` or `/sys`, your saved settings, or `FIEDLE400_*` variables.
