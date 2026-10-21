@@ -59,8 +59,11 @@ release flow -- just to get a `fiedle400-setup.exe` to test with):
       and pause ~10s before the process actually exits
 - [x] Pause logic is off-Windows/shared-console/API-failure safe, same
       rules as `enlarge_owned_console`, and testable without a real delay
-- [x] Main Start Menu icon renamed to "fiedle400" (group folder name and
-      uninstall shortcut deliberately left as-is -- not asked for)
+- [x] All remaining "PO-400" mentions in the installer renamed to
+      "fiedle400": app name/version string, uninstall display name, group
+      folder, uninstall shortcut, Explorer context-menu text (psytrap
+      asked for this after seeing them still in the rebuilt installer --
+      supersedes the narrower initial scope)
 - [x] Recordings/output folder and `config.py`'s matching
       `default_workdir()` renamed from `PO-400` to `fiedle400` together
 - [x] Windows resolves the real default browser via the registry
@@ -115,6 +118,18 @@ the old `\PO-400` data-folder path, so it failed on the folder rename
 artifact was even produced. Fixed the one remaining reference (line 180)
 to `\fiedle400`; the other `PO-400` mentions in that file are release-note
 prose about the device itself and are correctly left alone.
+
+psytrap tested the rebuilt (0.4.35) installer and found several more
+"PO-400" mentions still visible: the wizard's `AppName`/`AppVerName`
+("fiedle400 (PO-400 Oximeter)"), `DefaultGroupName` (Start Menu group
+folder), `UninstallDisplayName`, the "Uninstall PO-400" shortcut, and
+the Explorer context-menu task description/label ("Open PO-400 ...").
+These were deliberately left alone in the first pass (noted above as
+"not asked for"), but psytrap now wants the app's own name everywhere,
+superseding that narrower scope. Renamed all of them to "fiedle400" in
+`fiedle400.iss` and the matching description in `PACKAGING.md`. Left
+`AppId` (GUID, must stay stable across versions) and the historical
+rename-comment prose referring to the device by its real name unchanged.
 
 Not yet re-verified against a freshly rebuilt installer on the real
 Windows machine -- rebuilding now. Needs transfer once ready to re-check.

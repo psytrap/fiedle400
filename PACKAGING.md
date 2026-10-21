@@ -36,7 +36,7 @@ Source: `packaging/windows/fiedle400.iss`, built by CI with `/DAppVersion=<__ver
 
 - Per-user install to `%LOCALAPPDATA%\Programs\fiedle400`; no admin rights.
 - Start Menu entry runs `fiedle400.exe`; with no arguments it opens the interactive wizard.
-- Explorer right-click entries ("Open PO-400 here", on folders and folder backgrounds) under
+- Explorer right-click entries ("Open fiedle400 here", on folders and folder backgrounds) under
   `HKCU\SOFTWARE\Classes\Directory\{Background\,}shell\fiedle400`; removed on uninstall.
 - Creates `Documents\fiedle400` as the default working folder for the shortcut (T-064;
   must match `fiedle400/config.py`'s `default_workdir()`).

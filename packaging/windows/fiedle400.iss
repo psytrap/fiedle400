@@ -41,20 +41,22 @@
 ; UsePreviousAppDir=no moves it to the new folder; [InstallDelete] removes the
 ; old folder and the [Registry] deletekey lines remove the old context-menu keys.
 ; The recordings folder was kept as "PO-400" at first (the device's name), but
-; psytrap later asked for the app's own name there too (T-064) -- it must stay
-; in lock-step with fiedle400/config.py's default_workdir(), which hardcodes
-; the same path for the same reason (its docstring explains why).
+; psytrap later asked for the app's own name everywhere (T-064) -- the group
+; folder, uninstall shortcut, and Explorer context-menu text included. The
+; recordings folder name must stay in lock-step with fiedle400/config.py's
+; default_workdir(), which hardcodes the same path for the same reason (its
+; docstring explains why).
 
 [Setup]
 AppId={{1C4AFF42-942E-45D2-ACF1-908840BCC434}
-AppName=fiedle400 (PO-400 Oximeter)
+AppName=fiedle400
 AppVersion={#AppVersion}
-AppVerName=fiedle400 {#AppVersion} (PO-400 Oximeter)
+AppVerName=fiedle400 {#AppVersion}
 AppPublisher=psytrap
 DefaultDirName={localappdata}\Programs\fiedle400
 UsePreviousAppDir=no
-DefaultGroupName=PO-400
-UninstallDisplayName=fiedle400 (PO-400 Oximeter)
+DefaultGroupName=fiedle400
+UninstallDisplayName=fiedle400
 OutputBaseFilename=fiedle400-setup
 OutputDir=..\..\installer
 Compression=lzma2
@@ -89,10 +91,10 @@ Source: "{#DemoSpo2}"; DestDir: "{userdocs}\fiedle400"; Flags: onlyifdoesntexist
 Name: "{group}\fiedle400"; Filename: "{app}\fiedle400.exe"; WorkingDir: "{userdocs}\fiedle400"
 Name: "{group}\View Demo Recording"; Filename: "{app}\fiedle400.exe"; \
     Parameters: "view ""{userdocs}\fiedle400\demo.SpO2"""; WorkingDir: "{userdocs}\fiedle400"
-Name: "{group}\Uninstall PO-400"; Filename: "{uninstallexe}"
+Name: "{group}\Uninstall fiedle400"; Filename: "{uninstallexe}"
 
 [Tasks]
-Name: "contextmenu"; Description: "Add ""Open PO-400 Console here"" to the Explorer right-click menu"; GroupDescription: "Integration:"
+Name: "contextmenu"; Description: "Add ""Open fiedle400 Console here"" to the Explorer right-click menu"; GroupDescription: "Integration:"
 
 [Registry]
 ; Remove the pre-rename context-menu keys, whether or not the task is chosen now.
@@ -101,14 +103,14 @@ Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\po400"; ValueTy
 
 ; Explorer context menu, both on a folder and on the folder background.
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\fiedle400"; ValueType: string; ValueName: ""; \
-    ValueData: "Open PO-400 here"; Flags: uninsdeletekey; Tasks: contextmenu
+    ValueData: "Open fiedle400 here"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\fiedle400"; ValueType: string; ValueName: "Icon"; \
     ValueData: "{app}\fiedle400.exe,0"; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\shell\fiedle400\command"; ValueType: string; ValueName: ""; \
     ValueData: """{app}\fiedle400.exe"""; Tasks: contextmenu
 
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\fiedle400"; ValueType: string; ValueName: ""; \
-    ValueData: "Open PO-400 here"; Flags: uninsdeletekey; Tasks: contextmenu
+    ValueData: "Open fiedle400 here"; Flags: uninsdeletekey; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\fiedle400"; ValueType: string; ValueName: "Icon"; \
     ValueData: "{app}\fiedle400.exe,0"; Tasks: contextmenu
 Root: HKCU; Subkey: "SOFTWARE\Classes\Directory\Background\shell\fiedle400\command"; ValueType: string; ValueName: ""; \
