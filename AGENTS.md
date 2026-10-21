@@ -66,6 +66,10 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
   of the patch kept in the repo root. The other direction (local commit for the cloud) is
   `python3 scripts/sync_patch.py generate [REF] --name SLUG`, numbered from the patch files on
   disk; pass `--number N` when the cloud's latest patches are not in this repo's root.
+- Delete an applied `*.patch` file (`rm`) once its apply is committed and the suite is green --
+  it is gitignored, so git tracks nothing about it either way, and there is no further use for
+  the copy once the commit exists. Do this right after a successful apply, not as a separate
+  later clean-up pass.
 - One patch per request. Findings and the fixes they call for go in that one patch, not in a
   list of proposed patches. A follow-up to a patch that has not been applied yet is merged
   into it instead of getting a new number.
