@@ -86,7 +86,7 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 
 - [x] G1-G4 green locally (suite, pcap regression, version sync, clean-venv
       zero-dependency smoke test) on the current `HEAD`
-- [ ] Diff audit re-confirmed immediately before tagging (not just the one
+- [x] Diff audit re-confirmed immediately before tagging (not just the one
       above, if more commits land before this closes)
 - [ ] Commit pushed to `origin/master`; **G10 checked and recorded** on
       that exact commit (ubuntu/windows/macos) -- pre-flight doesn't count
@@ -173,6 +173,13 @@ real Windows 8.1 machine):**
   gaps -- matches the Linux pass's numbers exactly.
 
 Still not done: G9 (Manual-mode real-device check), the desat-algorithm
-SpO2-Assistant re-validation, diff audit re-confirm immediately before
-tagging, pushing/tagging/rings. (G7 visual confirmation done 2026-10-21,
-see T-051.)
+SpO2-Assistant re-validation, pushing/tagging/rings. (G7 visual
+confirmation done 2026-10-21, see T-051.)
+
+**2026-10-21, commit and diff audit (HEAD `e6c2886`):** committed the
+session's batch (T-051 closed, T-065/T-066/T-067 filed, 0.4.38). Full
+suite green (408 tests, `OK (skipped=7)`) immediately before committing.
+Diff audit re-run: `git diff --stat v0.3.9..HEAD` -- 130 files changed;
+no `output/` captures, `.dump`, stray `.spo2`, `egg-info`, or `.zip` --
+the one `.SpO2` hit is `packaging/windows/demo.SpO2`, the intentional
+synthetic demo asset from T-055. Not yet pushed to `origin/master`.
