@@ -32,6 +32,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-068](open/T-068-viewer-desaturation-event-legend.md) | Legend entry for desaturation/pulse event markers in the HTML viewer | Either | Open (deferred) |
 | [T-069](open/T-069-js-interactive-behavior-test-coverage.md) | Automated test coverage for the viewer's interactive JS behavior (chart zoom/pan, hover, toggles) | Either | Open (deferred) |
 | [T-070](open/T-070-fresh-spo2-assistant-desat-rerun.md) | Fresh real SpO2 Assistant run of the desaturation-event probe | Local | Open (deferred) |
+| [T-071](open/T-071-manual-mode-remaining-byte-mysteries.md) | Manual-mode subframe bytes 3..4, `D0` bytes 8..9, and `D0` kinds 1/4 | Either | Open (deferred) |
 | [T-061](open/T-061-po250-po300-support-via-spo2-analysis.md) | PO-250 / PO-300 support via `.spo2` analysis | Either | Open (deferred) |
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
 | [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open (deferred) |
@@ -43,15 +44,8 @@ Open tickets parked until psytrap picks them up again.
 
 Questions waiting on a decision from psytrap or on a check only the local side can run, each
 with its source. When one is answered, move the answer to the source ticket or doc and delete
-the line here.
+the line here. Anything with real remaining work gets its own ticket instead of sitting here
+as a loose bullet (2026-10-21).
 
-### Waiting on a local check (device or Windows)
-
-- **`fiedle400 clear` on the device** and **Manual mode on the real device**: folded into
-  [T-047](open/T-047-release-v0-4.md)'s G5/G6/G9 gates, not tracked separately any more.
-- **Manual-mode sample timing and unknown bytes**: resolved in
-  [T-051](done/2026-W43/T-051-manual-mode-remaining-protocol-questions.md) (2026-10-21): timing
-  confirmed via the device's own RTC; subframe bytes 3..4 and `D0` bytes 8..9 remain unknown
-  (documented in `PROTOCOL.md` §3.14); `D0` kinds 1/4 never reproduced.
-- **`0xEC` byte 1 bits 0..3**: decoded in
-  [T-066](done/2026-W43/T-066-0xec-byte1-low-nibble.md) (a third data series; never seen on a PO-400).
+(None open right now -- the last three were resolved or spun off into
+[T-071](open/T-071-manual-mode-remaining-byte-mysteries.md).)
