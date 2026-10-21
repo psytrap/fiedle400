@@ -3,14 +3,9 @@
 Live list of everything in `tickets/open/`. See `README.md` for the
 protocol; `DONE.md` for the archive.
 
-Nothing open right now outside the Backlog below.
-
-## Before next beta release
-
-What must be done before the next beta. Proposed 2026-10-21; psytrap to confirm or change.
-
-- Local check: `fiedle400 clear` on the device (see "Open questions" below).
-- Local check: manual mode on the real device (see "Open questions" below).
+| Ticket | Title | Owner | Status |
+| :---: | :--- | :---: | :--- |
+| [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
 
 ## Backlog (deferred)
 
