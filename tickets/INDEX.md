@@ -44,6 +44,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open (deferred) |
 | [T-076](open/T-076-viewer-event-band-toggle.md) | Checkbox to toggle drawing desaturation/pulse-rate event bands in the HTML viewer | Either | Open (deferred) |
 | [T-077](open/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either | Open (deferred) |
+| [T-078](open/T-078-transient-first-command-usb-hiccup.md) | First command after idle occasionally fails to find/reach the device, succeeds on retry | Either | Open (deferred) |
 
 ## Open questions
 

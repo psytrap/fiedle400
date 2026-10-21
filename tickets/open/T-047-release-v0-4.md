@@ -165,8 +165,19 @@ session actually reports. Re-running the full runbook on this new RC
       aren't erased, which T-072 made untrue. Added G11 to
       `RELEASE_PLAN.md`'s gate table and pre-flight command block as a
       standing gate for every future cycle, not just this one.
-- [ ] Ring 0 (tag `v0.4.41` locally), Ring 1 (`workflow_dispatch` dry
-      run), Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
+- [x] Ring 0: `git tag -a v0.4.41` on `4c11f52` (ubuntu+windows CI green;
+      macOS non-blocking, caught up green by Ring 1).
+- [x] Ring 1: dispatched `build-release.yml` on `4c11f52`, run
+      [39638361509](https://github.com/psytrap/fiedle400/actions/runs/39638361509).
+      All jobs green (tests x3, builds x3, Windows installer);
+      `Create GitHub Release` correctly **skipped** (dry-run ref guard).
+      Linux binary artifact downloaded via `gh run download` (came
+      through as a clean plain `.tar.gz`, no extra `.zip` layer --
+      relevant data point for T-077) and smoke-tested against the real
+      device: `--version`/`--help` fine, `info` hit a one-off transient
+      USB hiccup then passed on retry, `sessions` showed the same 2 real
+      sessions (60 + 56 records) as every other pass this cycle.
+- [ ] Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
       `--version`) -- not yet done for this sub-cycle.
 - [ ] `CHANGELOG.md` gate-reverification log entry for this sub-cycle.
 
