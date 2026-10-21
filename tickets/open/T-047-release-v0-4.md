@@ -109,8 +109,8 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 - [x] Ring 0: annotated tag created locally once the above all pass
 - [ ] Ring 1: `workflow_dispatch` dry run; all three binaries smoke-tested
       on their own OS
-- [ ] Ring 2: tag pushed; GitHub Release published
-- [ ] Ring 3: published assets verified (SHA-256 matches CI, `--version`
+- [x] Ring 2: tag pushed; GitHub Release published
+- [x] Ring 3: published assets verified (SHA-256 matches CI, `--version`
       matches the tag)
 - [x] `RELEASE_PLAN.md`'s stale "nothing has been tagged" header line
       corrected
@@ -192,6 +192,22 @@ Windows manual smoke test for now, doing it after the final release
 instead -- a deliberate deviation from Ring 1's "all three binaries
 smoke-tested" step, not an oversight. macOS binary not smoke-tested
 either (no Mac hardware); same non-blocking status as G10.
+
+**2026-10-21, Ring 2:** `git push origin v0.4.38` -- psytrap's call to
+proceed without the deferred Windows manual smoke test, since Windows
+was already exercised heavily today (G5/G6's real-hardware pass).
+Triggered run
+[39621249947](https://github.com/psytrap/fiedle400/actions/runs/39621249947):
+tests, all three binary builds, the Windows installer's own smoke test
+(silent install/run/uninstall), and `Create GitHub Release` all green.
+**Published:** <https://github.com/psytrap/fiedle400/releases/tag/v0.4.38>
+(not a draft, all four assets attached).
+
+**2026-10-21, Ring 3:** downloaded the published release assets and the
+release-build run's own uploaded artifacts separately; `sha256sum` on all
+four matches exactly byte for byte (linux/macos/setup.exe/windows.exe).
+Extracted the Linux asset and ran `--version`: `fiedle400 0.4.38`,
+matching the tag. Ring 0-3 all done.
 
 **2026-10-21, G10 confirmed on the exact pushed commit (`7655266`):**
 ubuntu-latest and windows-latest both green (14s/30s); macOS also green
