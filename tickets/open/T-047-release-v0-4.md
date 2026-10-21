@@ -189,9 +189,21 @@ session actually reports. Re-running the full runbook on this new RC
       **T1 promoted from "unconfirmed" to confirmed fixed** -- see
       `RELEASE_PLAN.md` §3d and `CHANGELOG.md`. This also stands in for
       G9 (optional Manual-mode-vs-SpO2-Assistant check) for this cycle.
-- [ ] Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
-      `--version`) -- not yet done for this sub-cycle.
-- [ ] `CHANGELOG.md` gate-reverification log entry for this sub-cycle.
+- [x] Tag `v0.4.41` moved to `3f4f57f` (the commit with the T1-confirmation
+      docs) before pushing, so the release ships with the full writeup.
+- [x] Ring 2: pushed `v0.4.41`, triggered run
+      [39642717392](https://github.com/psytrap/fiedle400/actions/runs/39642717392)
+      -- all jobs green, `Create GitHub Release` succeeded. Published:
+      <https://github.com/psytrap/fiedle400/releases/tag/v0.4.41>, not a
+      draft, all four assets present.
+- [x] Ring 3: `gh release download` + `gh run download` on the same run;
+      all four assets' SHA-256 match byte-for-byte
+      (`fiedle400-linux-x64.tar.gz`, `fiedle400-macos-arm64`,
+      `fiedle400-setup.exe`, `fiedle400-windows-x64.exe`). Extracted the
+      Linux asset: `--version` prints `0.4.41`, matching the tag.
+- [x] `CHANGELOG.md` gate-reverification log entry added for this cycle
+      (full G1-G11/Ring 0-3 writeup, plus the three-erase-path and T1
+      real-hardware confirmations run against the final tagged binary).
 
 ---
 

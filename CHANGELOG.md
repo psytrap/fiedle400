@@ -488,6 +488,53 @@ device unplug/replug (see RELEASE_PLAN.md T8). `FIEDLE400_LIVE=1` suite
 7/7 pass. Windows: re-synced, rebuilt, `info`/`selftest` correct,
 `FIEDLE400_LIVE=1` suite 5/5 applicable pass.
 
+**`0.4.41` (psytrap, 2026-10-21), full runbook restart after T-072/074/075
+landed since `0.4.38`:**
+- G1-G4: 413 tests green (`skipped=7`), diff audit clean, version sync
+  confirmed, clean-venv stdlib-only smoke test passes.
+- G5/G6 (Linux): `pyinstaller` build clean; `info`/`sessions` against the
+  real device show the T-075-correct durations (60 records/1m00s, 56
+  records/56s); `FIEDLE400_LIVE=1` 7/7, both `hidraw` and `hid` passed
+  this run.
+- G5/G6 (Windows, SSH to the T-053 laptop, re-synced to `master`): full
+  suite 413 tests (`skipped=87`, expected); build clean; `info`/
+  `sessions` match the Linux pass exactly (same physical device); `hid`
+  backend 5/5 applicable.
+- G7: full download (no `-s`, per the new convention below), both real
+  sessions, 116 records, 0 sequence gaps, SpO2 94-96%/HR 70-76%, 0
+  probe-out -- confirmed physiologically plausible.
+- **G11 (new gate this cycle):** README re-read end to end; found and
+  fixed a stale claim that `clear` doesn't erase Manual-mode recordings
+  (untrue since T-072). Added as a standing gate for every future cycle.
+- G10: green on ubuntu/windows/macos on the exact tagged commit
+  (`3f4f57f`).
+- Ring 0-3: tag `v0.4.41` created on `3f4f57f`; Ring 1 dry run
+  ([39638361509](https://github.com/psytrap/fiedle400/actions/runs/39638361509))
+  all green, `Create GitHub Release` correctly skipped; Linux artifact
+  smoke-tested against the real device (one-off transient USB hiccup on
+  `info`, cleared on retry -- see T-078). Ring 2
+  ([39642717392](https://github.com/psytrap/fiedle400/actions/runs/39642717392))
+  published <https://github.com/psytrap/fiedle400/releases/tag/v0.4.41>
+  with all four assets. Ring 3: all four assets' SHA-256 match the CI
+  build artifacts byte-for-byte; extracted Linux asset's `--version`
+  prints `0.4.41`.
+- **All three erase paths re-confirmed against the final tagged binary**,
+  not just the simulator: Auto-mode single-session erase (`clear -s N`)
+  still fails exactly per T-074 (`F0 70` ack, nothing erased, honest
+  failure reported); Auto-mode full erase (`clear -y`) works (status 0,
+  device verified empty); Manual-mode erase (`A1`/`D1`) works on a fresh
+  real Manual-mode recording (both steps status 0, device verified
+  empty) -- the third confirmation of T-072/T-073's fix on real hardware.
+- **T1 (probe-out sentinel) confirmed fixed on real hardware** during
+  this cycle's Manual-mode testing -- see RELEASE_PLAN.md §3d for the
+  full writeup (two recordings, clean contiguous probe-out blocks
+  matching real finger-on/off behavior, cross-checked against the real
+  SpO2 Assistant's own decode on the same recording).
+- **New convention (psytrap, 2026-10-21):** release-gate/visual-check
+  downloads always use a full `fiedle400 download` with no `-s` filter --
+  a single-session download during this cycle's G7 check looked like it
+  was missing a session that was simply never requested.
+
 **`0.4.32`-`0.4.38` (psytrap, 2026-10-21), T-047 v0.4.x release cycle:**
 first re-verification since `0.3.9`. Linux (HEAD `a5b4685`): G1-G4 full
 suite green; G5 `pyinstaller` build's `info`/`sessions` against the real
