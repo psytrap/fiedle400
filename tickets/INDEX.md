@@ -7,6 +7,7 @@ protocol; `DONE.md` for the archive.
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
 | [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open |
+| [T-075](open/T-075-auto-session-duration-reads-half-the-real-time.md) | Auto-mode session duration/record count reads ~half the real recording time | Either | Open |
 
 ## Backlog (deferred)
 
