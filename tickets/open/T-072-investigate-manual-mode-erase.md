@@ -43,14 +43,29 @@ actual behavior first.
 - [ ] Capture the real SpO2 Assistant erasing a Manual-mode recording
       (if it's possible to do from that program at all), the way T-042
       captured Manual-mode download
-- [ ] Determine whether `9D 7F` applies to Manual mode, and if so, what
-      `user`/`entry` values (if any) actually matter
+- [x] Determine whether `9D 7F` applies to Manual mode, and if so, what
+      `user`/`entry` values (if any) actually matter (static analysis: it
+      does not; the vendor uses `A1`, see Execution Notes)
 - [ ] If `fiedle400 clear` on a Manual-mode recording is currently wrong
       or a no-op, fix it or make it refuse clearly instead of silently
       claiming success
-- [ ] `PROTOCOL.md` updated with the finding
+- [x] `PROTOCOL.md` updated with the finding (static analysis, §3.14 G)
 - [ ] Tests pass
 
 ## Execution Notes
 
-(Not started.)
+**Static analysis of `SpO2.exe` (cloud, 2026-10-21, patch 0033; ticket stays deferred).**
+- The vendor does not use `9D 7F` for Manual recordings. It has its own erase, `A1 00 21`. After
+  the device's `D1 00 [status]` reply it sends `A1 01 22`, then `A1 04 25` when the third-series
+  flag is set. Each step waits for status 0. Full write-up and addresses: PROTOCOL.md §3.14 G and
+  the §3.13 table.
+- Sent by the Delete button and Delete User when the device did not report the Auto-mode
+  categories, and after a Manual download when a stored setting is on (the Manual
+  counterpart of the Auto-mode automatic delete).
+- The one Manual capture has no `A1`, so it shows no erase. Nothing here has been seen on the
+  wire.
+- Correction to the description above: `clear_memory()` filters out Manual sessions
+  (`not s.manual`), so `clear -s 1` on a Manual recording sends no `9D 7F` at all. It reports
+  that the recording is still listed and exits 1, rather than claiming success.
+- Still open: whether the device erases on `A1 00` (capture SpO2 Assistant's Delete on a Manual
+  recording), and whether `fiedle400 clear` should send it.

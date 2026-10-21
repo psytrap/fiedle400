@@ -614,6 +614,7 @@ Delete User and Delete All.
 | Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]` (pulse series), then `9D 7F 01 …` (SpO2), then `9D 7F 03 …` if the recording has a third series (§3.2) | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`), sends the first. The reply handler sends the next one when the device confirms the last (`0x4b9e19`-`0x4ba07d`, T-066). `user`/`entry` as in the `0xEC` header (§3.2) |
 | Delete User | no command for this device | `0x4af5ef` sends `A1 00`, or `0xAE` in a `7D 80` frame, on other device types, and nothing on the `0x9C`/`0x9D` path |
 | Delete for the `0x91`..`0x96` data category | `91 7F` | `0x4af547` |
+| Delete on the Manual-mode path | `A1 00 21`, then `A1 01 22`, then `A1 04 25` if the third-series flag is set, each after a `D1` reply | §3.14 G (T-072) |
 
 **Confirmed by the vendor captures.** Every vendor capture that downloads also ends with the
 automatic delete-all, after the last `9D 04` page request. (`fiedle400` deliberately does not:
@@ -861,6 +862,32 @@ above against more than one data point:
 - **`D0` kind byte:** still `0x00` in this capture too; kinds `1` and `4` remain unobserved,
   with no known way to trigger them.
 
+#### G. Erase (`0xA1` -> `0xD1`) -- static analysis only (T-072)
+
+`SpO2.exe` has an erase for this path. It has never been captured, and `fiedle400` never sends it.
+
+| Step | Host | Device reply |
+| :--- | :--- | :--- |
+| 1 | `A1 00 21` | `D1 00 [status] [chk]` |
+| 2, after status 0 | `A1 01 22` | `D1 01 [status] [chk]` |
+| 3, after status 0, only with the third-series flag (§3.2) | `A1 04 25` | `D1 04 [status] [chk]` |
+
+- **Reply:** the `0xD1` parser (`0x4ea145`) keeps byte 1 and treats byte 2 == 0 as done. The
+  dialog's `0xD1` case (`0x4b6f58`-`0x4b710d`) sends the next step, or shows the result message
+  (`0xAE`: 0 = done, 4 = failed). The byte-1 values 0, 1 and 4 are the same set as the `D0` kind
+  byte; whether they name series or kinds is not decoded.
+- **What sends step 1:**
+  - The Delete button (`0x4af562`), when the device did not report the `0x40`/`0x01` categories
+    (`0xEF`, §3.9); otherwise it takes the `9D 7F` path (§3.13).
+  - Delete User (`0x4af626`), on the same condition.
+  - The end of a Manual download (`0x4b74a5`-`0x4b74e3`), after saving, when a stored setting is
+    on (byte `0x63fcf5`, loaded from the settings at `0x50f4c4`). This works like the Auto-mode
+    automatic delete.
+- **Not seen in the capture:** `bum400_20261015_194301.pcap` has no `A1` (and no `9F 1F`), so
+  SpO2 Assistant erased nothing there.
+- **Not confirmed:** that the device erases on `A1 00`, and what steps 2 and 3 add.
+- **`fiedle400 clear`** skips Manual recordings: it sends nothing, reports that the recording is
+  still listed, and exits 1.
 
 ### 3.15 Reverse-engineering `SpO2.exe` -- what works, what does not
 

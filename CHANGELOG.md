@@ -8,6 +8,12 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.39 (2026-10-21)
+
+- **T-072** (still deferred): SpO2.exe erases a Manual-mode recording with `A1 00`, then `A1 01`
+  and `A1 04` after `D1` replies; never captured, `fiedle400` does not send it. `clear` skips
+  Manual recordings (no `9D 7F` is sent). PROTOCOL.md §3.14 G, §3.13.
+
 ## 0.4.38 (2026-10-21)
 
 - **T-066** done: `0xEC` byte 1 bits 0..3 = 1 means the recording has a third data series
