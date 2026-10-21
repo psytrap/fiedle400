@@ -149,11 +149,19 @@ session actually reports. Re-running the full runbook on this new RC
       `RELEASE_PLAN.md`'s G7 row), both sessions, 116 records total, 0
       sequence gaps, SpO2 94-96%/HR 70-76%, 0 probe-out -- confirmed
       physiologically plausible by psytrap.
-- [ ] Windows G5/G6 pass for this sub-cycle -- not yet run.
+- [x] Windows G5/G6 pass (SSH to the real Windows 8.1 laptop, T-053's
+      machine; `C:\Users\mik\fiedle400-repo`, a stale `synctest` branch
+      with an uncommitted WIP duplicate of T-063's already-merged fix was
+      stashed, not discarded; switched to `master`, pulled to `0578612`).
+      Full suite: 413 tests, `OK (skipped=87)` (extra skips vs. Linux are
+      expected, same as the `0.4.38` cycle). `pyinstaller fiedle400.spec`
+      built clean; `dist\fiedle400.exe info`/`sessions` match the Linux
+      pass exactly (same 2 real sessions, 60 + 56 records, same physical
+      device). G6: `FIEDLE400_LIVE=1` -- 5/5 applicable tests pass via the
+      `hid` backend (2 correctly skip as Linux-only).
 - [ ] Ring 0 (tag `v0.4.41` locally), Ring 1 (`workflow_dispatch` dry
       run), Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
-      `--version`) -- not yet done for this sub-cycle; the Ring 0-3 boxes
-      above are `v0.4.38`'s, not this one's.
+      `--version`) -- not yet done for this sub-cycle.
 - [ ] `CHANGELOG.md` gate-reverification log entry for this sub-cycle.
 
 ---
