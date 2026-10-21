@@ -63,6 +63,16 @@ not separate from it -- doing them *is* most of what's left below.
 - Whether a Manual-mode real-device recording is available this cycle for
   G9 (optional, non-blocking either way).
 
+**Named CI/workflow debt, checked against the actual workflow files on
+2026-10-21, deliberately not made part of this release:** `ubuntu-latest`
+now meaning Ubuntu 26 (the 2026-10-19 cutover already passed), the Actions
+Node 20 deprecation warnings' current status, and the untested macOS
+Gatekeeper/quarantine path. None of them block v0.4.x shipping as-is; spun
+off as [T-049](T-049-ci-workflow-debt.md) (deferred). Likewise the
+`builtins.input`-vs-pty question from the same `RELEASE_PLAN.md` section,
+which has no known bug behind it: [T-048](T-048-pty-input-mocking-review.md)
+(deferred).
+
 ---
 
 ## Criteria
