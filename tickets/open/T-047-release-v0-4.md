@@ -120,6 +120,42 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
       `scripts/bump_version.py minor`
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
+### v0.4.41 sub-cycle (restarted 2026-10-21 -- critical fixes since v0.4.38)
+
+`v0.4.38` (above) already tagged/published/verified. Three real-hardware
+findings landed on `master` since then -- T-072/T-073 (Manual-mode erase,
+fixed and confirmed), T-074 (Auto single-session erase, diagnosed, stops
+honestly, deferred), and **T-075** (the `0xEC` sample count is one sample
+per second, not 2Hz-needing-averaging -- every prior release had
+under-reported every session's duration/record count by half). T-075 in
+particular is release-worthy on its own: it changes what every downloaded
+session actually reports. Re-running the full runbook on this new RC
+(`0.4.41`) rather than treating these as a silent patch bump.
+
+- [x] G1-G4 (this sub-cycle, HEAD `0ef2cdd`): 413 tests green
+      (`skipped=7`, live-device only); diff audit `v0.4.38..HEAD` clean (29
+      files, no debris); version sync `0.4.41` confirmed; clean-venv
+      stdlib-only smoke test passes, no matplotlib import.
+- [x] Pushed `0ef2cdd` to `origin/master`; G10: ubuntu-latest and
+      windows-latest green, macos-latest green (run
+      [39635460118](https://github.com/psytrap/fiedle400/actions/runs/39635460118)).
+- [x] G5 (Linux, real device): `pyinstaller fiedle400.spec` built clean;
+      `./dist/fiedle400 info`/`sessions` show the 2 real sessions (60 +
+      56 records) at their T-075-fixed durations (1m00s / 56s).
+- [x] G6 (Linux): `FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live`
+      -- 7/7, both `hidraw` and `hid` passed this run (T8 remains known-
+      intermittent on `hid`, not a regression).
+- [x] G7: full download (no `-s` filter, per the new note added to
+      `RELEASE_PLAN.md`'s G7 row), both sessions, 116 records total, 0
+      sequence gaps, SpO2 94-96%/HR 70-76%, 0 probe-out -- confirmed
+      physiologically plausible by psytrap.
+- [ ] Windows G5/G6 pass for this sub-cycle -- not yet run.
+- [ ] Ring 0 (tag `v0.4.41` locally), Ring 1 (`workflow_dispatch` dry
+      run), Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
+      `--version`) -- not yet done for this sub-cycle; the Ring 0-3 boxes
+      above are `v0.4.38`'s, not this one's.
+- [ ] `CHANGELOG.md` gate-reverification log entry for this sub-cycle.
+
 ---
 
 ## Execution Notes
