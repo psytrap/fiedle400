@@ -28,6 +28,7 @@ class SerialDeviceEngine:
         self.dump_fp = None
         self.last_dump_time = None
         self._is_mock = hasattr(device, "responses")  # test doubles script replies; real devices never do
+        self.single_erase_unsupported = False  # set by clear_memory, T-074
 
     def _sleep(self, seconds: float):
         if not self._is_mock:
@@ -227,13 +228,13 @@ class SerialDeviceEngine:
             block_hr_pkts.clear()
 
         # The "page" argument of a 0x9D 0x04 read is the sample offset at which the reply starts
-        # (RELEASE_PLAN.md T6): each request continues where the records so far end. A record
-        # averages two raw 2 Hz samples, so the offset is 2 * records. A reply that adds no record
+        # (RELEASE_PLAN.md T6): each request continues where the records so far end. One record
+        # is one stored sample (T-075), so the offset is the record count. A reply that adds no record
         # (the end marker at offset == stored samples, or silence past it) ends the download.
         for _window in range(4096):
             if len(sess_records) >= target_records:
                 break
-            page_idx = 2 * len(sess_records)
+            page_idx = len(sess_records)
             records_before = len(sess_records)
             SerialPacketDetector.reset_decoder_state()
 
@@ -732,6 +733,8 @@ class SerialDeviceEngine:
 
         Like the vendor tool, it lists the recordings and opens the storage transfer (`9D 02`)
         first. Afterwards it lists them again: returns True only if what should be gone is gone.
+        If the device does not answer the first single-entry step with an erase reply (a real
+        PO-400 does not, T-074), it stops there and sets `single_erase_unsupported`.
         A Manual-mode recording (there is at most one, T-042) is erased separately, with the
         unconfirmed `A1`/`D1` sequence from PROTOCOL.md 3.14 G (T-072).
         """
@@ -756,7 +759,7 @@ class SerialDeviceEngine:
                      for series in (2, 1)]
         else:
             steps = [(Commands.delete_all(), "Delete All (0x9D 0x7F)")]
-        for cmd, desc in steps:
+        for n, (cmd, desc) in enumerate(steps):
             if int(debug) >= 1:
                 print(f"[DEBUG OUT] {desc}: {cmd[:16].hex()}")
             self._write_report(cmd, desc)
@@ -765,6 +768,11 @@ class SerialDeviceEngine:
             if int(debug) >= 1:
                 print(f"[DEBUG] Erase reply status: {'none' if status is None else status}")
             if status not in (None, 0):
+                break
+            if status is None and session_id > 0 and n == 0:
+                # A real PO-400 answers the single-entry delete with the generic `F0 70` ack only
+                # and erases nothing (T-074); stop instead of sending the next series.
+                self.single_erase_unsupported = True
                 break
 
         after = self.list_sessions(debug=debug)

@@ -1,6 +1,6 @@
 # T-075: Auto-mode session duration/record count reads ~half the real recording time
 
-- **Status:** Open (psytrap, 2026-10-21)
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**
@@ -47,19 +47,44 @@ test recordings were started/stopped. No code changes have been made.
 
 ## Criteria
 
-- [ ] Reproduce with a fresh, precisely-timed recording (e.g. exactly
+- [x] Reproduce with a fresh, precisely-timed recording (e.g. exactly
       60s by a stopwatch) and compare the device's own on-screen
       duration (if it shows one) against what `fiedle400 sessions`
       reports
-- [ ] Determine whether the `0xEC` raw-sample count itself is wrong, or
+- [x] Determine whether the `0xEC` raw-sample count itself is wrong, or
       whether `record_count`/`duration_sec` are computed wrong from a
       correct raw value (`PROTOCOL.md` §3.2's 2 Hz raw-sample assumption)
-- [ ] Fix the decode/computation if it's a real bug, or document why the
+- [x] Fix the decode/computation if it's a real bug, or document why the
       reported duration is correct and the discrepancy was a timing
       mistake on the human side
-- [ ] `PROTOCOL.md` updated if the finding changes what §3.2 claims
-- [ ] Tests pass
+- [x] `PROTOCOL.md` updated if the finding changes what §3.2 claims
+- [x] Tests pass
 
 ## Execution Notes
 
-(Not started.)
+Done 2026-10-21 (patch 0034, 0.4.41). **The `0xEC` count is seconds; the 2 Hz reading (CHANGELOG
+T3, patch 0013) was wrong.** The raw count is correct; `record_count`/`duration_sec` halved it, and
+the decoder averaged each pair of nibbles into one value.
+
+Evidence:
+- SpO2 Assistant's own download of the `bum400.pcapng` recording,
+  `archive/capture/_user_1_0_20260903074127-20260903074137joint.SpO2`: session 1 has 9705
+  records (header count 9705), then a 17 s gap, then session 2 (header 1758). Decoding the capture
+  one value per nibble gives all 9705 SpO2 values identical to the vendor file
+  (`tests/test_pcap_decoder.py`, runs where `archive/capture` is present).
+- The vendor Auto-mode decoder (`0x4e9b49`, called for `ED 04` at `0x4e976e`) outputs one value
+  per nibble (base minus high, base minus low unless low is `0xF`), at most 42 per frame, and never
+  averages.
+- In every capture the next recording starts 13-18 s after start + count seconds
+  (`bum400.pcapng`: 22:32:31 + 9705 s = 01:14:16, next at 01:14:33). The same holds for T-011's
+  two sessions: 08:37:31 + 320 s, next at 08:43:12.
+- psytrap's two 60 s recordings report count 59.
+
+The stopwatch criterion is covered by the 60 s recordings and the capture gaps. Why it looked right
+before: the SpO2 Assistant checks (T-011, G7) opened files `fiedle400` wrote, so SpO2 Assistant
+showed the halved data back. The check with a matching duration (G9, 5:15) was a Manual-mode
+recording, which has its own decoder and was always one value per second.
+
+Fix: `parsers.py` `duration_sec = raw_samples`; `detector.py` emits one sample per nibble;
+`device.py` page offset = records received. Tests updated to the new counts (214, 243).
+PROTOCOL.md §1, §3.2, §3.5; AGENTS.md, DESIGN.md.

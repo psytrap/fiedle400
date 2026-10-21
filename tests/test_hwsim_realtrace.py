@@ -45,15 +45,10 @@ def probe_trace() -> Trace:
 
 
 def window(series: int, offset: int):
-    """Raw 2 Hz samples of one stored-data reply, decoded independently of the engine."""
+    """The samples of one stored-data reply (one per second), decoded independently of the engine."""
     stream = b"".join(real_trace().responses((0x9D, 0x04, series, 1, 1, offset, 0))[0])
     frames = [stream[i:i + 30] for i in range(0, len(stream) - 29, 30)]
     return decode_ed_subframes(frames, is_spo2=(series == SPO2))
-
-
-def pairs(samples):
-    """What the engine does with raw values: average two 2 Hz values into one 1 Hz record."""
-    return [round((samples[2 * i] + samples[2 * i + 1]) / 2.0) for i in range(len(samples) // 2)]
 
 
 # --------------------------------------------------------------------------
@@ -137,7 +132,7 @@ class RealFlow(base.FlowCase):
 class TestSessions(RealFlow):
     def test_lists_the_recorded_session(self):
         (s,) = self.engine.list_sessions()
-        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 107, 214))
+        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 214, 214))
         self.assertEqual(s.timestamp.isoformat(), "2026-09-30T19:54:53")
         self.assert_fully_answered()
 
@@ -145,12 +140,13 @@ class TestSessions(RealFlow):
         self.engine.list_sessions()
         self.assertEqual([command_key(r) for r in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
 
-    def test_header_count_is_in_raw_2hz_samples_so_duration_is_107_seconds(self):
-        """T3 (fixed) on real data: 214 raw samples at 2 Hz are 107 s, and the independent decode of the
-        first reply agrees (214 values, 107 averaged records)."""
+    def test_header_count_is_seconds_so_duration_is_214_seconds(self):
+        """T-075 (reverses T3) on real data: the header counts one sample per second, and the
+        independent decode of the first reply agrees (214 values)."""
         (s,) = self.engine.list_sessions()
-        self.assertEqual(s.duration_seconds, 107)
-        self.assertEqual(s.duration_str, "1m 47s")
+        self.assertEqual(s.duration_seconds, 214)
+        self.assertEqual(s.duration_str, "3m 34s")
+        self.assertEqual(len(window(SPO2, 0)), 214)
 
 
 class TestDownload(RealFlow):
@@ -182,23 +178,24 @@ class TestDownload(RealFlow):
         self.assertEqual(len(self.fake.sent), 8)
 
     def test_each_sample_of_the_session_is_exported_once(self):
-        """T6/T1/T3 (fixed): a 214-sample session is 107 one-second records, the averaged pairs of the
-        first reply. The engine used to ask for windows 1 and 2 as well and export 214 records."""
+        """T6/T1 (fixed), T-075: a 214-sample session is 214 one-second records, the samples of the
+        first reply. The engine used to ask for windows 1 and 2 as well (T6), and until 0.4.41
+        averaged pairs of samples into 107 records (T3, wrong)."""
         records = self.download()
-        self.assertEqual([r["spo2"] for r in records], pairs(window(SPO2, 0)))
-        self.assertEqual([r["heart_rate"] for r in records], pairs(window(PULSE, 0)))
-        self.assertEqual([r["flags"] for r in records], ["ok"] * 107)
-        self.assertEqual(records[-1]["timestamp"], "2026-09-30T19:56:39")
+        self.assertEqual([r["spo2"] for r in records], window(SPO2, 0))
+        self.assertEqual([r["heart_rate"] for r in records], window(PULSE, 0))
+        self.assertEqual([r["flags"] for r in records], ["ok"] * 214)
+        self.assertEqual(records[-1]["timestamp"], "2026-09-30T19:58:26")
 
     def test_no_samples_are_lost_at_the_end_of_a_window(self):
-        """T1 (fixed): the short filler frame at the end of a reply (mask bytes 0x7f) holds the last 4
-        pairs. Its byte 7 is the third MSB mask, not a status field."""
+        """T1 (fixed): the short filler frame at the end of a reply (mask bytes 0x7f) holds the last 8
+        samples. Its byte 7 is the third MSB mask, not a status field."""
         stream = b"".join(real_trace().responses((0x9D, 4, SPO2, 1, 1, 0, 0))[0])
         SerialPacketDetector.reset_decoder_state()
         buf = SerialByteStreamBuffer()
         buf.write(stream)
         events = [e for e in SerialPacketDetector.detect_and_decode_stream(buf) if e.packet_type == "STORED_BLOCK"]
-        self.assertEqual(sum(e.spo2 is not None for e in events), 107)
+        self.assertEqual(sum(e.spo2 is not None for e in events), 214)
         self.assertEqual({e.status_str for e in events}, {"ok"})
 
 
@@ -212,7 +209,7 @@ class TestDownloadPastTheEnd(RealFlow):
         """Offset == stored samples is answered with an end marker (one frame of 0xFF filler), not with
         silence. A header announcing 400 samples must not make the engine loop or invent records."""
         records = self.download()
-        self.assertEqual(len(records), 107)
+        self.assertEqual(len(records), 214)
         keys = [command_key(r) for r in self.fake.sent if command_key(r)[:3] == (0x9D, 4, SPO2)]
         offsets = [k[5] | k[6] << 7 for k in keys]
         self.assertEqual(sorted(set(offsets)), [0, 214])
@@ -297,7 +294,7 @@ class TestFingerOut(unittest.TestCase):
         # base 127 (0xF7 0xFF), two 127s; base 98 (0xF6 0xF2), two 98s
         events = self.detect(SPO2, bytes([0xF7, 0xFF, 0x00, 0xF6, 0xF2, 0x00]))
         self.assertEqual([(e.spo2, e.invalid_sample, e.status_str) for e in events],
-                         [(None, True, "probe-out"), (98, False, "ok")])
+                         [(None, True, "probe-out")] * 2 + [(98, False, "ok")] * 2)
 
     def test_status_byte_values_in_the_mask_position_do_not_change_the_result(self):
         frame = bytearray(stored_frame(SPO2, 0, bytes([0xF6, 0xF2, 0x00, 0x11])))
@@ -327,8 +324,8 @@ class TestFingerOut(unittest.TestCase):
             dev.close()
         self.assertEqual(fake.unmatched, [])
         self.assertEqual([(r["spo2"], r["heart_rate"], r["flags"]) for r in records],
-                         [(None, None, "probe-out"), (98, 70, "ok")])
-        self.assertEqual([r["timestamp"][-8:] for r in records], ["19:54:53", "19:54:54"])
+                         [(None, None, "probe-out")] * 2 + [(98, 70, "ok")] * 2)
+        self.assertEqual([r["timestamp"][-8:] for r in records], ["19:54:53", "19:54:54", "19:54:55", "19:54:56"])
 
 
 # --------------------------------------------------------------------------

@@ -29,8 +29,8 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 - **Never erase device flash** and never run `clear` or other destructive opcodes in tests
   or tooling. Stored sessions are the user's real data. The simulator refuses them.
 - `download`, `sessions`, `info`, `selftest` are read-only on the device.
-- A read's "page" argument is a **sample offset**; the `0xEC` header count is **raw 2 Hz
-  samples**; a record is the average of two raw samples. In stored data, finger-out
+- A read's "page" argument is a **sample offset**; the `0xEC` header count is **samples, one
+  per second**; a record is one sample (T-075). In stored data, finger-out
   is detected from out-of-range decoded values (the vendor's 127 / 255 sentinels), never from a
   flag byte; no real recording has shown one yet (T1 is open). (Details: PROTOCOL.md §3.5, DESIGN.md §3.)
 - Failures end in one clear line and a nonzero exit code, not a traceback
@@ -89,8 +89,8 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 
 ## Glossary
 
-- **raw sample**: one 2 Hz device value. **record**: one exported second (two raw averaged).
-- **offset / page**: start position, in raw samples, of a `9D 04` read.
+- **sample**: one stored device value, one per second. **record**: one exported second (one sample; T-075).
+- **offset / page**: start position, in samples, of a `9D 04` read.
 - **T1..T8**: findings; current status in RELEASE_PLAN §3d, full history in CHANGELOG.md. **G1..G8**: release gates (RELEASE_PLAN §2).
 - **handoff/**: frozen archive of pre-ticket cloud briefs; still cited by filename
   elsewhere in these docs, but superseded by `tickets/` for new work.

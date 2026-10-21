@@ -63,7 +63,7 @@ class SessionInfo:
     record_count: int = 0
     duration_sec: int = 0
     timestamp: Optional[datetime] = None
-    raw_samples: int = 0   # raw 2 Hz readings stored (0xEC header); record_count and duration_sec are 1 Hz
+    raw_samples: int = 0   # samples stored (0xEC header), one per second, so equal to record_count (T-075)
     manual: bool = False   # the Manual-mode recording (0xD0 header, PROTOCOL.md 3.14), not an 0xEC entry
 
     @property

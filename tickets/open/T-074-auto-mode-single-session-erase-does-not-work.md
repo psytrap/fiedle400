@@ -59,11 +59,11 @@ guess at a cause (`fiedle400/cli.py`).
       analysis pass on `SpO2.exe`, or a packet capture of the Delete
       button against a single Auto-mode recording -- same approach as
       T-072/T-073 used for Manual mode)
-- [ ] Fix `clear -s N` to actually erase on real hardware, or make it
+- [x] Fix `clear -s N` to actually erase on real hardware, or make it
       explicitly fall back to (and say it is falling back to) delete-all
       when erasing a single session is not currently possible
 - [ ] `PROTOCOL.md` §3.13 updated with the real byte layout once known
-- [ ] Tests pass
+- [x] Tests pass
 
 ## Execution Notes
 
@@ -74,3 +74,23 @@ the device. Not yet fixed -- `clear -s N` currently honestly reports
 failure (via the existing re-list check) rather than lying about success,
 so nothing is silently broken for users, but a single session cannot
 currently be erased without also erasing every other recording.
+
+**Static analysis and fix (cloud, 2026-10-21, patch 0034, 0.4.41).**
+- `fiedle400`'s bytes match `SpO2.exe`'s send helper (`0x4bc385`, `0x9D` case `0x4bc54b`):
+  byte 1 mode `7F`, byte 2 series, bytes 3..4 user and entry, bytes 5..6 offset. No layout error
+  found.
+- The Delete button sends `9D 7F 02` only when the dialog mode (`+0x100`) is 6 and the `0xEF`
+  capability has `0x40`. Mode 6 is set in `0x4b0aca` on the `90 06` path. Delete-all has the same
+  gate, and `fiedle400`'s delete-all works without `90 06`, so the gate is not the missing step.
+- `F0 70` is the device's generic ack for a command it does not act on (same as the unsupported
+  queries in T8 and the Manual-mode probes).
+- Conclusion: most likely this firmware does not support erasing one recording. Not proven: no
+  capture of SpO2 Assistant doing it exists.
+
+Fix: `clear_memory` stops after the first single-entry step if no `ED 7F` reply comes, and sets
+`single_erase_unsupported`; `clear -s N` then says the device did not accept erasing a single
+recording and that `clear` without `-s` erases all of them. It never falls back to delete-all on
+its own. `tests/test_clear.py`. PROTOCOL.md §3.13.
+
+Still open: the first criterion (a capture of the vendor's Delete button on one Auto recording, or
+psytrap accepting "unsupported").

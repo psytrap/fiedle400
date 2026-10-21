@@ -44,8 +44,8 @@ as an HTML viewer page (default), `.SpO2`, CSV or JSON, and shows recordings alr
 
 1. `command_download` opens the device and builds a `SerialDeviceEngine`.
 2. `list_sessions`: send the index request; each `0xEC` reply is one session
-   (start time, header count). The header count is **raw 2 Hz samples**; one
-   *record* is the average of two raw samples, so records = `(raw + 1) // 2`.
+   (start time, header count). The header count is **samples, one per second**;
+   one *record* is one sample (T-075).
 3. `download_session`, per session: send `9D 04` reads (SpO2 series, pulse
    series). The argument is a **sample offset**, and each reply runs from that
    offset to the end of the stored data, in 30-byte `0xED` frames. The engine
@@ -81,10 +81,9 @@ cited per step); invents nothing.
    `0xEC` frame; a real one from the vendor capture:
    `EC 40 01 01 1A 09 06 0A 00 2E 73 01 00 00 75 73 65 72 00 00 42`.
    Decoded: flags `0x40` (data ready), date `1A 09 06` = 2026-09-06,
-   time `0A 00 2E` = 10:00:46, raw sample count `73 01 00 00` (28-bit
-   LE) = 243 -- **raw 2 Hz samples, not seconds**, so this session is
-   `(243 + 1) // 2` = 122 one-second records (PROTOCOL.md §1.4,
-   CHANGELOG.md T3).
+   time `0A 00 2E` = 10:00:46, sample count `73 01 00 00` (28-bit
+   LE) = 243 samples, one per second: 243 one-second records, 4m 03s
+   (PROTOCOL.md §1.4, T-075; CHANGELOG.md T3 had read it as 2 Hz).
 
 3. **Read the SpO2 series.** Request `9D 04 01 01 01 [offset] 00 [chk]`
    -- mode "read block", type `0x01` (SpO2), offset starting at 0. The

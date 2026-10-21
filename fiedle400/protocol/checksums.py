@@ -29,5 +29,5 @@ def pack_7bit_le_28bit(val: int) -> List[int]:
 
 
 def unpack_7bit_le_28bit(b0: int, b1: int, b2: int, b3: int) -> int:
-    """Unpacks four 7-bit Little-Endian bytes into a 28-bit integer (e.g. 2 Hz sample count)."""
+    """Unpacks four 7-bit Little-Endian bytes into a 28-bit integer (e.g. the 0xEC sample count)."""
     return (b0 & 0x7F) | ((b1 & 0x7F) << 7) | ((b2 & 0x7F) << 14) | ((b3 & 0x7F) << 21)

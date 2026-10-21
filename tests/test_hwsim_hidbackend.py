@@ -94,7 +94,7 @@ class FlowCase(unittest.TestCase):
 class TestSessions(FlowCase):
     def test_lists_the_recorded_session(self):
         (s,) = self.engine.list_sessions()
-        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 107, 214))
+        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 214, 214))
         self.assertEqual(s.timestamp.isoformat(), "2026-09-30T19:54:53")
         self.assert_fully_answered()
 
@@ -102,10 +102,10 @@ class TestSessions(FlowCase):
         self.engine.list_sessions()
         self.assertEqual([command_key(r) for r in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
 
-    def test_header_count_is_in_raw_2hz_samples_so_duration_is_107_seconds(self):
-        """T3 (fixed), same as on Linux: 214 raw samples at 2 Hz are 107 s."""
+    def test_header_count_is_seconds_so_duration_is_214_seconds(self):
+        """T-075, same as on Linux: 214 samples, one per second, are 214 s."""
         (s,) = self.engine.list_sessions()
-        self.assertEqual(s.duration_seconds, 107)
+        self.assertEqual(s.duration_seconds, 214)
 
 
 class TestDownload(FlowCase):
@@ -118,12 +118,12 @@ class TestDownload(FlowCase):
         self.assertEqual(len(self.fake.sent), 8)
         self.assert_fully_answered()
 
-    def test_download_returns_107_records_not_214(self):
-        """T6/T1 (fixed), same as on Linux: one window, each sample once, through HidBackend."""
+    def test_download_returns_each_sample_once(self):
+        """T6/T1 (fixed), T-075, same as on Linux: one window, each sample once, through HidBackend."""
         records = self.download()
-        self.assertEqual(len(records), 107)
-        self.assertEqual([r["spo2"] for r in records], rt.pairs(rt.window(rt.SPO2, 0)))
-        self.assertEqual([r["flags"] for r in records], ["ok"] * 107)
+        self.assertEqual(len(records), 214)
+        self.assertEqual([r["spo2"] for r in records], rt.window(rt.SPO2, 0))
+        self.assertEqual([r["flags"] for r in records], ["ok"] * 214)
 
 
 class TestInfo(FlowCase):
@@ -269,7 +269,7 @@ class TestCtypesStyleBranch(unittest.TestCase):
                 self.assertEqual(dev.backend_name, "hid")
                 engine = SerialDeviceEngine(dev)
                 (s,) = engine.list_sessions()
-                self.assertEqual(s.record_count, 107)
+                self.assertEqual(s.record_count, 214)
             finally:
                 dev.close()
         self.assertEqual(fake.destructive, [])

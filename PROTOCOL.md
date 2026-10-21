@@ -11,8 +11,11 @@ Bit- and byte-accurate wire protocol reference for the Pulox PO-400 (`VID_28E9&P
    `checksum = sum(bytes[0..N-1]) % 128` (or `sum(bytes[0..N-1]) & 0x7F`)
 3. **14-Bit Integer Packing (7-bit Little-Endian)**:
    `value_14 = byte[0] | (byte[1] << 7)`
-4. **28-Bit Integer Packing (Raw Sample Count in 0xEC Header)**:
-   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` -- counts raw 2 Hz half-second samples, **not** seconds or 1 Hz records (confirmed: psytrap, 2026-10-15; see §3.2, §3.5 "Delta-Nibble Decompression" step 3, and CHANGELOG.md T3). Records (= seconds) = `(value_28 + 1) // 2`: an odd count keeps its last raw sample as a record of its own (the vendor capture's header says 243 and the session has 122 records, the 122 rows in `analysis/bum400_20260906_100516.md` §6, which `fiedle400` reproduces exactly).
+4. **28-Bit Integer Packing (Sample Count in 0xEC Header)**:
+   `value_28 = b0 | (b1 << 7) | (b2 << 14) | (b3 << 21)` -- the number of stored samples, **one per
+   second**, so it is the duration in seconds and the record count (T-075, 2026-10-21; see §3.2).
+   Up to 0.4.40 this was read as 2 Hz half-second samples and pairs were averaged (CHANGELOG.md T3),
+   which halved every duration.
 5. **USB HID Report Size**: Outbound and inbound reports are 64 bytes fixed-length (`REPORT_SIZE = 64`), zero-padded.
 6. **Two request framings, both accepted**: the vendor tool sends requests bare (`9C 01 1D`, zero-padded); `fiedle400` wraps most of them as `7D 81 <opcode> <args>` padded with `0x80` (`commands.build_hid_command`). The device answers both the same way (compare `analysis/bum400_20260906_100516.pcap` with `tests/fixtures/cli-exchange.trace.json`). Both tools send `0x82` and the `0x9D` storage commands bare.
 7. **Replies are self-delimiting frames**: each reply has its own length (see §2.2) and ends with a checksum over the bytes before it (rule 2). The checksum is the reliable end marker: trailing zeros can be part of a frame (`FE 07 00 00 05`).
@@ -163,7 +166,7 @@ checksum form above is unrecorded.
 | `0x07` | Hour | `0..23` | Start hour |
 | `0x08` | Minute | `0..59` | Start minute |
 | `0x09` | Second | `0..59` | Start second |
-| `0x0A..0x0D` | Raw Sample Count | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. **Not seconds.** Counts raw 2 Hz half-second samples (confirmed: psytrap, 2026-10-15; previously mislabelled here as "1 Hz records", see CHANGELOG.md T3). `duration_sec = (raw_count + 1) // 2` (§1.4). |
+| `0x0A..0x0D` | Sample Count | 28-bit LE | `B0 \| (B1<<7) \| (B2<<14) \| (B3<<21)`. Stored samples, **one per second** = duration in seconds (T-075, below). Until 0.4.40 read as 2 Hz samples and halved (CHANGELOG.md T3, wrong). |
 | `0x0E..0x13` | Username | ASCII | `"user"` + `00 00` in every recording |
 | `0x14` | Checksum | `0..127` | `sum(bytes[0..0x13]) % 128` (`0x42` in the vendor capture, `0x03` in the CLI recording) |
 | `0x15..0x3F` | Padding | `0x00...` | Zero padding |
@@ -206,6 +209,22 @@ The `0xEF` capability bytes can set the same flag on another path (§3.9). All 1
 the captures (`bum400`, `bum400__2`, `bum400_download`, `raw/bum400_raw`, `realtime/bum400_realtime`)
 have bits 0..3 = 0, and every `9D 04` asks for type 1 or 2. `fiedle400` ignores the nibble and
 reads SpO2 and pulse, which stays correct for such a recording; it only leaves the third series out.
+
+**Sample count is seconds (T-075, 2026-10-21).** Three independent checks:
+- psytrap's two recordings timed at 60 s each have counts of 59. The second starts at 17:32:50,
+  16 s after `17:31:35 + 59 s`.
+- In every capture, the next recording starts 13 to 18 s after `start + count` seconds. For
+  example, `bum400.pcapng`: 22:32:31 + 9705 s = 01:14:16, and the next starts at 01:14:33. Read as
+  2 Hz, it would end at 23:53, leaving an unexplained 1 h 21 min gap. The same holds for
+  `bum400_download` (21:46:47 + 51 s, next at 21:47:51) and `raw/bum400_raw` (13:11:03 + 358 s,
+  next at 13:17:19).
+- `SpO2.exe`'s Auto-mode decoder (`0x4e9b49`, called for `ED 04` frames at `0x4e976e`) writes
+  one value per nibble, up to 42 per 21 data bytes, and never averages. A reply decodes to
+  exactly `count` values (243 and 214 in the recordings).
+
+T3 (2026-10-15) had read the count as 2 Hz and averaged pairs, on the strength of
+`analysis/bum400_20260906_100516.md`'s "243 values = 122 s". That was an assumption, not a timed
+recording, and every duration `fiedle400` reported up to 0.4.40 was half the real one.
 
 Still open: whether any PO-400 ever reports more than one user or entry. The "User 1..6" that
 §3.13 once gave for `0x91`..`0x96` has no support (T-037).
@@ -344,7 +363,7 @@ download works after both, so the difference has no visible effect so far.
 > [!IMPORTANT]
 > **The offset is a raw-sample sliding window, not a page index** (confirmed: psytrap, 2026-10-15,
 > by exact byte comparison against a real device). Requesting offset `k` returns the session's data
-> starting `k` *raw 2 Hz samples* in, not the k-th block of fresh data: `window(k)[i] == window(0)[i+k]`
+> starting `k` *samples* (seconds, T-075) in, not the k-th block of fresh data: `window(k)[i] == window(0)[i+k]`
 > for every `i`, on both series. A client that requests offsets `0, 1, 2, ...` and concatenates the
 > replies as if they were successive pages receives overlapping, re-shifted data, not new samples --
 > this is exactly how `fiedle400`'s own download logic padded a 107-second (214-raw-sample, see §3.2)
@@ -420,19 +439,15 @@ for msb, byte in zip(msb_bits, data_bytes):
      - The measured value drops by more than 14 points below the baseline ($\text{Base} - \text{Value} > 14$).
    - **Cross-Subframe Split Base**: If $B_1$ occurs at byte index 28 (end of subframe), $B_2$ is read from index 8 of the next subframe.
 2. **Stream Terminator**: `0xFF 0xFF` indicates the end of recorded flash data.
-3. **Delta-Nibble Extraction (2 Hz Half-Second Samples)**:
+3. **Delta-Nibble Extraction (one sample per nibble, one per second)**:
    - Each byte carries two unsigned 4-bit nibbles (`0x0..0xE`, 0..14) subtracted from `Base`:
      $$\text{Sample}_1 = \text{Base} - (B \gg 4)$$
      $$\text{Sample}_2 = \text{Base} - (B \ \& \ 0\text{x}0\text{F}) \quad (\text{skipped if nibble is } 0\text{x}0\text{F} \text{ padding})$$
    - **Ceiling Bound**: Because nibbles are unsigned subtractions, $\text{Sample}_{\max} = \text{Base} - 0 = \text{Base}$. Samples can never exceed the baseline using deltas.
    - **Zero Delta**: $B = 0\text{x}00$ represents $\Delta = 0$ ($\text{Sample} = \text{Base}$). Zero bytes are valid data and must **not** be dropped.
-   - **Two raw samples become one physiological value**: `Sample_1` and `Sample_2` are genuinely
-     independent half-second readings, not a repeated/duplicated value -- the device takes two raw
-     measurements per second, and the firmware's record (and this decoder, matching it) averages them
-     into a single 1 Hz sample: `round((Sample_1 + Sample_2) / 2)`. This is confirmed physiology/firmware
-     behaviour (psytrap, 2026-10-15), not a decode approximation. It is why the session header's raw
-     sample count (field `0x0A..0x0D` in §3.2) is exactly double the real recording duration and the
-     real 1 Hz record count.
+   - **Each nibble is one sample, one second apart** (T-075). `SpO2.exe` (`0x4e9b49`) stores
+     `Sample_1` and `Sample_2` as consecutive values and never averages them. Up to 0.4.40 `fiedle400`
+     averaged each pair into one record (T3), which halved the duration and smoothed the data.
 4. **End-of-Data Sentinel**: A subframe with `mode = 0x00`, `seq = 0`, and masks containing `0x7F` indicates an uninitialized flash segment and signals immediate termination (from the disassembly; not in any recording). The end marker that *is* recorded looks different: a read at offset == stored samples returns `ED 04 01 00 00 7B 7F 7F 7F 7F 0F 7F ...` (mode `0x04`, seq 0), whose first two data bytes reassemble to the `0xFF 0xFF` terminator (`tests/fixtures/probe.trace.json`).
 
 ---
@@ -611,7 +626,7 @@ Delete User and Delete All.
 | What | Bytes | Where in `SpO2.exe` |
 | :--- | :--- | :--- |
 | Delete All, and the automatic delete after saving | `9D 7F 7F 7F 7F 00 00 19` | `0x4af695`. Called by the Delete All button (`0x453`, `0x4a3e76`) and, after a download, when the setting `bAutoDeleteSegmentSaveData` is unset or non-zero (`0x4a48fc`-`0x4a494b`). Only in Auto mode (category `0x40`, §3.9). **Confirmed against a real device (2026-10-21, T-074):** `ED 7F` status 0, both sessions actually gone afterwards |
-| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]` (pulse series), then `9D 7F 01 …` (SpO2), then `9D 7F 03 …` if the recording has a third series (§3.2). **Tried against a real device (2026-10-21, T-074): does not erase anything.** The device answers with a plain `F0 70` ack (not `ED 7F`), and the session is unchanged afterwards -- unlike Delete All below, this byte layout is static analysis only and has never been seen on the wire | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`), sends the first. The reply handler sends the next one when the device confirms the last (`0x4b9e19`-`0x4ba07d`, T-066). `user`/`entry` as in the `0xEC` header (§3.2) |
+| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]` (pulse series), then `9D 7F 01 …` (SpO2), then `9D 7F 03 …` if the recording has a third series (§3.2). **Tried against a real device (2026-10-21, T-074): does not erase anything.** The device answers with a plain `F0 70` ack (not `ED 7F`), and the session is unchanged afterwards -- unlike Delete All below, this byte layout is static analysis only and has never been seen on the wire. The layout does match `SpO2.exe`'s send helper (`0x4bc54b`). The Delete button sends `9D 7F 02` only when the dialog's mode (`+0x100`) is 6, which `0x4b0aca` sets on the `90 06` path, but delete-all has the same gate and works without it. Most likely this firmware does not support erasing one recording (not proven: no capture of the vendor doing it) | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`), sends the first. The reply handler sends the next one when the device confirms the last (`0x4b9e19`-`0x4ba07d`, T-066). `user`/`entry` as in the `0xEC` header (§3.2) |
 | Delete User | no command for this device | `0x4af5ef` sends `A1 00`, or `0xAE` in a `7D 80` frame, on other device types, and nothing on the `0x9C`/`0x9D` path |
 | Delete for the `0x91`..`0x96` data category | `91 7F` | `0x4af547` |
 | Delete on the Manual-mode path | `A1 00 21`, then `A1 01 22`, then `A1 04 25` if the third-series flag is set, each after a `D1` reply | §3.14 G (T-072) |
@@ -657,7 +672,9 @@ Notes on the other candidates:
 - **`fiedle400 clear`** (`engine/device.py`, since 0.4.29) sends the vendor's commands: after
   listing the recordings and `9D 02`, `9D 7F 7F 7F 7F 00 00 19` for all, or for one
   `9D 7F 02 [user] [entry] ...` and then `9D 7F 01 …`, like the vendor (since 0.4.38; 0.4.29 to
-  0.4.37 sent only the first, T-066). It stops if an erase reply has a non-zero status. Then it
+  0.4.37 sent only the first, T-066). It stops if an erase reply has a non-zero status, and,
+  since 0.4.41, if the first delete-one step gets no erase reply at all (a real PO-400 answers
+  `F0 70` only, T-074); `clear -s N` then says the device did not accept it. Then it
   lists them again and reports whether they are gone. Up to 0.4.28 it
   sent `0xAF`, `0xAB`, `0xAA`, `0xAC`, none of which the vendor sends (T-037).
 - Switching the device between Auto and Manual recording mode on the device itself erases its memory

@@ -164,7 +164,7 @@ class Trace:
             fh.write("\n")
 
     def with_header_samples(self, raw_samples: int) -> "Trace":
-        """A copy whose 0xEC session headers announce ``raw_samples`` raw 2 Hz samples (to model a
+        """A copy whose 0xEC session headers announce ``raw_samples`` samples (to model a
         longer session than the recording holds; the data replies are unchanged)."""
         packed = bytes([raw_samples & 0x7F, (raw_samples >> 7) & 0x7F, (raw_samples >> 14) & 0x7F,
                         (raw_samples >> 21) & 0x7F])

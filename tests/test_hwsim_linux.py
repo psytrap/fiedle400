@@ -345,7 +345,7 @@ class TestSessionsFlow(FlowCase):
         sessions = self.engine.list_sessions()
         self.assertEqual(len(sessions), 1)
         s = sessions[0]
-        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 122, 243))
+        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 243, 243))
         self.assertEqual(s.timestamp.isoformat(), "2026-09-06T10:00:46")
 
     def test_sends_unlock_reset_then_query(self):
@@ -356,12 +356,12 @@ class TestSessionsFlow(FlowCase):
         self.engine.list_sessions()
         self.assertEqual(self.unmatched_keys(), {(0x9C, 0x80)})
 
-    def test_header_count_is_in_raw_2hz_samples_so_duration_is_about_two_minutes(self):
-        """T3 (fixed): the header says 243 raw 2 Hz values = 122 s (an odd count keeps its last
-        reading), where SessionInfo used to read the number as seconds and print 4m 03s."""
+    def test_header_count_is_seconds_so_duration_is_four_minutes(self):
+        """T-075 (reverses T3): the header says 243 samples, one per second = 4m 03s. The next
+        recording in every capture starts 13-18 s after start + count seconds."""
         s = self.engine.list_sessions()[0]
-        self.assertEqual(s.duration_seconds, 122)
-        self.assertEqual(s.duration_str, "2m 02s")
+        self.assertEqual(s.duration_seconds, 243)
+        self.assertEqual(s.duration_str, "4m 03s")
 
 
 class TestDownloadFlow(FlowCase):
@@ -371,7 +371,7 @@ class TestDownloadFlow(FlowCase):
             sent_names(self.fake),
             [UNLOCK, RESET_INDEX, QUERY_SESSIONS,                 # list
              UNLOCK, STORAGE_INIT, SPO2_PAGE0, PULSE_PAGE0,        # page 0 of both series
-                                                                   # 122 records are reached: no further page
+                                                                   # 243 records are reached: no further page
              SEGMENT_ACK],
         )
 
@@ -384,10 +384,10 @@ class TestDownloadFlow(FlowCase):
 
     def test_unanswered_page_is_retried_then_abandoned_cleanly(self):
         """A session announcing more samples than the recording holds makes the engine ask for the next
-        window (offset 244 = after 122 records), which the recording does not contain."""
+        window (offset 243 = after 243 records), which the recording does not contain."""
         self.fake.trace = trace().with_header_samples(400)
         records = self.download()
-        retries = [r for r in self.fake.sent if r.hex().startswith(Commands.session_page(1, 1, 244, 1)[:9].hex())]
+        retries = [r for r in self.fake.sent if r.hex().startswith(Commands.session_page(1, 1, 243, 1)[:9].hex())]
         self.assertEqual(len(retries), 3, "one request plus two retries")
         self.assertTrue(records)
 
@@ -408,19 +408,14 @@ class TestDownloadFlow(FlowCase):
             stream = b"".join(trace().responses((0x9D, 0x04, dtype, 1, 1, 0, 0))[0])
             frames = [stream[i:i + 30] for i in range(0, len(stream) - 29, 30)]
             series[dtype] = decode_ed_subframes(frames, is_spo2=(dtype == 1))
-        self.assertEqual(len(series[1]), 243)   # raw 2 Hz values
-        self.assertEqual(len(records), 122)     # engine halves the rate: two raw values per record
-        # Two raw values per record; an odd final value is a record of its own (243 = 121 pairs + 1).
-        def value(raw, i):
-            return raw[2 * i + 1] if 2 * i + 1 < len(raw) else raw[2 * i]
-        for i, rec in enumerate(records):
-            self.assertEqual(rec["spo2"], round((series[1][2 * i] + value(series[1], i)) / 2.0), i)
-            self.assertEqual(rec["heart_rate"], round((series[2][2 * i] + value(series[2], i)) / 2.0), i)
+        self.assertEqual(len(series[1]), 243)   # one value per second, as the header says
+        self.assertEqual([r["spo2"] for r in records], series[1])
+        self.assertEqual([r["heart_rate"] for r in records], series[2])
 
     def test_timestamps_follow_the_session_start_at_one_per_second(self):
         records = self.download()
         self.assertEqual(records[0]["timestamp"], "2026-09-06T10:00:46")
-        self.assertEqual(records[-1]["timestamp"], "2026-09-06T10:02:47")
+        self.assertEqual(records[-1]["timestamp"], "2026-09-06T10:04:48")
 
     def test_good_samples_are_not_blanked_at_page_end(self):
         """T1 (fixed): the last frame of a page has a non-zero MSB mask in byte 7, which the detector used
@@ -433,12 +428,12 @@ class TestDownloadFlow(FlowCase):
         with tempfile.TemporaryDirectory() as d:
             csv_path = export.export_records(records, output_filename=os.path.join(d, "r.csv"))
             with open(csv_path, newline="") as fh:
-                self.assertEqual(len(list(csv.DictReader(fh))), 122)
+                self.assertEqual(len(list(csv.DictReader(fh))), 243)
             spo2_path = export.export_records(records, output_filename=os.path.join(d, "r.spo2"))
             with open(spo2_path, "rb") as fh:
                 blob = fh.read()
-        self.assertEqual(struct.unpack_from("<I", blob, 0x0438)[0], 122)
-        self.assertEqual(len(blob), export.SPO2_HEADER_SIZE + 122 * 2)
+        self.assertEqual(struct.unpack_from("<I", blob, 0x0438)[0], 243)
+        self.assertEqual(len(blob), export.SPO2_HEADER_SIZE + 243 * 2)
 
 
 class TestInfoFlow(FlowCase):
@@ -480,7 +475,7 @@ class TestFaults(unittest.TestCase):
         rc, out, err, written, rows, fake = self.run_download()
         self.assertEqual(rc, 0)
         self.assertTrue(written)
-        self.assertEqual(rows, 122)
+        self.assertEqual(rows, 243)
 
     def test_timeout_flag_caps_the_download(self):
         """-t/--timeout used to be ignored for real sessions (record_count won over duration)."""
@@ -507,7 +502,7 @@ class TestFaults(unittest.TestCase):
             return None if (key[:2] == (0x9D, 0x04) and i == 2) else rep
         rc, out, err, written, rows, fake = self.run_download(fault=drop_last_report_of_pages)
         self.assertEqual(rc, 0)
-        self.assertLess(rows, 122)
+        self.assertLess(rows, 243)
 
     def test_device_that_never_answers_is_not_reported_as_a_successful_download(self):
         """T2 (fixed): with every reply dropped, `download` used to invent "Session #1 / 60 records",
@@ -584,7 +579,7 @@ class TestRecorder(unittest.TestCase):
             engine = SerialDeviceEngine(dev)
             again = engine.download_session(engine.list_sessions()[0])
             dev.close()
-        self.assertEqual(len(again), 122)
+        self.assertEqual(len(again), 243)
 
     def test_recorder_refuses_destructive_commands(self):
         import record_exchange

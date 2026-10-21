@@ -595,6 +595,9 @@ def command_clear(args):
         dev.close()
 
     _report_erase(ok, target_str)
+    if not ok and engine.single_erase_unsupported is True:
+        print("   The device did not accept erasing a single recording (T-074). "
+              "'fiedle400 clear' without -s erases all of them.")
     return 0 if ok else 1
 
 

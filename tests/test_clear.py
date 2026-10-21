@@ -50,24 +50,36 @@ class TestClear(base.FlowCase):
         self.assertEqual(keys[i - 1], (0x9D, 2))
         self.assertFalse(ok)  # the simulator did not erase, and clear noticed
 
-    def test_clear_one_deletes_pulse_then_spo2_of_that_user_and_entry(self):
-        self.engine.clear_memory(1)
-        self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1, 2), Commands.delete_entry(1, 1, 1)])
-
-    def test_clear_one_stops_when_the_device_reports_a_failed_erase(self):
-        frame = [0xED, 0x7F, 0x02, 1, 1, 0x05]
-        failed = bytes(frame + [sum(frame) & 0x7F] + [0] * 57)
+    def _erase_reply_after_first_delete(self, status):
+        frame = [0xED, 0x7F, 0x02, 1, 1, status]
+        reply = bytes(frame + [sum(frame) & 0x7F] + [0] * 57)
         real_read = self.engine.dev.read_report
         sent = []
 
         def read_report(n):
             if self.fake.destructive and not sent:
                 sent.append(1)
-                return failed
+                return reply
             return real_read(n)
         self.engine.dev.read_report = read_report
+
+    def test_clear_one_deletes_pulse_then_spo2_of_that_user_and_entry(self):
+        self._erase_reply_after_first_delete(0)
+        self.engine.clear_memory(1)
+        self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1, 2), Commands.delete_entry(1, 1, 1)])
+        self.assertFalse(self.engine.single_erase_unsupported)
+
+    def test_clear_one_stops_when_the_device_reports_a_failed_erase(self):
+        self._erase_reply_after_first_delete(0x05)
         self.engine.clear_memory(1)
         self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1, 2)])
+
+    def test_clear_one_stops_and_says_so_when_the_device_does_not_answer(self):
+        # T-074: a real PO-400 answers 9D 7F 02 with the generic F0 70 ack only and erases nothing.
+        ok = self.engine.clear_memory(1)
+        self.assertEqual(self.fake.destructive, [Commands.delete_entry(1, 1, 2)])
+        self.assertTrue(self.engine.single_erase_unsupported)
+        self.assertFalse(ok)
 
     def test_nothing_is_sent_for_a_session_that_does_not_exist(self):
         self.engine.clear_memory(7)

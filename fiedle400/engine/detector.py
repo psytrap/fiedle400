@@ -188,38 +188,33 @@ class SerialPacketDetector:
                             if cls.base_val is None:
                                 cls.base_val = 98 if is_spo2_block else 60
 
+                            # One sample per nibble, as SpO2.exe's decoder (0x4e9b49) does: base minus
+                            # the high nibble, then base minus the low nibble unless it is the 0xF
+                            # filler of a frame's last byte. One sample is one second (T-075).
                             h_nib = (b >> 4) & 0x0F
                             l_nib = b & 0x0F
-                            v1 = cls.base_val - h_nib
-                            v2 = (cls.base_val - l_nib) if (l_nib != 0x0F) else v1
+                            values = [cls.base_val - h_nib] + ([cls.base_val - l_nib] if l_nib != 0x0F else [])
 
-                            spo2_val = None
-                            hr_val = None
                             # Out-of-range readings are the stream's finger-out marker (SpO2 0x7F = 127,
                             # pulse 0xFF = 255; analysis/bum400_20260906_100516.md section 4).
                             limit = 100 if is_spo2_block else 254
-                            valid = 0 < v1 <= limit and 0 < v2 <= limit
-                            if valid:
-                                if is_spo2_block:
-                                    spo2_val = round((v1 + v2) / 2.0)
-                                else:
-                                    hr_val = round((v1 + v2) / 2.0)
-
-                            events.append(DecodedPacket(
-                                packet_type="STORED_BLOCK",
-                                timestamp=base_timestamp + timedelta(seconds=len(events)),
-                                spo2=spo2_val,
-                                heart_rate=hr_val,
-                                ppg_wave=0,
-                                status_flags=flags,
-                                status_str="ok" if valid else "probe-out",
-                                raw_payload=bytes(chunk),
-                                block_id=block_id,
-                                seq=seq,
-                                sequence_gap=sequence_gap,
-                                expected_seq=expected_seq,
-                                invalid_sample=not valid,
-                            ))
+                            for v in values:
+                                valid = 0 < v <= limit
+                                events.append(DecodedPacket(
+                                    packet_type="STORED_BLOCK",
+                                    timestamp=base_timestamp + timedelta(seconds=len(events)),
+                                    spo2=v if valid and is_spo2_block else None,
+                                    heart_rate=v if valid and not is_spo2_block else None,
+                                    ppg_wave=0,
+                                    status_flags=flags,
+                                    status_str="ok" if valid else "probe-out",
+                                    raw_payload=bytes(chunk),
+                                    block_id=block_id,
+                                    seq=seq,
+                                    sequence_gap=sequence_gap,
+                                    expected_seq=expected_seq,
+                                    invalid_sample=not valid,
+                                ))
                             p_idx += 1
                     else:
                         # Fallback for single-sample header / legacy sub-chunks

@@ -70,21 +70,21 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual(len(zero_sessions), 0)
 
     def test_parsers_ec_session_index(self):
-        # 0xEC report for Session #2: header count 204 = raw 2 Hz samples = 102 s (1m 42s)
+        # 0xEC report for Session #2: header count 204 = 204 samples, one per second (3m 24s; T-075)
         report_ec = bytes([0xEC, 0x00, 0x01, 0x02, 26, 9, 4, 21, 46, 47, 76, 1, 0, 0, 117, 115, 101, 114, 0, 0, 0] + [0]*43)
         sessions = Parsers.parse_session_index(report_ec)
         self.assertEqual(len(sessions), 1)
         self.assertEqual(sessions[0].session_id, 2)
         self.assertEqual(sessions[0].user_id, 1)
-        self.assertEqual(sessions[0].duration_sec, 102)
-        self.assertEqual(sessions[0].duration_str, "1m 42s")
-        self.assertEqual(sessions[0].record_count, 102)
+        self.assertEqual(sessions[0].duration_sec, 204)
+        self.assertEqual(sessions[0].duration_str, "3m 24s")
+        self.assertEqual(sessions[0].record_count, 204)
         self.assertEqual(sessions[0].raw_samples, 204)
 
-    def test_parsers_ec_odd_sample_count_keeps_its_last_reading(self):
-        report_ec = bytes([0xEC, 0x00, 0x01, 0x01, 26, 9, 4, 21, 46, 47, 115, 1, 0, 0] + [0]*50)   # 243 raw
+    def test_parsers_ec_odd_sample_count_is_seconds_too(self):
+        report_ec = bytes([0xEC, 0x00, 0x01, 0x01, 26, 9, 4, 21, 46, 47, 115, 1, 0, 0] + [0]*50)   # 243 samples
         (s,) = Parsers.parse_session_index(report_ec)
-        self.assertEqual((s.raw_samples, s.record_count, s.duration_sec), (243, 122, 122))
+        self.assertEqual((s.raw_samples, s.record_count, s.duration_sec), (243, 243, 243))
 
     def test_parsers_hid_chunks(self):
         chunk0 = [0xF0, 0x00, 0x10, 85, 0, 0]

@@ -56,14 +56,14 @@ def decode_ed_subframes(
     is_spo2: bool = True,
     state: Optional[Dict[str, Any]] = None,
 ) -> List[Optional[int]]:
-    """Decodes 2 Hz delta-compressed samples from a sequence of 30-byte 0xED 0x04 subframes.
+    """Decodes delta-compressed samples (one per second, T-075) from a sequence of 30-byte 0xED 0x04 subframes.
 
     Reversed from SpO2.exe (0x004c4fa7) and verified on PO-400 hardware:
     - Restores Bit 7 for bytes 8..28 via m0 (5), m1 (6), m2 (7).
     - Detects 0xF_ 0xF_ dynamic base value escape: ((B1 & 0x0F) << 4) | (B2 & 0x0F).
     - Supports cross-subframe split-base (when B1 is at byte index 28).
     - Stops on 0xFF 0xFF terminator ("遇到无效包，结束").
-    - Decompresses two 2 Hz half-second delta samples per byte:
+    - Decompresses two samples per byte, one second apart (SpO2.exe 0x4e9b49):
         Sample 1 = BaseValue - (B >> 4)
         Sample 2 = BaseValue - (B & 0x0F)  (skipped if Low-Nibble == 0x0F padding)
     - Validates physiological ranges:
