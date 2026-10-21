@@ -1165,7 +1165,10 @@ def main(argv: Optional[List[str]] = None):
 
     args = parser.parse_args(argv)
     handler = args.func if args.command else run_interactive_wizard
-    sys.exit(run_guarded(handler, args))
+    exit_code = run_guarded(handler, args)
+    if exit_code != 0:
+        console.pause_before_exit_if_owned()
+    sys.exit(exit_code)
 
 
 def run_guarded(handler, args) -> int:

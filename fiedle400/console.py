@@ -14,6 +14,7 @@ must never stop a command from running.
 
 import ctypes
 import sys
+import time
 from ctypes import wintypes
 
 DEFAULT_COLUMNS = 120
@@ -123,3 +124,36 @@ def enlarge_owned_console(
         return bool(kernel32.SetConsoleWindowInfo(handle, True, ctypes.byref(rect)))
     except Exception:
         return False  # Cosmetic only: never let sizing break a command
+
+
+def pause_before_exit_if_owned(
+    seconds: int = 10,
+    kernel32=None,
+    platform: str = None,
+    frozen: bool = None,
+    sleep=time.sleep,
+) -> bool:
+    """Keep a console fiedle400 owns open for a few seconds after an error exit.
+
+    Double-clicking fiedle400.exe (or its Start Menu shortcut) gives it a fresh
+    console that Windows closes the instant the process exits, so an error
+    message printed right before exit is never seen. Pausing here only when
+    the console is ours (never one shared with cmd.exe/PowerShell, which the
+    user controls) gives them a chance to read it first. Returns True when it
+    paused. `kernel32`, `platform`, `frozen` and `sleep` exist so tests can
+    drive it off Windows without a real delay.
+    """
+    platform = sys.platform if platform is None else platform
+    if platform != "win32":
+        return False
+    frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
+    try:
+        if kernel32 is None:
+            kernel32 = _load_kernel32()
+        if not console_is_owned(kernel32, frozen):
+            return False
+    except Exception:
+        return False  # Same rule as enlarge_owned_console: never let this break a command
+    print(f"\nClosing in {seconds} seconds...", file=sys.stderr)
+    sleep(seconds)
+    return True

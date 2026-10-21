@@ -83,7 +83,7 @@ Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DemoSpo2}"; DestDir: "{userdocs}\PO-400"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
-Name: "{group}\PO-400 Oximeter"; Filename: "{app}\fiedle400.exe"; WorkingDir: "{userdocs}\PO-400"
+Name: "{group}\fiedle400"; Filename: "{app}\fiedle400.exe"; WorkingDir: "{userdocs}\PO-400"
 Name: "{group}\View Demo Recording"; Filename: "{app}\fiedle400.exe"; \
     Parameters: "view ""{userdocs}\PO-400\demo.SpO2"""; WorkingDir: "{userdocs}\PO-400"
 Name: "{group}\Uninstall PO-400"; Filename: "{uninstallexe}"

@@ -50,6 +50,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-055](done/2026-W43/T-055-demo-recording-in-windows-installer.md) | Ship a synthetic demo recording in the Windows installer | Local |
 | [T-062](done/2026-W43/T-062-windows-test-failures-viewer-tmp-dir.md) | `TestViewerTmpDir` fails on real Windows -- tests mock the wrong thing | Local |
 | [T-063](done/2026-W43/T-063-pyproject-hid-dependency-wrong-package.md) | `pyproject.toml` declares the wrong `hid`-family package | Local |
+| [T-064](done/2026-W43/T-064-windows-installer-ux-fixes-from-manual-test.md) | Windows installer UX fixes found during manual install testing | Local |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
