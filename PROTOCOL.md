@@ -864,7 +864,8 @@ above against more than one data point:
 
 #### G. Erase (`0xA1` -> `0xD1`) -- static analysis only (T-072)
 
-`SpO2.exe` has an erase for this path. It has never been captured, and `fiedle400` never sends it.
+`SpO2.exe` has an erase for this path. It has never been captured on the wire; `fiedle400` sends
+steps 1 and 2 (`clear`, 0.4.40+) on SpO2.exe's own static-analysis byte layout, unconfirmed.
 
 | Step | Host | Device reply |
 | :--- | :--- | :--- |
@@ -886,8 +887,13 @@ above against more than one data point:
 - **Not seen in the capture:** `bum400_20261015_194301.pcap` has no `A1` (and no `9F 1F`), so
   SpO2 Assistant erased nothing there.
 - **Not confirmed:** that the device erases on `A1 00`, and what steps 2 and 3 add.
-- **`fiedle400 clear`** skips Manual recordings: it sends nothing, reports that the recording is
-  still listed, and exits 1.
+- **`fiedle400 clear`** sends step 1 (`A1 00`), then step 2 (`A1 01`) once the device confirms the
+  first, exactly as it does for the Auto-mode `9D 7F` path (§3.13); it never sends step 3 (`A1
+  04`), since Manual mode has no known way to tell whether the third-series flag applies. Like
+  the Auto-mode path, it verifies by re-listing afterwards rather than trusting the `D1` reply
+  alone, and reports failure (exit 1) if the recording is still listed -- this has not yet been
+  tried against a real device with an actual Manual-mode recording (`engine/device.py`
+  `_clear_manual`, T-072).
 
 ### 3.15 Reverse-engineering `SpO2.exe` -- what works, what does not
 

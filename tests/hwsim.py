@@ -64,11 +64,12 @@ def scrub_env():
 REPORT_LEN = 64
 
 # Opcodes that might change stored data. The vendor's real deletes are 0x9D with mode 0x7F
-# (handled in command_key; PROTOCOL.md 3.13, T-037), which `clear` sends since 0.4.29; 0xAA,
-# 0x91..0x96 and the old clear's 0xAB/0xAC stay here as untested candidates. The simulator models none of them: an
+# (handled in command_key; PROTOCOL.md 3.13, T-037) for Auto-mode recordings, and 0xA1 for the
+# Manual-mode one (PROTOCOL.md 3.14 G, T-072); `clear` sends both. 0xAA, 0x91..0x96 and the old
+# clear's 0xAB/0xAC stay here as untested candidates. The simulator models none of them: an
 # attempt is recorded in FakeOximeter.destructive and gets no reply. 0x94 is also the
 # read-only sector query (`94 14`), so it only counts as destructive in any other form.
-DESTRUCTIVE_OPCODES = frozenset([0x91, 0x92, 0x93, 0x95, 0x96, 0xAA, 0xAB, 0xAC])
+DESTRUCTIVE_OPCODES = frozenset([0x91, 0x92, 0x93, 0x95, 0x96, 0xAA, 0xAB, 0xAC, 0xA1])
 
 # How many bytes after the opcode identify a command (checksum bytes excluded).
 # Anything else is "unknown" and is never answered.

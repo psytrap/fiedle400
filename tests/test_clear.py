@@ -9,8 +9,10 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hwsim import command_key  # noqa: E402
 import test_hwsim_linux as base  # noqa: E402
+import test_manual_mode as manual_base  # noqa: E402
 
 from fiedle400.protocol import Commands  # noqa: E402
+from fiedle400.protocol import manual  # noqa: E402
 
 
 class TestBytes(unittest.TestCase):
@@ -74,6 +76,31 @@ class TestClear(base.FlowCase):
     def test_no_old_candidate_opcodes_are_sent(self):
         self.engine.clear_memory(0)
         self.assertFalse({0xAA, 0xAB, 0xAC, 0xAF, 0x91, 0x92, 0x93, 0x95, 0x96} & set(self.fake.opcodes_sent()))
+
+
+class TestClearManual(manual_base.ManualFlow):
+    """A Manual-mode recording is erased with `A1`, not `9D 7F` (PROTOCOL.md 3.14 G, T-072).
+
+    Non-strict: `clear_memory` re-asks the header afterwards to verify, and the fixture only
+    recorded one `0xA0` exchange; non-strict repeats that last recorded reply, as the device
+    itself would for an unchanged recording."""
+
+    def make_fake(self):
+        return manual_base.FakeOximeter(manual_base.trace())
+
+    def test_clear_sends_a1_00_then_a1_01_and_no_9d(self):
+        ok = self.engine.clear_memory(1)
+        self.assertEqual(self.fake.destructive, [manual.delete_step(0), manual.delete_step(1)])
+        self.assertFalse(ok)  # the simulator did not erase, and clear noticed
+        self.assertNotIn(0x9D, self.fake.opcodes_sent())
+
+    def test_clear_all_also_takes_the_manual_path(self):
+        self.engine.clear_memory(0)
+        self.assertEqual(self.fake.destructive, [manual.delete_step(0), manual.delete_step(1)])
+
+    def test_a1_04_is_never_sent(self):
+        self.engine.clear_memory(1)
+        self.assertEqual(self.fake.destructive, [manual.delete_step(0), manual.delete_step(1)])
 
 
 if __name__ == "__main__":

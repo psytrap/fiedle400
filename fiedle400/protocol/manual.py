@@ -16,6 +16,8 @@ PULSE_DATA = 0xD2
 BLOCK_ACK = 0xD8
 SPO2_REQUEST = 0xA3
 PULSE_REQUEST = 0xA2
+DELETE_REQUEST = 0xA1
+DELETE_REPLY = 0xD1
 
 SUBFRAME_LEN = 20
 SAMPLES_PER_SUBFRAME = 27   # 1 base value + 13 bytes of two deltas each
@@ -23,7 +25,8 @@ NO_SPO2 = 0x7F              # invalid / no finger, as SpO2.exe stores it
 NO_PULSE = 0xFF
 
 # Frame lengths of everything that can share a report with the manual-mode replies.
-_FRAME_LEN = {HEADER: 14, SPO2_DATA: SUBFRAME_LEN, PULSE_DATA: SUBFRAME_LEN, BLOCK_ACK: 4, 0xEB: 6, 0xF0: 2}
+_FRAME_LEN = {HEADER: 14, SPO2_DATA: SUBFRAME_LEN, PULSE_DATA: SUBFRAME_LEN, BLOCK_ACK: 4,
+              DELETE_REPLY: 4, 0xEB: 6, 0xF0: 2}
 
 
 def _report(*body: int) -> bytes:
@@ -52,6 +55,24 @@ def block_ack(is_spo2: bool) -> bytes:
     return _report(0xA7, 0x01 if is_spo2 else 0x00)
 
 
+def delete_step(step: int) -> bytes:
+    """`A1 00` / `A1 01` / `A1 04`: SpO2.exe's Manual-mode erase (PROTOCOL.md 3.14 G, T-072).
+
+    Static analysis only -- never seen on the wire. Each step is answered by `D1 [step] [status]`;
+    SpO2.exe sends the next step after a status-0 reply, and `A1 04` only when a third-series flag
+    is set that has no known Manual-mode equivalent (so `clear_memory` never sends it, PROTOCOL.md
+    3.14 G "Not confirmed").
+    """
+    return _report(DELETE_REQUEST, step)
+
+
+def parse_delete_reply(frame: bytes) -> Optional[Tuple[int, int]]:
+    """`D1 [step] [status] [chk]` -> `(step, status)`; status 0 means that step is done."""
+    if len(frame) < 4 or frame[0] != DELETE_REPLY or not _checksum_ok(frame[:4]):
+        return None
+    return frame[1], frame[2]
+
+
 def _checksum_ok(frame: bytes) -> bool:
     return (sum(frame[:-1]) & 0x7F) == frame[-1]
 
@@ -70,7 +91,7 @@ def frames(reports: Iterable[bytes]) -> List[bytes]:
             i += 1
             continue
         frame = stream[i:i + n]
-        if len(frame) == n and op in (HEADER, SPO2_DATA, PULSE_DATA, BLOCK_ACK) and _checksum_ok(frame):
+        if len(frame) == n and op in (HEADER, SPO2_DATA, PULSE_DATA, BLOCK_ACK, DELETE_REPLY) and _checksum_ok(frame):
             out.append(frame)
         i += n
     return out

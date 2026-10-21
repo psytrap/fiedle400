@@ -8,6 +8,16 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.40 (2026-10-21)
+
+- **T-072** (still deferred): `clear` now sends `A1 00` then `A1 01` for a Manual-mode
+  recording (SpO2.exe's own, unconfirmed static-analysis byte layout), never `A1 04` -- Manual
+  mode has no known way to read the third-series flag. Verified by re-listing afterwards, same
+  as the Auto-mode `9D 7F` path; not yet tried against a real device holding a Manual-mode
+  recording. `fiedle400/protocol/manual.py` (`delete_step`, `parse_delete_reply`),
+  `fiedle400/engine/device.py` (`_clear_manual`, `_manual_delete_step`). Tests:
+  `tests/test_clear.py::TestClearManual`.
+
 ## 0.4.39 (2026-10-21)
 
 - **T-072** (still deferred): SpO2.exe erases a Manual-mode recording with `A1 00`, then `A1 01`

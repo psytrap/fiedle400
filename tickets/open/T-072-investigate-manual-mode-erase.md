@@ -46,11 +46,12 @@ actual behavior first.
 - [x] Determine whether `9D 7F` applies to Manual mode, and if so, what
       `user`/`entry` values (if any) actually matter (static analysis: it
       does not; the vendor uses `A1`, see Execution Notes)
-- [ ] If `fiedle400 clear` on a Manual-mode recording is currently wrong
+- [x] If `fiedle400 clear` on a Manual-mode recording is currently wrong
       or a no-op, fix it or make it refuse clearly instead of silently
-      claiming success
+      claiming success (now sends `A1 00`/`A1 01`; verifies by re-listing,
+      same as the Auto-mode path -- see Execution Notes)
 - [x] `PROTOCOL.md` updated with the finding (static analysis, §3.14 G)
-- [ ] Tests pass
+- [x] Tests pass (411/411, `tests/test_clear.py::TestClearManual`)
 
 ## Execution Notes
 
@@ -68,4 +69,24 @@ actual behavior first.
   (`not s.manual`), so `clear -s 1` on a Manual recording sends no `9D 7F` at all. It reports
   that the recording is still listed and exits 1, rather than claiming success.
 - Still open: whether the device erases on `A1 00` (capture SpO2 Assistant's Delete on a Manual
-  recording), and whether `fiedle400 clear` should send it.
+  recording).
+
+**Implementation (local, 2026-10-21, 0.4.40).** `clear_memory()` now branches on `s.manual`
+instead of filtering it out: a Manual-mode target goes to the new `_clear_manual()`, which sends
+`A1 00` then, once the device confirms the first (status 0 or no reply, same tolerance as the
+Auto-mode path's `_erase_status()`), `A1 01` -- never `A1 04`, since Manual mode has no known way
+to read the third-series flag (`manual.delete_step`, `manual.parse_delete_reply`,
+`fiedle400/protocol/manual.py`; `_clear_manual`/`_manual_delete_step`,
+`fiedle400/engine/device.py`). Like the existing Auto-mode path, it does not trust the `D1` reply
+alone: it re-lists afterwards and only reports success if the Manual recording is actually gone.
+Added `tests/test_clear.py::TestClearManual` (reusing the Manual-mode fixture/simulator from
+T-042) confirming `A1 00`/`A1 01` are sent, `9D` never is, `A1 04` never is, and `clear` correctly
+reports failure against the simulator (which does not model `A1` any more than it ever modeled
+`9D 7F` -- see `tests/hwsim.py` `DESTRUCTIVE_OPCODES`). 411/411 tests pass.
+
+**Still open, deliberately not attempted this round:** this has not been run against a real
+device holding a Manual-mode recording. The byte layout is SpO2.exe static analysis only (patch
+0033), never seen on the wire -- first real-hardware attempt should be treated with the same care
+as any other untested destructive command, and capturing the real SpO2 Assistant's own Delete
+against a Manual recording (criterion 1, still open) would be the way to actually confirm this
+before relying on it.

@@ -732,9 +732,14 @@ class SerialDeviceEngine:
 
         Like the vendor tool, it lists the recordings and opens the storage transfer (`9D 02`)
         first. Afterwards it lists them again: returns True only if what should be gone is gone.
-        The vendor deletes only Auto-mode recordings this way; a Manual-mode recording stays.
+        A Manual-mode recording (there is at most one, T-042) is erased separately, with the
+        unconfirmed `A1`/`D1` sequence from PROTOCOL.md 3.14 G (T-072).
         """
         before = self.list_sessions(debug=debug)
+        manual_target = next((s for s in before if s.manual and (session_id <= 0 or s.session_id == session_id)), None)
+        if manual_target is not None:
+            return self._clear_manual(debug=debug)
+
         targets = [s for s in before if not s.manual and (session_id <= 0 or s.session_id == session_id)]
         if not targets:
             if int(debug) >= 1:
@@ -769,6 +774,37 @@ class SerialDeviceEngine:
             # Entries are renumbered after a delete; compare start times, not numbers.
             left = [s for s in after if not s.manual and s.timestamp == targets[0].timestamp]
         return not left
+
+    def _clear_manual(self, debug: Union[bool, int] = 0) -> bool:
+        """Erases the Manual-mode recording with SpO2.exe's own, unconfirmed `A1`/`D1` sequence
+        (PROTOCOL.md 3.14 G, T-072): `A1 00`, then `A1 01` once the device confirms the first.
+        `A1 04` (third series) is not sent -- Manual mode has no known way to tell whether it
+        applies. Verified the same way as the Auto-mode path: by listing again afterwards.
+        """
+        for step in (0, 1):
+            desc = f"Manual delete step 0x{step:02X} (0xA1)"
+            if int(debug) >= 1:
+                print(f"[DEBUG OUT] {desc}: {manual.delete_step(step)[:16].hex()}")
+            status = self._manual_delete_step(step, debug=debug)
+            if int(debug) >= 1:
+                print(f"[DEBUG] Erase reply status: {'none' if status is None else status}")
+            if status not in (None, 0):
+                break
+
+        after = self.list_sessions(debug=debug)
+        return not any(s.manual for s in after)
+
+    def _manual_delete_step(self, step: int, debug: Union[bool, int] = 0) -> Optional[int]:
+        """Sends one Manual-mode erase step (`A1`) and returns its `D1` reply's status byte
+        (0 = done), or None if no reply came."""
+        while self.dev.read_report(64): pass
+        self._write_report(manual.delete_step(step), f"Manual delete step 0x{step:02X} (0xA1)")
+        got = self._manual_frames(lambda fr: any(f[0] == manual.DELETE_REPLY for f in fr), timeout=1.0, debug=debug)
+        reply = next((f for f in got if f[0] == manual.DELETE_REPLY), None)
+        if reply is None:
+            return None
+        parsed = manual.parse_delete_reply(reply)
+        return parsed[1] if parsed else None
 
     def _erase_status(self) -> Optional[int]:
         """Reads what the device sent after an erase command and returns the status byte of its

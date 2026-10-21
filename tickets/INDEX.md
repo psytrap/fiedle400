@@ -34,6 +34,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-070](open/T-070-fresh-spo2-assistant-desat-rerun.md) | Fresh real SpO2 Assistant run of the desaturation-event probe | Local | Open (deferred) |
 | [T-071](open/T-071-manual-mode-remaining-byte-mysteries.md) | Manual-mode subframe bytes 3..4, `D0` bytes 8..9, and `D0` kinds 1/4 | Either | Open (deferred) |
 | [T-072](open/T-072-investigate-manual-mode-erase.md) | Investigate `fiedle400 clear` against a Manual-mode recording | Either | Open (deferred) |
+| [T-073](open/T-073-validate-manual-erase-against-real-device.md) | Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware | Local | Open (deferred) |
 | [T-061](open/T-061-po250-po300-support-via-spo2-analysis.md) | PO-250 / PO-300 support via `.spo2` analysis | Either | Open (deferred) |
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
 | [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open (deferred) |
