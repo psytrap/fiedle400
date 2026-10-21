@@ -1,6 +1,8 @@
 """Mock tests for Windows console sizing (fiedle400.console), runnable on any OS."""
 
+import os
 import unittest
+from unittest import mock
 
 from fiedle400 import console
 
@@ -97,42 +99,25 @@ class TestEnlargeOwnedConsole(unittest.TestCase):
 
 
 class TestPauseBeforeExitIfOwned(unittest.TestCase):
-    def test_noop_off_windows(self):
-        k = FakeKernel32()
-        slept = []
-        self.assertFalse(console.pause_before_exit_if_owned(kernel32=k, platform="linux", sleep=slept.append))
-        self.assertEqual(slept, [])
+    def test_skipped_during_the_test_suite(self):
+        # tests/__init__.py sets RUNNING_FIEDLE400_TESTS, exactly like a real test
+        # run; cli.main() calls this with no sleep override, so this must
+        # not block the suite for real -- see the function's docstring.
+        self.assertFalse(console.pause_before_exit_if_owned())
 
-    def test_owned_console_pauses(self):
-        k = FakeKernel32(processes=1)
+    def test_pauses_on_any_platform_outside_the_test_suite(self):
         slept = []
-        self.assertTrue(console.pause_before_exit_if_owned(kernel32=k, platform="win32", frozen=False, sleep=slept.append))
+        with mock.patch.dict(os.environ, {}, clear=False):
+            del os.environ["RUNNING_FIEDLE400_TESTS"]
+            self.assertTrue(console.pause_before_exit_if_owned(sleep=slept.append))
         self.assertEqual(slept, [10])
 
     def test_custom_duration(self):
-        k = FakeKernel32(processes=1)
         slept = []
-        self.assertTrue(console.pause_before_exit_if_owned(5, kernel32=k, platform="win32", frozen=False, sleep=slept.append))
+        with mock.patch.dict(os.environ, {}, clear=False):
+            del os.environ["RUNNING_FIEDLE400_TESTS"]
+            self.assertTrue(console.pause_before_exit_if_owned(5, sleep=slept.append))
         self.assertEqual(slept, [5])
-
-    def test_shared_console_is_left_alone(self):
-        k = FakeKernel32(processes=3)
-        slept = []
-        self.assertFalse(console.pause_before_exit_if_owned(kernel32=k, platform="win32", frozen=True, sleep=slept.append))
-        self.assertEqual(slept, [])
-
-    def test_frozen_onefile_counts_bootloader_as_owner(self):
-        k = FakeKernel32(processes=2)
-        slept = []
-        self.assertTrue(console.pause_before_exit_if_owned(kernel32=k, platform="win32", frozen=True, sleep=slept.append))
-        self.assertEqual(slept, [10])
-
-    def test_api_failure_is_silent(self):
-        k = FakeKernel32()
-        k.GetConsoleProcessList = lambda *a: (_ for _ in ()).throw(OSError("no console"))
-        slept = []
-        self.assertFalse(console.pause_before_exit_if_owned(kernel32=k, platform="win32", frozen=False, sleep=slept.append))
-        self.assertEqual(slept, [])
 
 
 if __name__ == "__main__":

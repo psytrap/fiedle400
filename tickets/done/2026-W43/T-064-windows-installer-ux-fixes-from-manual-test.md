@@ -6,7 +6,7 @@
 - **Scope & Relevant Files:**
   - `fiedle400/console.py`, `fiedle400/cli.py` (exit path, `_open_in_viewer`)
   - `fiedle400/config.py` (`default_workdir`)
-  - `tests/test_console.py`, `tests/test_cli_graceful.py`
+  - `tests/__init__.py`, `tests/test_console.py`, `tests/test_cli_graceful.py`
   - `packaging/windows/fiedle400.iss`
   - `PACKAGING.md`
 
@@ -54,11 +54,13 @@ release flow -- just to get a `fiedle400-setup.exe` to test with):
 
 ## Criteria
 
-- [x] On any non-zero exit, if the console is one `fiedle400` owns
-      (never one shared with `cmd.exe`/PowerShell), print a short notice
-      and pause ~10s before the process actually exits
-- [x] Pause logic is off-Windows/shared-console/API-failure safe, same
-      rules as `enlarge_owned_console`, and testable without a real delay
+- [x] On any non-zero exit, print a short notice and pause ~10s before the
+      process actually exits -- on every platform, not only when Windows
+      reports an owned console (psytrap, 2026-10-21; supersedes the
+      narrower Windows-owned-console-only scope this criterion started
+      with)
+- [x] Pause logic never blocks the automated test suite for real, and is
+      testable without a real delay
 - [x] All remaining "PO-400" mentions in the installer renamed to
       "fiedle400": app name/version string, uninstall display name, group
       folder, uninstall shortcut, Explorer context-menu text (psytrap
@@ -131,5 +133,37 @@ superseding that narrower scope. Renamed all of them to "fiedle400" in
 `AppId` (GUID, must stay stable across versions) and the historical
 rename-comment prose referring to the device by its real name unchanged.
 
-Not yet re-verified against a freshly rebuilt installer on the real
-Windows machine -- rebuilding now. Needs transfer once ready to re-check.
+Rebuilt (0.4.36) installer transferred and tested by psytrap: installer
+naming confirmed clean ("looks good finally"). Verified `info` against the
+real device post-install (exit 0, correct hardware readout) and that
+`Documents\fiedle400` holds the expected recordings/exports.
+
+psytrap then asked whether the error-exit pause applies on Linux too --
+it didn't (Windows-only, by original design, since only Windows destroys
+an owned console on exit) -- and, after confirming that, asked for it on
+every platform regardless, including scripted/CI invocations. Rewrote
+`pause_before_exit_if_owned()`: dropped the Windows/owned-console check
+entirely (removed `kernel32`/`platform`/`frozen` params, `console_is_owned`
+is no longer called from here), so it now always prints the notice and
+sleeps `seconds` before `cli.main()` exits non-zero, on any platform.
+
+This broke the test suite badly on the first attempt: many tests call
+`cli.main()` directly in-process and exercise error exits, so the suite
+went from ~8s to over 2 minutes (409 tests each hitting a real
+`time.sleep(10)`). First fix attempt detected "the test suite itself is
+running" via `"unittest" in sys.modules` plus `sleep is time.sleep`
+identity, which mostly worked but missed four tests in
+`test_recording.py::TestViewCommand` that mock `fiedle400.cli.time.sleep`
+for an unrelated reason (silencing a different internal sleep) --
+`console.py`'s own default argument had already captured the *original*
+`time.sleep` object before that patch ran, so the identity check saw a
+mismatch and let the real sleep through anyway (4 x 10s, exactly the
+remaining gap). Replaced the detection with an explicit
+`RUNNING_FIEDLE400_TESTS` env var set unconditionally in `tests/__init__.py`
+(deliberately not prefixed `FIEDLE400_`, since `tests/hwsim.py`'s
+`scrub_env()` wipes that whole prefix for isolation and would have undone
+it mid-test). Suite is back to 406 tests in ~8s. `test_console.py`'s
+`TestPauseBeforeExitIfOwned` rewritten for the new unconditional-everywhere
+behaviour (was: 6 tests of the owned-console logic; now: confirms the
+test-suite skip, and that it pauses/respects a custom duration once that
+env var is removed).

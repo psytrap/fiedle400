@@ -13,6 +13,7 @@ must never stop a command from running.
 """
 
 import ctypes
+import os
 import sys
 import time
 from ctypes import wintypes
@@ -126,34 +127,34 @@ def enlarge_owned_console(
         return False  # Cosmetic only: never let sizing break a command
 
 
-def pause_before_exit_if_owned(
-    seconds: int = 10,
-    kernel32=None,
-    platform: str = None,
-    frozen: bool = None,
-    sleep=time.sleep,
-) -> bool:
-    """Keep a console fiedle400 owns open for a few seconds after an error exit.
+def pause_before_exit_if_owned(seconds: int = 10, sleep=time.sleep) -> bool:
+    """Pause for a few seconds after an error exit, so the message can be read.
 
-    Double-clicking fiedle400.exe (or its Start Menu shortcut) gives it a fresh
-    console that Windows closes the instant the process exits, so an error
-    message printed right before exit is never seen. Pausing here only when
-    the console is ours (never one shared with cmd.exe/PowerShell, which the
-    user controls) gives them a chance to read it first. Returns True when it
-    paused. `kernel32`, `platform`, `frozen` and `sleep` exist so tests can
-    drive it off Windows without a real delay.
+    On Windows, double-clicking fiedle400.exe (or its Start Menu shortcut)
+    gives it a fresh console that Windows closes the instant the process
+    exits, so an error message printed right before exit is never seen.
+    Applied on every platform (psytrap, 2026-10-21), not only when Windows
+    reports an owned console, so a script or CI invocation of the real
+    binary pauses too.
+
+    Skipped whenever RUNNING_FIEDLE400_TESTS is set -- tests/__init__.py sets
+    it unconditionally, so this is true for every test run regardless of
+    which module runs it, or whether that test happens to mock time.sleep
+    for an unrelated reason (identity-checking `sleep is time.sleep` was
+    tried first and missed exactly that case: a test mocking
+    "fiedle400.cli.time.sleep" to silence a different sleep elsewhere left
+    this function's own default argument -- bound to the real time.sleep
+    before the patch -- undetected, so it slept for real; four such tests
+    alone pushed the suite from ~8s to over 2 minutes). The name deliberately
+    does not start with FIEDLE400_: tests/hwsim.py's scrub_env() wipes that
+    whole prefix for isolation, which would have re-enabled the real sleep
+    mid-test. Without RUNNING_FIEDLE400_TESTS set, this always pauses.
+
+    Returns True when it paused. `sleep` exists so a test of this function
+    itself can still exercise the real pause logic without a real delay.
     """
-    platform = sys.platform if platform is None else platform
-    if platform != "win32":
+    if os.environ.get("RUNNING_FIEDLE400_TESTS"):
         return False
-    frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
-    try:
-        if kernel32 is None:
-            kernel32 = _load_kernel32()
-        if not console_is_owned(kernel32, frozen):
-            return False
-    except Exception:
-        return False  # Same rule as enlarge_owned_console: never let this break a command
     print(f"\nClosing in {seconds} seconds...", file=sys.stderr)
     sleep(seconds)
     return True
