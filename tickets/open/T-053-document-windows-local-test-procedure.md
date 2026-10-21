@@ -1,6 +1,6 @@
 # T-053: Document the local Windows test-execution procedure
 
-- **Status:** Open
+- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

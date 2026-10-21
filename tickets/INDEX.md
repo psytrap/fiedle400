@@ -7,8 +7,7 @@ protocol; `DONE.md` for the archive.
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
 | [T-051](open/T-051-manual-mode-remaining-protocol-questions.md) | Local inspection -- G7 visual confirmation and Manual-mode protocol questions | Local | Open |
-| [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open |
-| [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open |
+| [T-062](open/T-062-windows-test-failures-viewer-tmp-dir.md) | `TestViewerTmpDir` fails on real Windows -- tests mock the wrong thing | Local | In Progress |
 
 ## Backlog (deferred)
 
@@ -28,6 +27,14 @@ Open tickets parked until psytrap picks them up again.
 | [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either | Open (deferred) |
 | [T-049](open/T-049-ci-workflow-debt.md) | CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper) | Either | Open (deferred) |
 | [T-050](open/T-050-ubuntu-lts-compat-check.md) | Check the Linux binary against an older Ubuntu LTS in CI | Either | Open (deferred) |
+| [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either | Open (deferred) |
+| [T-060](open/T-060-reevaluate-spo2-viewer-architecture.md) | Re-evaluate `spo2_viewer.py`'s architecture | Either | Open (deferred) |
+| [T-061](open/T-061-po250-po300-support-via-spo2-analysis.md) | PO-250 / PO-300 support via `.spo2` analysis | Either | Open (deferred) |
+| [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
+| [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open (deferred) |
+| [T-056](open/T-056-html-viewer-comment-field.md) | Comment field in the HTML viewer | Cloud | Open (deferred) |
+| [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud | Open (deferred) |
+| [T-058](open/T-058-username-wizard-and-html-editable.md) | Set a username via the wizard; show and edit it in the HTML viewer | Cloud | Open (deferred) |
 
 ## Open questions
 

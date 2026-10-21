@@ -1,7 +1,9 @@
 """The CLI exits with a short message instead of a traceback when something goes wrong."""
 
 import io
+import ntpath
 import os
+import posixpath
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -154,19 +156,33 @@ class TestViewerTmpDir(unittest.TestCase):
     live against a real snap Firefox install to actually deny access."""
 
     def test_resolves_to_the_saved_files_own_directory(self):
-        result = cli._viewer_tmp_dir("/home/testuser/Documents/fiedle400/rec.spo2")
-        self.assertEqual(result, "/home/testuser/Documents/fiedle400")
+        # Built relative and resolved through the real os.path, so the
+        # expectation is correct on whichever OS this actually runs on
+        # (T-062 -- a hardcoded POSIX literal here passed on Linux only
+        # because os.path there happens to be posixpath already; it failed
+        # on a real Windows machine for the wrong reason: os.path is bound
+        # to ntpath/posixpath by the real OS, not by sys.platform).
+        rel = os.path.join("home", "testuser", "Documents", "fiedle400")
+        saved = os.path.join(rel, "rec.spo2")
+        result = cli._viewer_tmp_dir(saved)
+        self.assertEqual(result, os.path.abspath(rel))
 
     def test_bare_filename_resolves_to_the_current_directory_not_empty(self):
         result = cli._viewer_tmp_dir("rec.spo2")
         self.assertEqual(result, os.getcwd())
 
-    def test_same_on_every_platform_no_special_casing_needed(self):
-        # Reusing the save folder needs no platform branch -- it was never
-        # a system path or a hidden one on any OS.
-        for plat in ("linux", "win32", "darwin"):
-            with mock.patch.object(sys, "platform", plat):
-                self.assertEqual(cli._viewer_tmp_dir("/x/y/rec.spo2"), "/x/y")
+    def test_same_logic_on_posix_and_windows_path_styles(self):
+        # Reusing the save folder needs no platform branch. Verified by
+        # swapping in ntpath/posixpath directly (T-062) -- mocking
+        # sys.platform, as this test used to, does not change which path
+        # module os.path actually is, so it never exercised the other
+        # style at all.
+        for path_module in (posixpath, ntpath):
+            fake_os = SimpleNamespace(path=path_module, getcwd=os.getcwd)
+            with mock.patch.object(cli, "os", fake_os):
+                saved = path_module.join("x", "y", "rec.spo2")
+                expected = path_module.abspath(path_module.join("x", "y"))
+                self.assertEqual(cli._viewer_tmp_dir(saved), expected)
 
 
 class TestOpenInViewer(unittest.TestCase):
