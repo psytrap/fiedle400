@@ -91,13 +91,12 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 - [ ] Commit pushed to `origin/master`; **G10 checked and recorded** on
       that exact commit (ubuntu/windows/macos) -- pre-flight doesn't count
       as done until this reports back
-- [ ] G5: built binary (`pyinstaller fiedle400.spec`) runs `info`/
+- [x] G5: built binary (`pyinstaller fiedle400.spec`) runs `info`/
       `sessions` against the real device, Linux *and* Windows, against a
-      session with actual stored data -- **Linux done, see notes; Windows
-      still needed**
-- [ ] G6: `FIEDLE400_LIVE=1` tests pass, Linux (`hidraw` + `hid`) and
-      Windows (`hid`) -- **Linux `hidraw` done, see notes; Windows still
-      needed**
+      session with actual stored data -- done both, see notes
+- [x] G6: `FIEDLE400_LIVE=1` tests pass, Linux (`hidraw` + `hid`) and
+      Windows (`hid`) -- Linux `hidraw` done (Linux `hid` fails, T8,
+      won't-fix); Windows `hid` done, see notes
 - [ ] G7: technical half done (export + pre-check, see notes); visual
       confirmation tracked in [T-051](T-051-manual-mode-remaining-protocol-questions.md)
 - [ ] G9 (optional, non-blocking): a Manual-mode real-device recording
@@ -146,5 +145,33 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
   `output/g7-check/`; needs `fiedle400 view output/g7-check/rc.html`
   opened and confirmed by psytrap before G7 counts as done.
 
-Windows (G5/G6 Windows leg, G7 confirmation, G9, the Manual-mode protocol
-items, pushing/tagging/rings) not yet done.
+**2026-10-21, Windows pass (hardware present, HEAD `b47fa36`, via SSH to a
+real Windows 8.1 machine):**
+- Setting up a clean dev environment surfaced two real bugs, both fixed
+  this session: [T-062](T-062-windows-test-failures-viewer-tmp-dir.md)
+  (`TestViewerTmpDir` hardcoded POSIX paths and mocked `sys.platform`,
+  which `os.path` never consults -- 2 failures, fixed and verified on real
+  Windows) and [T-063](T-063-pyproject-hid-dependency-wrong-package.md)
+  (`pyproject.toml` named the wrong `hid`-family PyPI package -- `pip
+  install -e .` pulls in the DLL-less ctypes `hid` package, while the real
+  release build installs `hidapi` directly, bypassing `pyproject.toml`
+  entirely; fixed to declare `hidapi`).
+- Had to install Git and Python 3.11 on the Windows machine itself (neither
+  was present; only Python 3.5-32/3.8-32, below the project's `>=3.11`
+  floor) -- psytrap approved both installs. Full procedure (SSH access,
+  `cmd.exe` quirks, the TLS1.2 workaround needed for `Invoke-WebRequest` on
+  this machine) captured in [T-053](T-053-document-windows-local-test-procedure.md).
+- Full suite: 401 tests, `OK (skipped=81)` on Windows (vs. `skipped=7` on
+  Linux -- the extra skips are Linux-only tests, expected).
+- G5: `dist\fiedle400.exe info`/`sessions` match the Linux pass exactly
+  (2 real sessions, 160 + 30 records) via the `hid` backend.
+- G6: `FIEDLE400_LIVE=1` -- 5/5 applicable tests pass (`test_01`/`test_02`
+  correctly skip as Linux-only); the device needed a `wmic`-confirmed
+  USB re-enumeration mid-session (not visible at all until then, no
+  driver issue -- `VID_28E9` plugged in afterward).
+- Full `download` end-to-end: both sessions, 190 records, 0 sequence
+  gaps -- matches the Linux pass's numbers exactly.
+
+Still not done: G7 visual confirmation (tracked in T-051), G9 (Manual-mode
+real-device check), the desat-algorithm SpO2-Assistant re-validation,
+diff audit re-confirm immediately before tagging, pushing/tagging/rings.

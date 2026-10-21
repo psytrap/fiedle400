@@ -263,8 +263,10 @@ class HidBackend:
             return hid
         except ImportError as e:
             raise RuntimeError(
-                "The 'hid' library is required for the 'hid' backend but is not installed.\n"
-                "Install it with: pip install hid\n"
+                "The 'hid' library is required for the 'hid' backend but is not installed "
+                "(or no hidapi DLL/shared library could be found -- the 'hid' import module "
+                "itself raises ImportError in that case too, T-063).\n"
+                "Install it with: pip install hidapi\n"
                 "(On Linux, the default 'hidraw' backend requires no extra libraries)."
             ) from e
 

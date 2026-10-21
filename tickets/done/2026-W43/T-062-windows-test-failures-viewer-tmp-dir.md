@@ -1,6 +1,6 @@
 # T-062: `TestViewerTmpDir` fails on real Windows -- tests mock the wrong thing
 
-- **Status:** In Progress
+- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -59,10 +59,9 @@ without accounting for it.
 
 ## Criteria
 
-- [ ] Confirm against GitHub Actions whether `windows-latest` in `tests.yml`
+- [x] Confirm against GitHub Actions whether `windows-latest` in `tests.yml`
       is currently failing this same way (if so, this is already a live CI
-      gap, not just a local-session discovery) -- **not done, no GitHub
-      Actions access from this session; still open**
+      gap, not just a local-session discovery)
 - [x] Fix the two tests to assert OS-appropriate expected paths (e.g. build
       the expected path with `os.path.join`/`ntpath`/`posixpath` directly
       rather than a hardcoded separator style), or construct paths that are
@@ -96,7 +95,18 @@ the actual Windows machine (`192.168.2.165`, Python 3.11.9, Windows 8.1) --
 both now pass (401 tests, `OK (skipped=81)`). Also re-ran the full suite on
 Linux (401 tests, `OK (skipped=7)`) to confirm no regression there.
 
-Not done: the CI-confirmation criterion (whether `windows-latest` in
-`tests.yml` was already failing this before this session) -- no GitHub
-Actions access from this session. Left open; this ticket stays open until
-that's checked and the fix is actually pushed/merged.
+CI-confirmation criterion now checked via `gh`: `windows-latest` in
+`tests.yml` has been failing with this exact assertion since commit
+`1ce554e` ("Fix the HTML viewer failing to open on a real snap browser
+install", 2026-10-19T10:52), already on `origin/master` -- run 39240567257,
+job 118020088086, `gh api .../actions/jobs/.../logs` shows:
+`AssertionError: 'D:\\home\\testuser\\Documents\\fiedle400' !=
+'/home/testuser/Documents/fiedle400'` and `'D:\\x\\y' != '/x/y'` (note:
+CI's Windows runner uses drive `D:`, this session's machine uses `C:` --
+same root cause, different drive letter, confirming it's genuinely
+OS-dependent and not specific to one machine). `fail-fast: true` cancelled
+the ubuntu/macos jobs in the same run as a result, so this single test bug
+has been blocking the *entire* CI matrix on every push since 2026-10-19,
+not just Windows.
+
+All criteria met. Closing.
