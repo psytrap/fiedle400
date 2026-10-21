@@ -7,6 +7,7 @@ protocol; `DONE.md` for the archive.
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
 | [T-051](open/T-051-manual-mode-remaining-protocol-questions.md) | Local inspection -- G7 visual confirmation and Manual-mode protocol questions | Local | Open |
+| [T-052](open/T-052-findings-recheck-for-release.md) | Re-check findings T1-T8 against this release's hardware testing | Local | Open |
 
 ## Backlog (deferred)
 
