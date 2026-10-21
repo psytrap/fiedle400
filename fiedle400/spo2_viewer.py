@@ -201,6 +201,9 @@ _TEMPLATE = """<!doctype html>
     var low = events.filter(function (e) { return e.to_pct < criteria; });
     out.events_below_criteria = low.length;
     out.avg_low_spo2_below_criteria = low.length ? r2(sum(low, function (e) { return e.to_pct; }) / low.length) : null;
+    // "Time (min) <criteria" (SPO2_FORMAT.md Sec7.1), same valid samples as the rest of
+    // this report -- not a separately-filtered count (T-044).
+    out.time_below_criteria_s = valid.filter(function (i) { return spo2[i] < criteria; }).length;
     out.avg_event_duration_s = events.length ? r1(sum(events, function (e) { return e.nadir - e.start; }) / events.length) : null;
     var inside = {};
     events.forEach(function (e) { for (var k = e.start; k <= e.nadir; k++) inside[k] = true; });
@@ -474,21 +477,18 @@ _TEMPLATE = """<!doctype html>
   function stats() {
     var spo2Vals = records.map(function (r) { return r.spo2; }).filter(function (v) { return v !== null && v !== undefined; });
     var hrVals = records.map(function (r) { return r.heart_rate; }).filter(function (v) { return v !== null && v !== undefined; });
-    var invalidCount = n - spo2Vals.length;
-    // Time <criteria%, same criteria-level value the event detector uses to
-    // classify event severity (analysis.params.criteria) -- not a separately
-    // adjustable level. SPO2_FORMAT.md Sec7.1: "Time (min) <88%" is "Time below
-    // the desaturation criteria level" in SpO2 Assistant too, one input, two uses.
-    var desatCount = spo2Vals.filter(function (v) { return v < analysis.params.criteria; }).length;
+    var a = analysis.summary;
     function avg(a) { return a.length ? (a.reduce(function (s, v) { return s + v; }, 0) / a.length) : null; }
+    // "No-signal / probe-out" and the Time-below-criteria row below both come from
+    // analysis.summary (desat-port), so they use the same 1..100 valid-sample
+    // definition as every other report value instead of each filtering on its own (T-044).
     var rows = [
       ['__group__', 'Recording'],
       ['Duration', fmtSec(n) + ' (' + n + ' records)'],
       ['SpO2 min / avg / max', spo2Vals.length ? Math.min.apply(null, spo2Vals) + '% / ' + avg(spo2Vals).toFixed(1) + '% / ' + Math.max.apply(null, spo2Vals) + '%' : 'n/a'],
       ['Heart rate min / avg / max', hrVals.length ? Math.min.apply(null, hrVals) + ' / ' + avg(hrVals).toFixed(1) + ' / ' + Math.max.apply(null, hrVals) + ' bpm' : 'n/a'],
-      ['No-signal / probe-out', fmtSec(invalidCount) + ' (' + (100 * invalidCount / n).toFixed(1) + '%)'],
+      ['No-signal / probe-out', fmtSec(n - a.valid_samples) + ' (' + a.artifact_pct.toFixed(1) + '%)'],
     ];
-    var a = analysis.summary;
     function f1(v, unit) { return v === null || v === undefined ? 'n/a' : v.toFixed(1) + unit; }
     rows.push(
       ['__group__', 'Desaturation analysis'],
@@ -497,7 +497,7 @@ _TEMPLATE = """<!doctype html>
       ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
       ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
       ['Basal SpO2', f1(a.basal_spo2, '%') + ' (mean outside the event falls, as SpO2 Assistant computes it)'],
-      ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(desatCount) + (spo2Vals.length ? ' (' + (100 * desatCount / spo2Vals.length).toFixed(1) + '% of valid readings)' : '')]
+      ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(a.time_below_criteria_s) + (a.valid_samples ? ' (' + (100 * a.time_below_criteria_s / a.valid_samples).toFixed(1) + '% of valid readings)' : '')]
     );
     var pu = analysis.pulse.summary, pp = analysis.pulse.params;
     rows.push(

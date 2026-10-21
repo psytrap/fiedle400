@@ -89,6 +89,16 @@ class TestViewerControls(unittest.TestCase):
     def test_time_below_level_uses_the_criteria_level(self):
         self.assertIn("analysis.params.criteria", self.html)
 
+    def test_probe_out_and_time_below_read_the_shared_summary_not_their_own_count(self):
+        # T-044: "No-signal / probe-out" and "Time below <criteria>%" used to be computed
+        # inline in stats() by filtering spo2Vals (null/undefined only), disagreeing with
+        # artifact_pct/time_below_criteria_s already computed by summarizeEvents a few
+        # lines above -- a raw 0 or any numeric sentinel counted as valid in one and not
+        # the other. Both rows must now read the shared summary values.
+        self.assertIn("a.artifact_pct", self.html)
+        self.assertIn("a.time_below_criteria_s", self.html)
+        self.assertNotIn("spo2Vals.filter", self.html)
+
     def test_page_loads_nothing_from_the_network(self):
         for needle in ("http://", "https://", "src=\"//"):
             self.assertNotIn(needle, self.html)

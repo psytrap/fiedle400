@@ -6,7 +6,7 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-034](open/T-034-repo-clean-up.md) | Repo clean-up (tracked leftovers and local clutter) | Either | Open |
-| [T-044](open/T-044-viewer-artifact-and-time-below-discrepancies.md) | Viewer shows a different "artifact"/"time below" than it computes | Cloud | Open |
+| [T-045](open/T-045-pulse-max-time-and-sentinel-index-quirks.md) | Pulse row reads the wrong channel's max_time; a sentinel-index quirk is shared by both implementations | Cloud | Open |
 
 ## Before next beta release
 

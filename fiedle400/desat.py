@@ -112,6 +112,9 @@ def summarize(spo2, events, criteria=CRITERIA):
     low = [e for e in events if e["to_pct"] < criteria]
     out["events_below_criteria"] = len(low)
     out["avg_low_spo2_below_criteria"] = round(sum(e["to_pct"] for e in low) / len(low), 2) if low else None
+    # "Time (min) <criteria" (SPO2_FORMAT.md Sec7.1), same valid samples as the rest of
+    # this report -- not a separately-filtered count (T-044).
+    out["time_below_criteria_s"] = sum(1 for i in valid if spo2[i] < criteria)
     out["avg_event_duration_s"] = (
         round(sum(e["nadir"] - e["start"] for e in events) / len(events), 1) if events else None
     )

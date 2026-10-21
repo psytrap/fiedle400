@@ -248,7 +248,7 @@ predicted numbers; `SPO2_ASSISTANT_CHECKS.md` is the procedure for that check.
 | Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |
 | Artifact (%) | Share of non-effective data: "that zero value area and excluding data area" (zero/invalid samples plus user-excluded ranges, see [M] §5.4.2 Exclude data). | [M] §5.4.7.3 |
 | Avg. Low SpO2 (%) | "the average value of 'Minimum SpO2' for all SpO2 events" (mean of event nadirs). | [M] §5.4.7.3 |
-| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). | [M] §5.4.7.3, [X] |
+| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). `desat.py`'s `summarize`/the viewer's `summarizeEvents` compute it as `time_below_criteria_s`, over the same 1..100 valid samples as `artifact_pct` and the other values here -- not a separately-filtered count (T-032 found it wasn't, fixed in T-044). | [M] §5.4.7.3, [X] |
 
 ### 7.2 Desaturation event algorithm
 

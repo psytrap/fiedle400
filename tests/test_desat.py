@@ -90,6 +90,16 @@ class TestSummarizeEdgeCases(unittest.TestCase):
         self.assertIsNone(s["basal_spo2"])
         self.assertEqual(s["artifact_pct"], 100.0)
 
+    def test_time_below_criteria_uses_the_same_valid_samples_as_artifact_pct(self):
+        # T-044: a raw 0 is neither a valid reading nor a null probe-out gap -- it must
+        # be excluded from both artifact_pct and time_below_criteria_s the same way, not
+        # just from one of them (the mismatch the viewer's own separate counts had).
+        x = [97] * 10 + [85] * 5 + [0] * 3 + [None] * 2
+        s = desat.summarize(x, [], criteria=88)
+        self.assertEqual(s["valid_samples"], 15)  # excludes the 0s and the Nones
+        self.assertEqual(s["artifact_pct"], 25.0)  # 5 invalid / 20
+        self.assertEqual(s["time_below_criteria_s"], 5)  # the five 85s, not the 0s
+
 
 class TestBasalSpo2(unittest.TestCase):
     """The rule decoded from SpO2.exe (T-031): mean of the valid samples outside every
