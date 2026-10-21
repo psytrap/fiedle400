@@ -23,6 +23,14 @@ keeps a short, live summary and points here for the full story.
   `F0 70` ack and erases nothing. `clear -s N` now stops after that first step and says the device
   did not accept erasing a single recording (`clear` without `-s` erases all). Static analysis
   in the ticket; PROTOCOL.md §3.13.
+- **T1 confirmed fixed** (real-hardware release testing, not a code change): the probe-out
+  sentinel decode (SpO2 127 / pulse 255) fired for the first time ever on real hardware, twice,
+  during this cycle's Manual-mode release testing -- 76/146 and 55/161 records, each in clean
+  contiguous blocks matching real finger-on/off behavior, not scattered noise. psytrap
+  cross-checked the gap sizes against the real SpO2 Assistant on the same recording and they
+  match exactly, confirming the decode agrees with the vendor's own software rather than
+  over-detecting. Also resolves the "device may stop recording on probe-out" hypothesis: it
+  doesn't, both recordings kept going straight through. RELEASE_PLAN.md §3d.
 
 ## 0.4.40 (2026-10-21)
 

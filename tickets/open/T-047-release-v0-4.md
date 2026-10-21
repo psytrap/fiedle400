@@ -177,6 +177,18 @@ session actually reports. Re-running the full runbook on this new RC
       device: `--version`/`--help` fine, `info` hit a one-off transient
       USB hiccup then passed on retry, `sessions` showed the same 2 real
       sessions (60 + 56 records) as every other pass this cycle.
+- [x] Post-Ring-1 real-hardware testing: single-session erase re-confirmed
+      failing exactly per T-074 (same `F0 70` ack, nothing erased, honest
+      failure message) on the final tagged binary; full `clear -y`
+      confirmed working (status 0, device verified empty afterward).
+      Two fresh Manual-mode recordings made and downloaded (146 and 161
+      records) -- both fired **T1** (the probe-out sentinel) for the
+      first time ever on real hardware, in clean contiguous blocks
+      matching real finger-on/off behavior; psytrap cross-checked one
+      against the real SpO2 Assistant and the gap sizes match exactly.
+      **T1 promoted from "unconfirmed" to confirmed fixed** -- see
+      `RELEASE_PLAN.md` §3d and `CHANGELOG.md`. This also stands in for
+      G9 (optional Manual-mode-vs-SpO2-Assistant check) for this cycle.
 - [ ] Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
       `--version`) -- not yet done for this sub-cycle.
 - [ ] `CHANGELOG.md` gate-reverification log entry for this sub-cycle.

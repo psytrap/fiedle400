@@ -215,6 +215,23 @@ finger-out moment tried this cycle, and none occurred on its own during
 T-047's testing (0 probe-out samples in the G7 download). No change to
 status.
 
+**Confirmed on real hardware, 2026-10-21 (v0.4.41 cycle).** Two deliberate
+Manual-mode recordings fired the alert for the first time ever: 76/146
+and 55/161 records flagged `probe-out`, each in clean contiguous blocks
+(start-of-recording and a mid-recording gap), not scattered noise --
+exactly the shape of real finger-on/off behavior, not a decode artifact.
+psytrap's own sense of the gaps ("bigger than I executed in the
+experiment") initially looked like a possible over-detection bug, but
+**psytrap cross-checked the same recording against the real SpO2
+Assistant and the gap sizes match it exactly** -- `fiedle400`'s decode
+agrees with the vendor's own software, so this is a real device/sensor
+behavior (likely sensitivity to how firmly the finger sits in the probe),
+not a `fiedle400` bug. **T1 is now confirmed fixed**, not just
+synthetically tested: the sentinel decode has fired on real hardware and
+independently agrees with the vendor reference. The structurally-
+unreachable hypothesis above is also resolved: the device clearly does
+keep recording through probe-out, it doesn't stop.
+
 **T8 (open):** the Linux `hid` (libusb) backend's unlock handshake and RTC
 read get no usable reply on this machine (`hidraw` is unaffected, and the
 identical code works fine on the Windows laptop's `hid` backend). Likely
