@@ -531,14 +531,24 @@ def command_clear(args):
 
     engine = serial_engine.SerialDeviceEngine(dev)
     try:
-        engine.clear_memory(session_id=sess_id, debug=getattr(args, "verbose", 0))
+        ok = engine.clear_memory(session_id=sess_id, debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
         print("\nOperation interrupted by user.")
+        return 1
     finally:
         dev.close()
 
-    print(f"✅ Successfully cleared {target_str} from device flash memory.")
-    return 0
+    _report_erase(ok, target_str)
+    return 0 if ok else 1
+
+
+def _report_erase(ok, what: str = "the recordings") -> None:
+    """Says whether the erase worked; clear_memory lists the recordings again to find out."""
+    if ok:
+        print(f"✅ Erased {what} from the device.")
+    else:
+        print(f"⚠️ {what[:1].upper() + what[1:]} still listed on the device after the erase. "
+              f"A Manual-mode recording is not erased this way.")
 
 
 def command_read_time(args):
@@ -945,8 +955,7 @@ def run_interactive_wizard(args) -> int:
                 if act in ("c", "clear"):
                     confirm = clean_input("⚠️ Are you sure you want to format device flash memory? [y/N]: ").lower()
                     if confirm in ("y", "yes"):
-                        engine.clear_memory(0, debug=verbose_level)
-                        print("✅ Device flash memory formatted successfully.")
+                        _report_erase(engine.clear_memory(0, debug=verbose_level))
                 print("Goodbye!")
                 return 0
 
@@ -980,8 +989,7 @@ def run_interactive_wizard(args) -> int:
             elif choice.lower() in ("c", "clear"):
                 confirm = clean_input("⚠️ Are you sure you want to permanently DELETE ALL recordings from device memory? [y/N]: ").lower()
                 if confirm in ("y", "yes"):
-                    engine.clear_memory(0, debug=verbose_level)
-                    print("✅ Device flash memory cleared successfully.")
+                    _report_erase(engine.clear_memory(0, debug=verbose_level))
                 ret = clean_input("\nReturn to main menu? [y/N]: ").lower()
                 if ret in ("y", "yes"):
                     continue
@@ -1053,8 +1061,7 @@ def run_interactive_wizard(args) -> int:
             # Offer flash erase with default = YES
             erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()
             if erase_input in ("", "y", "yes"):
-                engine.clear_memory(0, debug=verbose_level)
-                print("✅ Device flash memory erased successfully.")
+                _report_erase(engine.clear_memory(0, debug=verbose_level))
             else:
                 print("Flash recordings preserved.")
 

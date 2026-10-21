@@ -594,7 +594,8 @@ Delete User and Delete All.
 | Delete for the `0x91`..`0x96` data category | `91 7F` | `0x4af547` |
 
 **Confirmed by the vendor captures.** Every vendor capture that downloads also ends with the
-automatic delete-all, after the last `9D 04` page request:
+automatic delete-all, after the last `9D 04` page request. (`fiedle400` deliberately does not:
+`download` never erases, and erasing is always a step the user confirms; T-038.)
 
 | Capture (`archive/capture/`, `analysis/`) | Date | Headers (user, entry: start) | Ends with `9D 7F 7F 7F 7F` |
 | :--- | :--- | :--- | :--- |
@@ -622,9 +623,10 @@ Notes on the other candidates:
     stores spot-check SpO2 and step-counter records (`insert spo2Single`, `insert step`).
 
   §A.6's "user erase after every download" reading is wrong, and "User 1..6" has no support.
-- **`fiedle400 clear`** (`engine/device.py`) sends none of the vendor's bytes: it sends `0xAF`,
-  then `0xAB 01 [id]` for one session, or `0xAA 80 80`, `0xAB 80 80`, `0xAC 80 80` for all, each
-  with the `7D 81` prefix. It is unverified, and it matches nothing the vendor sends (T-037).
+- **`fiedle400 clear`** (`engine/device.py`, since 0.4.29) sends the vendor's commands: after
+  listing the recordings and `9D 02`, `9D 7F 7F 7F 7F 00 00 19` for all or `9D 7F 02 [user]
+  [entry] ...` for one, then lists them again and reports whether they are gone. Up to 0.4.28 it
+  sent `0xAF`, `0xAB`, `0xAA`, `0xAC`, none of which the vendor sends (T-037).
 - Switching the device between Auto and Manual recording mode on the device itself erases its memory
   (CHANGELOG.md, "Manual-mode protocol").
 

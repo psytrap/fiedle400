@@ -129,13 +129,28 @@ def build_storage_block_command(block_id: int, session_id: int) -> bytes:
     return build_session_data_command(SUBCOMMAND_STORAGE_READ_BLOCK, block_id, session_id)
 
 
-def build_storage_finalize_command() -> bytes:
-    """Builds the 64-byte 0x9D report with mode 0x7F (9D 7F 7F 7F 7F ...).
+def build_delete_all_command() -> bytes:
+    """DESTRUCTIVE: `9D 7F 7F 7F 7F 00 00 19`, SpO2 Assistant's "Delete All" (PROTOCOL.md 3.13).
 
-    DESTRUCTIVE: this is SpO2 Assistant's "Delete All" / auto-delete-after-saving, which erases
-    every recording on the device (PROTOCOL.md 3.13, T-037). Nothing in fiedle400 sends it.
+    Erases every Auto-mode recording; confirmed by the vendor captures. Byte for byte as the
+    vendor sends it (8 bytes, checksum at byte 7).
     """
-    return build_session_data_command(SUBCOMMAND_STORAGE_FINALIZE, 0x7F, 0x7F)
+    b = [0x9D, 0x7F, 0x7F, 0x7F, 0x7F, 0x00, 0x00]
+    b.append(calc_checksum_7bit(b))
+    return bytes(b + [0x00] * (64 - len(b)))
+
+
+def build_delete_entry_command(user_id: int, entry: int) -> bytes:
+    """DESTRUCTIVE: `9D 7F 02 [user] [entry] 00 00 [chk]`, SpO2 Assistant's "Delete" for one
+    recording (PROTOCOL.md 3.13). Decoded from SpO2.exe; never captured on the wire."""
+    b = [0x9D, 0x7F, 0x02, user_id & 0x7F, entry & 0x7F, 0x00, 0x00]
+    b.append(calc_checksum_7bit(b))
+    return bytes(b + [0x00] * (64 - len(b)))
+
+
+def build_storage_finalize_command() -> bytes:
+    """Old name for `build_delete_all_command` (the bytes were once read as a "finalize")."""
+    return build_delete_all_command()
 
 
 def build_select_session_command(session_id: int) -> bytes:
@@ -232,6 +247,14 @@ class Commands:
     @staticmethod
     def storage_finalize() -> bytes:
         return build_storage_finalize_command()
+
+    @staticmethod
+    def delete_all() -> bytes:
+        return build_delete_all_command()
+
+    @staticmethod
+    def delete_entry(user_id: int, entry: int) -> bytes:
+        return build_delete_entry_command(user_id, entry)
 
     @staticmethod
     def read_time() -> bytes:

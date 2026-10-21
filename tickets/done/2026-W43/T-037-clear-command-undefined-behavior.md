@@ -1,6 +1,6 @@
 # T-037: `fiedle400 clear`'s per-session erase sequence is unverified against a real capture
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -43,17 +43,25 @@ run against real device flash holding real recorded sessions -- unlike
 
 ## Criteria
 
-- [ ] A written recommendation on how to verify `clear`'s actual behavior
+- [x] A written recommendation on how to verify `clear`'s actual behavior
       safely (e.g. a disposable test recording, captured with
       `record_exchange.py`, erased deliberately with explicit consent) --
       or a decision to leave it unverified for now, with a reason.
-- [ ] If verified: `PROTOCOL.md` §3.13 updated with the real behavior and a
+- [x] If verified: `PROTOCOL.md` §3.13 updated with the real behavior and a
       capture reference; if not verified: the "unverified" note stays as-is.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
+
+**Done (Claude, cloud, 2026-10-21, patch 0031).** psytrap decided: "clear is erase, use the 9D
+command". `clear_memory` now lists the recordings, sends `9D 02` like the vendor tool, then
+`9D 7F 7F 7F 7F 00 00 19` (all) or `9D 7F 02 [user] [entry] 00 00 [chk]` (one), and lists them
+again: `clear` and the wizard say whether the recordings are gone. A Manual-mode recording is
+not erased this way (the vendor gates `9D 7F` to Auto mode). `tests/test_clear.py` checks the
+bytes against the vendor capture. The erase-all is confirmed by the vendor captures; running
+`clear` on a device, and delete-one at all, is in `tickets/INDEX.md`, "Open questions".
 
 **Findings so far (Claude, cloud, 2026-10-20/21, patch 0030; static analysis of `SpO2.exe`,
 checked against every vendor capture).

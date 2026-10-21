@@ -7,7 +7,8 @@ back, grouped by command. The result (``tests/hwsim.py`` ``Trace`` JSON, format 
 lets the simulated oximeter answer the CLI's own commands with real device bytes.
 
 Safety: commands are checked before they are written. Anything that erases data
-(the ``clear`` family, 0xAA/0xAB/0xAC, 0x91..0x96) raises instead of being sent, and
+(``9D 7F ...``, the vendor's delete that ``clear`` sends, and the old candidates
+0xAA/0xAB/0xAC, 0x91..0x96) raises instead of being sent, and
 this script never calls ``clear_memory`` or ``set_rtc_time`` in the first place.
 The download ends with the same non-destructive segment ack the CLI always sends.
 

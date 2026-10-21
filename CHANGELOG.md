@@ -8,6 +8,23 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.29 (2026-10-21)
+
+- **T-040** (deferred): psytrap decided the wizard's erase default stays `[Y/n]` (default yes),
+  and the planned GUI follows it. Removed from the open questions in `tickets/INDEX.md`.
+- **T-038** done: psytrap decided `fiedle400` never erases after a download (SpO2 Assistant does
+  by default); erasing stays a step the user confirms. Noted in PROTOCOL.md §3.13.
+- **T-037** done, `clear` changed: it now erases with SpO2 Assistant's own commands,
+  `9D 7F 7F 7F 7F` for all and `9D 7F 02 <user> <entry>` for one (`clear -s N`), instead of
+  `0xAA`/`0xAB`/`0xAC`, which the vendor never sends. It lists the recordings afterwards and says
+  whether they are gone; `clear` exits 1 if not. The wizard's erase reports the same.
+- **T-041** deferred; the second-user question moved into it.
+- `tickets/INDEX.md`: the commit-message question is dropped (psytrap: no additions to commit
+  messages).
+- `tickets/INDEX.md`: new "Before next beta release" group (proposed list, psytrap to confirm).
+
+---
+
 ## 0.4.28 (2026-10-20)
 
 - **T-042:** Manual-mode recordings. A PO-400 in Manual recording mode keeps one recording

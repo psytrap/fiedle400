@@ -1,6 +1,6 @@
 # T-038: fiedle400 and the vendor SpO2 Assistant differ on auto-erase after download
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**
@@ -36,18 +36,23 @@ What is NOT known:
 
 ## Criteria
 
-- [ ] A written decision: keep `fiedle400 download` read-only with no
+- [x] A written decision: keep `fiedle400 download` read-only with no
       auto-erase (status quo), or evaluate adding an explicit, opt-in
       erase-after-download flag -- with a reason either way.
-- [ ] If an opt-in flag is recommended, file it as its own follow-up ticket
-      rather than implementing it here.
-- [ ] `README.md` or `PROTOCOL.md` notes the deliberate divergence from the
+- [x] If an opt-in flag is recommended, file it as its own follow-up ticket
+      rather than implementing it here. (Not recommended: see the decision.)
+- [x] `README.md` or `PROTOCOL.md` notes the deliberate divergence from the
       vendor tool, if not already clear from §3.13.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
+
+**Decision (psytrap, 2026-10-21; closed in patch 0031): no auto-erase.** "Auto-erase without an
+option for the user is stupid, and annoying when figuring things out." `fiedle400 download`
+stays read-only; the device is only erased when the user confirms it (the wizard's prompt,
+`clear`). No opt-in flag either. `PROTOCOL.md` §3.13 states the difference from SpO2 Assistant.
 
 **Facts corrected (Claude, cloud, 2026-10-20, patch 0030; static analysis of `SpO2.exe`).
 The decision stays open (psytrap).**
@@ -64,6 +69,6 @@ The decision stays open (psytrap).**
   only newer recordings (table in `PROTOCOL.md` §3.13). The one capture without a download has
   no delete, and its recording was still there in the next one.
 - **`fiedle400 download` stays read-only.** Erasing is a separate, confirmed step: the
-  wizard's prompt, and in the T-040 GUI mockup a button with a No default. Any erase
+  wizard's `[Y/n]` prompt, which the planned T-040 GUI follows. Any erase
   `fiedle400` keeps should use the vendor's bytes once T-037 has verified them; the current
   `clear` bytes match nothing the vendor sends.

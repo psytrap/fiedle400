@@ -725,31 +725,39 @@ class SerialDeviceEngine:
         return 1
 
     def clear_memory(self, session_id: int = 0, debug: Union[bool, int] = 0) -> bool:
-        """Deletes single session (0xAB) or formats device Flash memory (0xAA/0xAB/0xAC)."""
-        self.dev.write_report(Commands.build_hid(0xAF))
-        time.sleep(0.1)
+        """Erases one recording (`session_id` > 0) or all of them, with SpO2 Assistant's own
+        commands (PROTOCOL.md 3.13): `9D 7F 02 [user] [entry]` or `9D 7F 7F 7F 7F`.
 
+        Like the vendor tool, it lists the recordings and opens the storage transfer (`9D 02`)
+        first. Afterwards it lists them again: returns True only if what should be gone is gone.
+        The vendor deletes only Auto-mode recordings this way; a Manual-mode recording stays.
+        """
+        before = self.list_sessions(debug=debug)
+        targets = [s for s in before if not s.manual and (session_id <= 0 or s.session_id == session_id)]
+        if not targets:
+            if int(debug) >= 1:
+                print("[DEBUG] Nothing to erase.")
+            return not any(s.session_id == session_id for s in before) if session_id > 0 else not before
+
+        self._write_report(Commands.storage_init(), "Storage Init (0x9D 0x02)")
+        self._sleep(0.05)
+        while self.dev.read_report(64): pass
         if session_id > 0:
-            c_del = Commands.build_hid(0xAB, [0x01, session_id])
-            if int(debug) >= 1:
-                print(f"[DEBUG OUT] Delete Session #{session_id}: {c_del[:16].hex()}")
-            self.dev.write_report(c_del)
-            time.sleep(0.2)
+            t = targets[0]
+            cmd = Commands.delete_entry(t.user_id, t.session_id)
+            desc = f"Delete user {t.user_id} entry {t.session_id} (0x9D 0x7F 0x02)"
         else:
-            c_fmt = Commands.build_hid(0xAA, [0x80, 0x80])
-            c_ab = Commands.build_hid(0xAB, [0x80, 0x80])
-            c_ac = Commands.build_hid(0xAC, [0x80, 0x80])
-            if int(debug) >= 1:
-                print(f"[DEBUG OUT] Format Flash: {c_fmt[:16].hex()}")
-            self.dev.write_report(c_fmt)
-            time.sleep(0.2)
-            self.dev.write_report(c_ab)
-            time.sleep(0.2)
-            self.dev.write_report(c_ac)
-            time.sleep(0.2)
+            cmd, desc = Commands.delete_all(), "Delete All (0x9D 0x7F)"
+        if int(debug) >= 1:
+            print(f"[DEBUG OUT] {desc}: {cmd[:16].hex()}")
+        self._write_report(cmd, desc)
+        self._sleep(0.5)
+        while self.dev.read_report(64): pass
 
-        c_check = Commands.build_hid(0xA5)
-        self.dev.write_report(c_check)
-        time.sleep(0.3)
-        self.read_packets(debug=debug)
-        return True
+        after = self.list_sessions(debug=debug)
+        gone = {(t.user_id, t.session_id) for t in targets}
+        left = [s for s in after if not s.manual and (s.user_id, s.session_id) in gone]
+        if session_id > 0:
+            # Entries are renumbered after a delete; compare start times, not numbers.
+            left = [s for s in after if not s.manual and s.timestamp == targets[0].timestamp]
+        return not left

@@ -30,12 +30,14 @@ how to do and test it. In short:
 The screens follow `scripts/wizard_gui_mockup.py` (screenshots in the project files under
 `po400-t033/`), adjusted to psytrap's feedback.
 
+**Decided (psytrap, 2026-10-21):** the erase default stays as today, `[Y/n]` (default yes).
+The GUI's erase confirmation follows it: its default button is "Erase", not the mockup's
+"Keep recordings".
+
 **Open questions (psytrap):**
-1. The erase default: the terminal wizard asks `[Y/n]` (default yes); the mockup offers an
-   "Erase device memory…" button whose confirmation defaults to No.
-2. Keep `console=True` (a console window next to the GUI on Windows), since the same exe is
+1. Keep `console=True` (a console window next to the GUI on Windows), since the same exe is
    the CLI?
-3. Any changes to the mockup screens.
+2. Any changes to the mockup screens.
 
 ---
 

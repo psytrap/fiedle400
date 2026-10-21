@@ -1,6 +1,6 @@
 # T-041: Key stored recordings by user and entry, not entry alone
 
-- **Status:** Open
+- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low (no device has shown a second user yet)
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
@@ -27,6 +27,12 @@ first in `session_map`, so one recording was listed and the other could not be d
 The vendor captures show up to four entries, always for user 1 (PROTOCOL.md §3.13), so
 keying by entry alone works on the devices seen so far. This is a latent issue for a second
 user, not an observed one.
+
+---
+
+**Open question (first step when picked up):** can a PO-400 record for a second user at all?
+Check the device menu and, if it can, capture a listing with `tests/capture_tools` (reading
+only). If it cannot, close this ticket as Won't Do.
 
 ---
 
