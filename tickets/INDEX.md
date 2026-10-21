@@ -6,7 +6,6 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
-| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open |
 
 ## Backlog (deferred)
 
@@ -42,6 +41,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-056](open/T-056-html-viewer-comment-field.md) | Comment field in the HTML viewer | Cloud | Open (deferred) |
 | [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud | Open (deferred) |
 | [T-058](open/T-058-username-wizard-and-html-editable.md) | Set a username via the wizard; show and edit it in the HTML viewer | Cloud | Open (deferred) |
+| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open (deferred) |
 
 ## Open questions
 
