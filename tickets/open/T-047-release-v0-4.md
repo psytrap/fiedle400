@@ -159,6 +159,12 @@ session actually reports. Re-running the full runbook on this new RC
       pass exactly (same 2 real sessions, 60 + 56 records, same physical
       device). G6: `FIEDLE400_LIVE=1` -- 5/5 applicable tests pass via the
       `hid` backend (2 correctly skip as Linux-only).
+- [x] G11 (new gate, this cycle, psytrap 2026-10-21): read `README.md`
+      end to end against current behavior. Found and fixed one real
+      drift -- the `clear` bullet still said Manual-mode recordings
+      aren't erased, which T-072 made untrue. Added G11 to
+      `RELEASE_PLAN.md`'s gate table and pre-flight command block as a
+      standing gate for every future cycle, not just this one.
 - [ ] Ring 0 (tag `v0.4.41` locally), Ring 1 (`workflow_dispatch` dry
       run), Ring 2 (push tag, verify Release), Ring 3 (asset SHA-256 +
       `--version`) -- not yet done for this sub-cycle.
