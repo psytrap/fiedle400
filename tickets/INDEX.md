@@ -3,10 +3,7 @@
 Live list of everything in `tickets/open/`. See `README.md` for the
 protocol; `DONE.md` for the archive.
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-034](open/T-034-repo-clean-up.md) | Repo clean-up (tracked leftovers and local clutter) | Either | Open |
-| [T-045](open/T-045-pulse-max-time-and-sentinel-index-quirks.md) | Pulse row reads the wrong channel's max_time; a sentinel-index quirk is shared by both implementations | Cloud | Open |
+Nothing open right now outside the Backlog below.
 
 ## Before next beta release
 
@@ -28,6 +25,8 @@ Open tickets parked until psytrap picks them up again.
 | [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud | Open (deferred) |
 | [T-041](open/T-041-key-sessions-by-user-and-entry.md) | Key stored recordings by user and entry, not entry alone | Cloud | Open (deferred) |
 | [T-043](open/T-043-coding-conventions.md) | Write down coding conventions, starting with identifier names | Either | Open (deferred) |
+| [T-045](open/T-045-pulse-max-time-and-sentinel-index-quirks.md) | Pulse row reads the wrong channel's max_time; a sentinel-index quirk is shared by both implementations | Cloud | Open (deferred) |
+| [T-046](open/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either | Open (deferred) |
 
 ## Open questions
 

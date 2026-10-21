@@ -1,6 +1,6 @@
 # T-045: Pulse row reads the wrong channel's max_time; a sentinel-index quirk is shared by both implementations
 
-- **Status:** Open
+- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
