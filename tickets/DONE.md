@@ -38,6 +38,9 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-031](done/2026-W43/T-031-basal-spo2-rule-confirmation.md) | Confirm the exact Basal SpO2 calculation rule | Cloud |
 | [T-030](done/2026-W43/T-030-pulse-rate-desaturation-implementation.md) | Implement the pulse-rate desaturation detector | Cloud |
 | [T-036](done/2026-W43/T-036-spo2-assistant-check-procedure.md) | Reusable procedure for confirming a decoded algorithm in SpO2 Assistant | Cloud |
+| [T-033](done/2026-W43/T-033-migrate-wizard-to-tkinter.md) | Evaluate migrating the interactive wizard from a terminal TUI to tkinter | Cloud |
+| [T-039](done/2026-W43/T-039-clarify-user-vs-session-concept.md) | Clarify "User" vs "Session" in the device protocol | Cloud |
+| [T-042](done/2026-W43/T-042-manual-mode-download.md) | Download Manual-mode recordings | Cloud |
 
 Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with

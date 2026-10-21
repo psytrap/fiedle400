@@ -502,7 +502,8 @@ def command_sessions(args):
         print("-" * 73)
         for s in sessions:
             ts_str = s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "N/A"
-            print(f"{s.session_id:<12} | {s.user_id:<6} | {s.record_count:<10} | {s.duration_str:<12} | {ts_str:<20}")
+            mode = "  (Manual mode)" if s.manual else ""
+            print(f"{s.session_id:<12} | {s.user_id:<6} | {s.record_count:<10} | {s.duration_str:<12} | {ts_str:<20}{mode}")
         print(f"\nTotal sessions found: {len(sessions)}")
 
     return 0
@@ -952,7 +953,8 @@ def run_interactive_wizard(args) -> int:
             print(f"Found {len(sessions)} recorded session(s):")
             for s in sessions:
                 ts_str = s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "N/A"
-                print(f"  [{s.session_id}] {ts_str}  |  Duration: {s.duration_str} ({s.record_count:,} records)")
+                mode = "  (Manual mode)" if s.manual else ""
+                print(f"  [{s.session_id}] {ts_str}  |  Duration: {s.duration_str} ({s.record_count:,} records){mode}")
 
             print("\n------------------------------------------------------------")
             print("Actions:")

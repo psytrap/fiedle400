@@ -115,9 +115,10 @@ cited per step); invents nothing.
    index into `{timestamp, spo2, heart_rate, flags}` dicts and go to
    `export.export_records` as `.spo2`/`.csv`/`.json`.
 
-Nothing above touches the Manual-mode protocol (`0xA0`/`0xD2`/`0xD3`/`0xD8`)
--- that's a separate, not-yet-implemented path; see PROTOCOL.md §3.14
-and CHANGELOG.md for its own worked example.
+The Manual-mode recording uses its own commands (`0xA0`/`0xA3`/`0xA2`/`0xA7`,
+PROTOCOL.md §3.14): `list_sessions` asks for its header only when the Auto list is empty, and
+`download_session` hands a manual `SessionInfo` to `download_manual`
+(`fiedle400/protocol/manual.py` decodes it). The records have the same shape as above.
 
 ## 4. Tests
 

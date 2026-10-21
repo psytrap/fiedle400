@@ -130,7 +130,11 @@ def build_storage_block_command(block_id: int, session_id: int) -> bytes:
 
 
 def build_storage_finalize_command() -> bytes:
-    """Builds the 64-byte 0x9D storage transfer finalization report."""
+    """Builds the 64-byte 0x9D report with mode 0x7F (9D 7F 7F 7F 7F ...).
+
+    DESTRUCTIVE: this is SpO2 Assistant's "Delete All" / auto-delete-after-saving, which erases
+    every recording on the device (PROTOCOL.md 3.13, T-037). Nothing in fiedle400 sends it.
+    """
     return build_session_data_command(SUBCOMMAND_STORAGE_FINALIZE, 0x7F, 0x7F)
 
 

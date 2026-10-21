@@ -8,6 +8,47 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.4.28 (2026-10-20)
+
+- **T-042:** Manual-mode recordings. A PO-400 in Manual recording mode keeps one recording
+  that the Auto commands cannot see; `sessions`, `download` and the wizard now list and read it
+  ("(Manual mode)"), with the same commands SpO2 Assistant sends (`A0`, `A3`, `A7`, `A2`; never
+  an erase). The header query is only sent when the Auto list is empty. The decoder follows
+  `SpO2.exe`'s: 27 one-second samples per subframe, nibble `0xF` an invalid sample, the sample
+  count at `D0` bytes 10..12. Tested against psytrap's capture
+  (`tests/fixtures/manual-download.trace.json`); not yet run on a device.
+- **T-033:** evaluation of a tkinter wizard (no behaviour change). Recommendation in the ticket:
+  a tkinter-free controller (`wizard.py`) tested as today, a thin `ttk` front-end with smoke
+  tests that skip without a display (`xvfb-run` on Ubuntu CI), and the terminal wizard kept as
+  the fallback. `scripts/wizard_gui_mockup.py` is a clickable mockup of the proposed screens
+  (`tests/test_wizard_gui_mockup.py`).
+- **T-040** (new, deferred): implement it, after psytrap picks from the mockup.
+- `tickets/INDEX.md` lists deferred tickets in a separate "Backlog (deferred)" table.
+- `tickets/INDEX.md` gets an "Open questions" section: what waits on psytrap or a local check,
+  each linked to its source.
+- PROTOCOL.md §3.14 (Manual mode) checked against psytrap's capture
+  `archive/capture/bum400_20261015_194301.pcap`: the exchange is written out, the framing (three
+  subframes per report) and the header example are confirmed, and the old "decoded reference
+  capture" table, which matches nothing in that capture, is replaced. A manual download sends no
+  erase.
+- **T-039:** "User" vs "session" worked out from `SpO2.exe` (no code change). `0xEC` byte 2 is the
+  user and byte 3 the entry within that user, so a recording is named by both, as the `0x9D`
+  request already sends them. Bit 6 of byte 1 marks the last header, and `9C 01` is a constant
+  "next header", not a user selector. The "Total Segments" name came from a wrong disassembly
+  citation. PROTOCOL.md §3.2 and §3.5 are corrected.
+- **T-037 / T-038 findings** (both stay open; no behaviour change): SpO2 Assistant's erase is
+  `9D 7F 7F 7F 7F 00 00 19` ("Delete All", and the auto-delete after saving, which the setting
+  `bAutoDeleteSegmentSaveData` turns on by default) and `9D 7F 02 <user> <entry>` ("Delete" for one
+  recording). `0x91`..`0x96` are a download family answered by `0xE1`..`0xE6`, and `0xAA` is never
+  sent, so neither is an erase. All vendor captures that download end with the erase-all, and
+  each next capture starts again at entry 1, which confirms it. `fiedle400
+  clear` and the wizard's erase send other bytes and may not erase anything. PROTOCOL.md §3.5,
+  §3.9 and §3.13 are rewritten, and the `hwsim` fake treats any `9D 7F` as destructive.
+- **T-041** (new): key recordings by user and entry. A pdb run with two users showed the
+  second replacing the first; the captures show up to four entries, always for user 1.
+
+---
+
 ## 0.4.27 (2026-10-20)
 
 The rest of the 0.4.26 work: the 0028 that was applied was an earlier draft, without the

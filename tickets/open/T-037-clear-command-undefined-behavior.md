@@ -55,4 +55,41 @@ run against real device flash holding real recorded sessions -- unlike
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Findings so far (Claude, cloud, 2026-10-20/21, patch 0030; static analysis of `SpO2.exe`,
+checked against every vendor capture).
+The ticket stays open: verifying on the device is the local step.** Details are in
+`PROTOCOL.md` §3.13.
+
+- **The vendor's delete commands for this device:**
+  - `9D 7F 7F 7F 7F 00 00 19` deletes every recording. It is sent by the "Delete All" button and
+    by the automatic delete after saving (`0x4af695`).
+  - `9D 7F 02 [user] [entry] 00 00 [chk]` deletes one recording. It is sent by the "Delete"
+    button, once per selected recording (`0x4af43c`). `user` and `entry` are bytes 2 and 3 of
+    its `0xEC` header (T-039).
+
+  The buttons are in the "Device Stored Data" dialog (resource 148).
+- **`0xAA` and `0x91`..`0x96` are not deletes.** `SpO2.exe` never sends `0xAA`. `0x91`..`0x96`
+  are transfers for another kind of stored data, answered by `0xE1`..`0xE6`.
+- **`fiedle400 clear` matches nothing the vendor sends.** It sends `0xAF`, then `0xAB 01 [id]`
+  for one session, or `0xAA`/`0xAB`/`0xAC 80 80` for all. It may do nothing at all. The same
+  method backs the wizard's "Erase recordings from device flash? [Y/n]", so that prompt may not
+  erase anything either. Whether a recording was still listed after an erase from the wizard
+  would tell.
+- **The erase-all is confirmed by the vendor captures.** Five of the six captures end with
+  `9D 7F 7F 7F 7F 00 00 19` (what `PROTOCOL.md` used to call `STORAGE_FINALIZE`), and each
+  following capture starts again at entry 1 with only newer recordings (`PROTOCOL.md` §3.13).
+  None of the captures contains `9D 7F 02` or any of `fiedle400 clear`'s bytes.
+- **Guards added in 0030:**
+  - The `hwsim` fake now counts any `9D 7F ...` as destructive.
+  - The unused `storage_finalize` builder says what it really is.
+
+**Recommendation for the local check:**
+1. Make two short throwaway recordings. Back them up with `fiedle400 download -f spo2`.
+2. Turn the auto-delete off in SpO2 Assistant if it has the setting
+   (`bAutoDeleteSegmentSaveData`).
+3. Delete one recording with its Delete button, capturing with `tests/capture_tools`. Then
+   `fiedle400 sessions` should list one recording.
+4. Separately, check whether the current `fiedle400 clear` changes anything. Delete All needs no
+   new run: the captures already show it.
+
+Only with your go-ahead for each run.

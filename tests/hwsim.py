@@ -63,8 +63,9 @@ def scrub_env():
 
 REPORT_LEN = 64
 
-# Opcodes that erase stored data (PROTOCOL.md 3.13: 0xAA full erase, 0x91..0x96 per-user
-# erase; the CLI's clear also sends 0xAB/0xAC). The simulator models none of them: an
+# Opcodes that might change stored data. The vendor's real deletes are 0x9D with mode 0x7F
+# (handled in command_key; PROTOCOL.md 3.13, T-037); 0xAA, 0x91..0x96 and the CLI clear's
+# 0xAB/0xAC stay here as untested candidates. The simulator models none of them: an
 # attempt is recorded in FakeOximeter.destructive and gets no reply. 0x94 is also the
 # read-only sector query (`94 14`), so it only counts as destructive in any other form.
 DESTRUCTIVE_OPCODES = frozenset([0x91, 0x92, 0x93, 0x95, 0x96, 0xAA, 0xAB, 0xAC])
@@ -76,6 +77,7 @@ _KEY_ARGS = {
     0x8E: 1, 0x90: 1, 0x9B: 1, 0x9C: 1,            # sub-index / control byte
     0xAD: 0, 0xA5: 1, 0xA6: 0,                     # device info, session select / download
     0x8F: 2, 0x9E: 2, 0x9F: 2,
+    0xA0: 1, 0xA2: 3, 0xA3: 3,                     # Manual mode: header, pulse / SpO2 series (mode, offset)
 }
 
 
@@ -88,14 +90,18 @@ def command_key(report: bytes) -> Optional[Tuple]:
         return None
     op = r[0]
     if op == 0xA7:
-        return ("unlock",)
+        # 7D 81 A7 80 ... is the CLI's unlock; A7 00 / A7 01 is the Manual-mode block ack.
+        return ("unlock",) if len(r) < 2 or r[1] == 0x80 else (op, r[1])
     if op in DESTRUCTIVE_OPCODES or (op == 0x94 and len(r) > 1 and r[1] != 0x14):
         return ("destructive", op)
     if op == 0x9D:
-        # Storage: init / ack / finalize carry only a mode (the vendor tool sends 8 bytes, the CLI 9);
-        # a block read (mode 0x04) is identified by type, user, segment and the two offset bytes.
+        # Storage: init / ack carry only a mode (the vendor tool sends 8 bytes, the CLI 9);
+        # a block read (mode 0x04) is identified by type, user, entry and the two offset bytes.
+        # Mode 0x7F deletes recordings (PROTOCOL.md 3.13, T-037).
         if len(r) < 2:
             return None
+        if r[1] == 0x7F:
+            return ("destructive", op)
         return (op, r[1]) + (tuple(r[2:7]) if r[1] == 0x04 else ())
     if op not in _KEY_ARGS:
         return None

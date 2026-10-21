@@ -49,4 +49,21 @@ What is NOT known:
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**Facts corrected (Claude, cloud, 2026-10-20, patch 0030; static analysis of `SpO2.exe`).
+The decision stays open (psytrap).**
+
+- **The vendor's automatic delete is not `0x91`..`0x96`.** It is `9D 7F 7F 7F 7F 00 00 19`,
+  the same command as the "Delete All" button (`0x4af695`). `SpO2.exe` sends it after saving a
+  download when all of these hold (`0x4a48bd`-`0x4a494b`):
+  - the setting `bAutoDeleteSegmentSaveData` is unset (the default) or non-zero;
+  - the data is Auto-mode recordings (category `0x40` in the `0xEF` reply, `PROTOCOL.md` §3.9).
+
+  So it can be turned off; the default is on.
+- **The vendor captures confirm it.** Five of the six captures in the repository end with
+  this delete after the download, and the next capture always starts again at entry 1 with
+  only newer recordings (table in `PROTOCOL.md` §3.13). The one capture without a download has
+  no delete, and its recording was still there in the next one.
+- **`fiedle400 download` stays read-only.** Erasing is a separate, confirmed step: the
+  wizard's prompt, and in the T-040 GUI mockup a button with a No default. Any erase
+  `fiedle400` keeps should use the vendor's bytes once T-037 has verified them; the current
+  `clear` bytes match nothing the vendor sends.

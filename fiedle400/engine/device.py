@@ -10,6 +10,7 @@ from ..protocol import (
     Parsers,
     Commands,
 )
+from ..protocol import manual
 from .buffer import SerialByteStreamBuffer
 from .detector import SerialPacketDetector, DecodedPacket
 
@@ -146,6 +147,8 @@ class SerialDeviceEngine:
 
     def download_session(self, sess_info: SessionInfo, debug: Union[bool, int] = 0) -> List[Dict[str, Any]]:
         """Downloads stored oximetry session records using SerialPacketDetector engine."""
+        if sess_info.manual:
+            return self.download_manual(sess_info, debug=debug)
         sess_id = sess_info.session_id
         duration_sec = sess_info.duration_seconds
         base_timestamp = sess_info.timestamp or datetime.now()
@@ -507,7 +510,117 @@ class SerialDeviceEngine:
             if ec_event.raw_payload and len(ec_event.raw_payload) > 1 and (ec_event.raw_payload[1] & 0x40):
                 break
 
-        return sorted(list(session_map.values()), key=lambda x: x.session_id)
+        sessions = sorted(list(session_map.values()), key=lambda x: x.session_id)
+        if not sessions:
+            # A device in Manual recording mode lists nothing here; its one recording has its own
+            # header query (PROTOCOL.md 3.14, T-042). Asked only when the Auto list is empty.
+            header = self.read_manual_header(debug=debug)
+            if header is not None and header.samples > 0:
+                sessions.append(SessionInfo(session_id=1, user_id=1, record_count=header.samples,
+                                            duration_sec=header.samples, timestamp=header.start,
+                                            raw_samples=header.samples, manual=True))
+        return sessions
+
+    # --- Manual mode (PROTOCOL.md 3.14, T-042) ---------------------------------------------------
+    def _manual_frames(self, done, timeout: float = 1.0, quiet: float = 0.3, debug: Union[bool, int] = 0) -> List[bytes]:
+        """Reads reports until done(frames) is true, nothing new came for `quiet` s, or `timeout` s passed."""
+        got: List[bytes] = []
+        start = last = time.time()
+        while time.time() - start < timeout and time.time() - last < quiet:
+            report = self.dev.read_report(64)
+            if report:
+                self._log_dump("IN", report, "manual mode")
+                if int(debug) >= 2:
+                    print(f"[DEBUG IN] Raw HID Frame ({len(report)} bytes): {report.hex()}")
+                new = manual.frames([report])
+                if new:
+                    got.extend(new)
+                    last = time.time()
+                    if done(got):
+                        break
+            else:
+                self._sleep(0.005)
+        return got
+
+    def read_manual_header(self, debug: Union[bool, int] = 0) -> Optional[manual.ManualHeader]:
+        """Asks for the Manual-mode recording's header (`A0`); None when the device does not answer."""
+        while self.dev.read_report(64): pass
+        self._write_report(manual.header_query(), "Manual header (0xA0)")
+        got = self._manual_frames(lambda fr: any(f[0] == manual.HEADER for f in fr), timeout=0.5, debug=debug)
+        header = next((manual.parse_header(f) for f in got if f[0] == manual.HEADER), None)
+        if int(debug) >= 1:
+            print(f"[DEBUG IN] Manual header: {header}")
+        return header
+
+    def _manual_series(self, opcode: int, reply: int, samples: int, debug: Union[bool, int] = 0) -> List[int]:
+        """One series, 27 values per subframe. A missing subframe is asked for again from where
+        the series broke off, as SpO2 Assistant does (`9N 7F`, then `9N 00` from that subframe)."""
+        values: List[int] = []
+        self._write_report(manual.series_request(opcode), f"Manual series (0x{opcode:02X})")
+        resumes = 0
+        while len(values) < samples:
+            got = self._manual_frames(
+                lambda fr: len(values) + manual.SAMPLES_PER_SUBFRAME * sum(f[0] == reply for f in fr) >= samples,
+                timeout=2.0, debug=debug)
+            progressed = False
+            for f in (f for f in got if f[0] == reply):
+                expected = len(values) // manual.SAMPLES_PER_SUBFRAME
+                seq = manual.subframe_seq(f)
+                if seq == expected:
+                    values.extend(manual.decode_subframe(f))
+                    progressed = True
+                elif seq > expected:
+                    break  # a gap: the rest of this batch is out of order
+            if len(values) >= samples:
+                break
+            if resumes >= 3:
+                break
+            resumes += 1
+            expected = len(values) // manual.SAMPLES_PER_SUBFRAME
+            if int(debug) >= 1:
+                print(f"[DEBUG OUT] Manual series 0x{opcode:02X}: asking again from subframe {expected}")
+            self._write_report(manual.series_end(opcode), f"Manual series stop (0x{opcode:02X} 7F)")
+            self._write_report(manual.series_request(opcode, expected), f"Manual series (0x{opcode:02X}) from {expected}")
+            if not progressed and not got:
+                self._sleep(0.05)
+        return values[:samples]
+
+    def download_manual(self, sess_info: SessionInfo, debug: Union[bool, int] = 0) -> List[Dict[str, Any]]:
+        """Downloads the Manual-mode recording: SpO2 (`A3`), ack (`A7 01`), pulse (`A2`), ack (`A7 00`),
+        then `A3 7F` / `A2 7F` to end. Read-only: nothing here erases the recording."""
+        samples = sess_info.record_count
+        base_timestamp = sess_info.timestamp or datetime.now()
+        while self.dev.read_report(64): pass
+        self._write_report(bytes([0x80]) + bytes(63), "Stop live stream (0x80)")
+        self._manual_frames(lambda fr: False, timeout=0.1, quiet=0.05)
+
+        spo2 = self._manual_series(manual.SPO2_REQUEST, manual.SPO2_DATA, samples, debug=debug)
+        self._write_report(manual.block_ack(True), "Manual SpO2 done (0xA7 01)")
+        self._manual_frames(lambda fr: any(f[0] == manual.BLOCK_ACK for f in fr), timeout=0.3)
+        pulse = self._manual_series(manual.PULSE_REQUEST, manual.PULSE_DATA, samples, debug=debug)
+        self._write_report(manual.block_ack(False), "Manual pulse done (0xA7 00)")
+        self._manual_frames(lambda fr: any(f[0] == manual.BLOCK_ACK for f in fr), timeout=0.3)
+        self._write_report(manual.series_end(manual.SPO2_REQUEST), "Manual end (0xA3 7F)")
+        self._write_report(manual.series_end(manual.PULSE_REQUEST), "Manual end (0xA2 7F)")
+
+        out = []
+        for i, (s, p) in enumerate(manual.records(spo2, pulse, samples)):
+            out.append({
+                "session_id": sess_info.session_id,
+                "user_id": sess_info.user_id,
+                "block_id": 1,
+                "seq": i // manual.SAMPLES_PER_SUBFRAME,
+                "timestamp": (base_timestamp + timedelta(seconds=i)).isoformat(),
+                "spo2": s,
+                "heart_rate": p,
+                "flags": "ok" if s is not None else "probe-out",
+            })
+        missing = samples - min(len(spo2), len(pulse))
+        print(f"\nManual recording download complete ({len(out)} records).")
+        if missing > 0:
+            print(f"WARNING: the device sent {missing} sample(s) fewer than its header announced; "
+                  f"those seconds are empty. Download it again.")
+        return out
 
     def download_all_sessions(
         self,

@@ -334,6 +334,9 @@ release notes.
   provided, note it as skipped and ship anyway -- Manual mode isn't
   implemented in `fiedle400` yet, so this never blocks a release, it only
   improves the docs when the data happens to be available. Not yet done.
+  **Update 2026-10-21:** psytrap supplied one (`archive/capture/bum400_20261015_194301.pcap`);
+  it settled M1 and M2, and Manual mode is implemented since 0.4.28 (T-042). A live check of
+  `fiedle400` on a device in Manual mode is still open (`tickets/INDEX.md`, "Open questions").
 - **Linux desktop icon.** ✅ **Done (psytrap, 2026-10-16).** No custom icon
   artwork exists anywhere in the project for *either* platform (the Windows
   shortcut just uses PyInstaller's default EXE icon), so this is a

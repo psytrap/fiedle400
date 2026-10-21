@@ -45,7 +45,7 @@ hypothesis until a recording shows it.
 | **0x9D [0x02]** | `STORAGE_INIT` / `SEGMENT_ACK` | `9D 02 7F 7F 7F 00 00 1C` | none | Vendor, CLI | Sent before and after a download; no recording shows a reply (§3.5) |
 | **0x9D [0x04 0x01]** | `READ_SPO2_BLOCK` | `9D 04 01 01 01 [off lo] [off hi] 00 [chk]` | `0xED` | Vendor, CLI | SpO2 series from a raw-sample offset (§3.5) |
 | **0x9D [0x04 0x02]** | `READ_PULSE_BLOCK` | `9D 04 02 01 01 [off lo] [off hi] 00 [chk]` | `0xED` | Vendor, CLI | Pulse series from a raw-sample offset (§3.5) |
-| **0x9D [0x7F]** | `STORAGE_FINALIZE` | `9D 7F 7F 7F 7F 00 00 19` | not identified | Vendor | Sent three times after the download; `fiedle400` has a builder but never sends it |
+| **0x9D [0x7F]** | `DELETE_ALL` / `DELETE_ENTRY` | `9D 7F 7F 7F 7F 00 00 19` / `9D 7F 02 [user] [entry] 00 00 [chk]` | not identified | Vendor | **Destructive** (decoded in T-037; §3.13). The vendor sent `DELETE_ALL` three times after the recorded download (its auto-delete). `fiedle400` has a builder (`storage_finalize`) but never sends it |
 | **0x81** | `QUERY_DEVICE_INFO` | `81 01` | `0xF1` | Vendor, CLI | Hardware model descriptor `"50F"` (§3.6) |
 | **0xAD** | (device info, variant) | `AD` | `F0 70` | CLI | Bare ACK on this device (T7 note before §3.6) |
 | **0x80** | `FIRMWARE_QUERY` | `80 00` | `F0 70` | Vendor, CLI | Bare ACK on this device; the documented `0xCF` reply is *RE only* (§3.7) |
@@ -58,7 +58,8 @@ hypothesis until a recording shows it.
 | **0x9A** | (unknown) | `9A 1A` | not identified | Vendor | Last command of the vendor download; `analysis/bum400_20260906_100516.md` calls it "back to live mode" (unverified) |
 | **0xA5** | `SESSION_SELECT` | `A5 [id] [chk]` | none | CLI (tested) | Serial-stream devices; this firmware does not answer (§3.12) |
 | **0xA6** | `SESSION_DOWNLOAD` | `A6 [chk]` | none | CLI (tested) | Serial-stream devices; this firmware does not answer (§3.12) |
-| **0xAA / 0x91** | `FLASH_CLEAR` | `AA 00×6 [chk]` / `91 01 12` | | *RE only* | **Destructive** (§3.13) |
+| **0xAA** | `FLASH_CLEAR` | `AA 00×6 [chk]` | | *RE only* | Never sent by `SpO2.exe` (§3.13) |
+| **0x91..0x96** | (other data category) | `9N 00` / `9N 02` / `9N 7F` | `0xE1..0xE6` | *RE only* | Transfers for a data category this device does not report; not erase commands (§3.13) |
 
 The Manual-mode commands (`0xA0`, `0xA3`, standalone `0xA2`, `0xA7 00/01`) are documented separately in §3.14.
 
@@ -145,16 +146,16 @@ checksum form above is unrecorded.
 | Offset | Field | Value | Notes |
 | :--- | :--- | :--- | :--- |
 | `0x00` | Opcode | `0x9C` | Session query command |
-| `0x01` | User / Slot ID | `0x01` | User 1 (Slot 1) |
+| `0x01` | Next header | `0x01` | Always `0x01`. `SpO2.exe` sends `9C 01` from all three call sites (`0x4b8636`, `0x4b8d6a`, `0x4ba4c6`) and repeats it until a header with bit 6 set arrives; it is not a user selector (T-039) |
 | `0x02` | Checksum | `0x1D` | `(0x9C + 0x01) % 128 = 0x1D` |
 
 #### Device Response: Session Header (`0xEC`, 21 Bytes)
 | Offset | Field | Format | Description |
 | :--- | :--- | :--- | :--- |
 | `0x00` | Header Opcode | `0xEC` | Session metadata packet identifier |
-| `0x01` | Flags | Bitmask | Bit 6 (`0x40`): Data ready (1 = valid session). Bits 0..3: User slot ID |
-| `0x02` | Total Segments | `uint8` | Total stored segments count (per the `SpO2.exe` disassembly; `fiedle400` reads this byte as the user id) |
-| `0x03` | Segment Index | `uint8` | 1-based segment number (`fiedle400` reads it as the session id). Every recording has `01 01`, so neither reading is confirmed |
+| `0x01` | Flags | Bitmask | Bit 6 (`0x40`): **last header**. While it is clear, `SpO2.exe` asks for the next one with `9C 01`; `fiedle400` stops on it too. Bits 0..3: stored separately and compared with 1 (selects a download path); meaning not decoded, `0` in every recording (T-039) |
+| `0x02` | User | `uint8` | 1-based user number: `SpO2.exe` keeps one username and one list of entries per value, and sends it back as byte 3 of the `0x9D` page request. `fiedle400`'s `user_id`. Not a segment count (T-039) |
+| `0x03` | Entry | `uint8` | 1-based entry (one recording) **within that user**; byte 4 of the `0x9D` page request. `fiedle400`'s `session_id`. The vendor captures show entries 1..4 for user 1; a second user has never been seen (§3.13, T-039) |
 | `0x04` | Year | `uint8` | Years since 2000 (`26` = 2026) |
 | `0x05` | Month | `1..12` | Month |
 | `0x06` | Day | `1..31` | Day of month |
@@ -170,6 +171,31 @@ Corrected 2026-10-16 against both recordings: earlier drafts gave this as a 64-b
 16-byte username at `0x0E..0x1D`. The real frame is 21 bytes, matching §2.2:
 `EC 40 01 01 1A 09 06 0A 00 2E 73 01 00 00 75 73 65 72 00 00 42` (vendor capture; 2026-09-06
 10:00:46, 243 raw samples).
+
+**User, entry and `fiedle400` session (T-039, from `SpO2.exe`; the vendor captures show entries 1..4 of user 1, §3.13).** The
+`0xEC` reply handler is the case at `0x4ea405` of the reply parser (payload pointer
+`[obj+0x124]`). It stores byte 1's low nibble at `+0x2f8`, bit 6 at `+0x2fc`, byte 2 at `+0x2f0`
+and byte 3 at `+0x2f4` (getters `0x4c3c50`, `0x4c3c90`, `0x4c3c10`, `0x4c3c30`). The dialog that
+lists recordings (`0x4b8807`-`0x4b8d9d`) then does the following:
+- It grows its per-user tables to `byte2` entries and the entry list of user `byte2` to `byte3`.
+- It stores the start time and sample count at `[byte2 - 1][byte3 - 1]`.
+- It stores the username (bytes `0x0E..0x13`) once per `byte2`.
+- It asks for the next header (`9C 01`) until bit 6 is set.
+
+Downloads address a recording by both numbers. The `0x9D` page request carries `byte2` in its
+byte 3 and `byte3` in its byte 4 (`0x4b8fd2`-`0x4b9059`; `fiedle400` builds the same bytes,
+§3.5). So:
+- a **user** is byte 2;
+- an **entry** is byte 3, numbered per user;
+- a `fiedle400` **session** is one entry, identified by both numbers.
+
+Still open: whether any PO-400 ever reports more than one user or entry. The "User 1..6" that
+§3.13 once gave for `0x91`..`0x96` has no support (T-037).
+
+Correction: `analysis/bum400_20260906_100516.md` §A.2 places this handler at `0x004c587a` with
+fields `[this+0x1e8]`/`[this+0x1ec]` named "Total Segments" / "Segment Index". The binary does
+not match: `0x4c587a` is unrelated code, and nothing reads those fields as a count. This table
+used the doc's names until T-039.
 
 ---
 
@@ -274,8 +300,8 @@ Packed consecutively in 64-byte HID input reports:
 | `0x00` | Opcode | `0x9D` | Storage transfer command opcode |
 | `0x01` | Mode | `0x02` / `0x04` | `0x02` = Init / ACK, `0x04` = Read block |
 | `0x02` | Data Type | `0x01` / `0x02` / `0x7F` | `0x01` = SpO2 series, `0x02` = Pulse Rate, `0x7F` = Init / ACK |
-| `0x03` | User ID | `0x01` / `0x7F` | User slot ID (`0x7F` for Init / ACK) |
-| `0x04` | Segment ID | `0x01` / `0x7F` | Session segment ID (`0x7F` for Init / ACK) |
+| `0x03` | User | `0x01` / `0x7F` | User number, byte 2 of the `0xEC` header (`0x7F` for Init / ACK; T-039) |
+| `0x04` | Entry | `0x01` / `0x7F` | Entry within that user, byte 3 of the `0xEC` header (`0x7F` for Init / ACK; T-039) |
 | `0x05` | Offset Low | `0x00..0x7F` | Sample offset (bits 0..6) -- **not** a block/page index, see note below |
 | `0x06` | Offset High | `0x00..0x7F` | Sample offset (bits 7..13) |
 | `0x07` | Reserved | `0x00` | Fixed zero |
@@ -283,13 +309,14 @@ Packed consecutively in 64-byte HID input reports:
 | `0x09..0x3F` | Padding | `0x00...` | Reserved zero padding |
 
 #### Command Parameters
-| Command | Mode `[0x01]` | Type `[0x02]` | User `[0x03]` | Seg `[0x04]` | Offset `[0x05..0x06]` | Checksum `[0x08]` | Description |
+| Command | Mode `[0x01]` | Type `[0x02]` | User `[0x03]` | Entry `[0x04]` | Offset `[0x05..0x06]` | Checksum `[0x08]` | Description |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
 | `STORAGE_INIT` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` *at `[0x07]`* | Sent before the download; no reply |
 | `READ_SPO2_BLOCK` | `0x04` | `0x01` | `0x01` | `0x01` | offset | `0x24` at offset 0 | Reads SpO2 flash series |
 | `READ_PULSE_BLOCK` | `0x04` | `0x02` | `0x01` | `0x01` | offset | `0x25` at offset 0 | Reads Pulse Rate flash series |
 | `SEGMENT_ACK` | `0x02` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x1C` *at `[0x07]`* | Same bytes as `STORAGE_INIT`, sent after the download; no reply |
-| `STORAGE_FINALIZE` | `0x7F` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x19` *at `[0x07]`* | Vendor tool only, three times after the download; reply not identified |
+| `DELETE_ALL` | `0x7F` | `0x7F` | `0x7F` | `0x7F` | `0x00 0x00` | `0x19` *at `[0x07]`* | **Destructive.** Erases every recording (§3.13). Vendor tool only, three times after the recorded download; reply not identified |
+| `DELETE_ENTRY` | `0x7F` | `0x02` | user | entry | `0x00 0x00` | `sum % 128` | **Destructive.** Erases one recording (§3.13). Static analysis only |
 
 The `0x02`/`0x7F` commands are **8 bytes** in the vendor capture (`9D 02 7F 7F 7F 00 00 1C`): no
 reserved byte, checksum at `[0x07]`. `fiedle400` sends a 9-byte variant with the reserved `0x00`
@@ -482,6 +509,17 @@ The only recorded reply is `EF 00 01 40 00 00 00 30`. Read with this map it give
 size of `0x01 | 0x40 << 7` = 8193 and zero capacity, which fits neither 64 nor 256; the field meanings
 are unconfirmed.
 
+**What `SpO2.exe` does with it (T-037, static analysis).** The reply parser copies bytes `0x03..0x06`
+into one 4-byte field (`0x4eaba5`). It also sets a flag when byte `0x02` is non-zero. The download
+dialog reads the first of those bytes as a bitmask of the kinds of stored data, and picks a
+download path from it (`0x4b0d27`-`0x4b0f30`, `0x4ba6c7`):
+- `0x40`: Auto-mode recordings. It sends `90 06`, then the `0x9C`/`0x9D` download.
+- `0x01`: another kind. It sends `90 00` or `90 01`, then the `0x91`..`0x96` transfers (§3.13).
+- `0x10`: a third kind. It sends `90 04`.
+
+The recorded `40` matches what the vendor then sent (`90 06`, then `9C`/`9D`). So these bytes are a
+capability mask, not flash geometry; the name of this section is historical.
+
 ---
 
 ### 3.10 FLASH_SECTOR_QUERY (`0x94`)
@@ -534,24 +572,59 @@ ACK (CHANGELOG.md, "Manual-mode protocol"). Serial-stream devices are untested.
 
 ---
 
-### 3.13 FLASH_CLEAR (`0xAA` & `0x91`..`0x96`)
+### 3.13 Deleting recordings (`0x9D 7F`; not `0xAA` or `0x91`..`0x96`)
 
 > [!CAUTION]
 > **Destructive Operations**:
-> - `0xAA`: Completely erases all flash memory partitions.
-> - `0x91`..`0x96`: Erases recorded session data for User 1..6.
+> - `9D 7F 7F 7F 7F 00 00 19` erases every recording, and `9D 7F 02 [user] [entry]` erases one
+>   (decoded from `SpO2.exe`, T-037). No automated test may send either to a real device.
+> - `0xAA` and `0x91`..`0x96`, listed here in earlier drafts, are not erase commands for this
+>   device (see below).
 
-- **Full Erase Request**: `[0x7D, 0x81, 0xAA, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28]`
-- **User Erase Request**: `[0x91, 0x01, 0x12]` (User 1)
-- **Response**: `[0xF0, 0x70]` upon completion.
+**Decoded in T-037 (static analysis of `SpO2.exe`, then checked against every vendor capture).** The
+erase commands for this device are `0x9D` commands with mode `0x7F`, not `0xAA` or `0x91`..`0x96`.
+The vendor's "Device Stored Data" dialog (resource 148) has four buttons: Receive, Delete,
+Delete User and Delete All.
 
-None of this is in a recording (nobody has captured an erase on purpose). Three things to know:
-- Per the disassembly (`analysis/bum400_20260906_100516.md` §A.6), the unmodified vendor `SpO2.exe`
-  sends `0x91`..`0x96` automatically **after every download**, which erases the device. The vendor
-  capture in this repository was made with a patched copy that drops those commands.
-- `fiedle400 clear` (`engine/device.py`) sends other bytes than the ones above: `0xAF`, then
-  `0xAB 01 [id]` for one session, or `0xAA 80 80`, `0xAB 80 80`, `0xAC 80 80` for all, each with the
-  `7D 81` prefix. None of these is documented or recorded; treat `clear` as unverified.
+| What | Bytes | Where in `SpO2.exe` |
+| :--- | :--- | :--- |
+| Delete All, and the automatic delete after saving | `9D 7F 7F 7F 7F 00 00 19` | `0x4af695`. Called by the Delete All button (`0x453`, `0x4a3e76`) and, after a download, when the setting `bAutoDeleteSegmentSaveData` is unset or non-zero (`0x4a48fc`-`0x4a494b`). Only in Auto mode (category `0x40`, §3.9) |
+| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]`, one per recording | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`). `user`/`entry` as in the `0xEC` header (§3.2) |
+| Delete User | no command for this device | `0x4af5ef` sends `A1 00`, or `0xAE` in a `7D 80` frame, on other device types, and nothing on the `0x9C`/`0x9D` path |
+| Delete for the `0x91`..`0x96` data category | `91 7F` | `0x4af547` |
+
+**Confirmed by the vendor captures.** Every vendor capture that downloads also ends with the
+automatic delete-all, after the last `9D 04` page request:
+
+| Capture (`archive/capture/`, `analysis/`) | Date | Headers (user, entry: start) | Ends with `9D 7F 7F 7F 7F` |
+| :--- | :--- | :--- | :--- |
+| `bum400.pcapng` | 09-03 07:29 | 1,1: 09-02 22:32; 1,2: 09-03 01:14 | yes, after downloading both |
+| `bum400__2.pcapng` | 09-03 ~08:59 | 1,1: 09-03 08:12 | no (no download) |
+| `bum400_download.pcapng` | 09-05 09:46 | 1,1: 09-03 08:12; 1,2..1,4: 09-04 21:46 .. 09-05 00:28 | yes, after downloading all four |
+| `raw/bum400_raw.pcapng` | 09-05 15:59 | 1,1: 09-05 09:53; 1,2: 13:11; 1,3: 13:17 | yes |
+| `realtime/bum400_realtime.pcapng` | 09-05 18:13 | 1,1: 09-05 16:11 | yes |
+| `bum400_20260906_100516.pcap` | 09-06 10:05 | 1,1: 09-06 10:00 | yes, sent three times |
+
+Every capture after an erase starts again at entry 1 with only newer recordings, and the one
+capture without an erase (`bum400__2`) left its recording in place for the next. So
+`9D 7F 7F 7F 7F 00 00 19` erases every recording, and the device renumbers from 1. The device
+sends no reply of its own to it (the `0xEB` frames around it are the live stream). No capture
+contains `9D 7F 02` (delete one), `0xAA`, `0xAB`, `0xAC`, `0xAF` or `0x91`..`0x96`.
+
+Notes on the other candidates:
+- **`0xAA` and `0x91`..`0x96` are not erase commands for this device.** `SpO2.exe` never sends
+  `0xAA`: none of its 137 send sites uses it. `0x91`..`0x96` are a transfer family for a different
+  kind of stored data (the `0x01` category of §3.9):
+  - the device answers them with `0xE1`..`0xE6` (reply handler cases `0x4ba821`-`0x4bb4d0`);
+  - the program follows up with `9N 02` to continue and `9N 7F` to finish, appending the items in
+    blocks of ten;
+  - the program's Bluetooth path sends some of the same opcodes (`0x4bf109`-`0x4bf463`) before it
+    stores spot-check SpO2 and step-counter records (`insert spo2Single`, `insert step`).
+
+  §A.6's "user erase after every download" reading is wrong, and "User 1..6" has no support.
+- **`fiedle400 clear`** (`engine/device.py`) sends none of the vendor's bytes: it sends `0xAF`,
+  then `0xAB 01 [id]` for one session, or `0xAA 80 80`, `0xAB 80 80`, `0xAC 80 80` for all, each
+  with the `7D 81` prefix. It is unverified, and it matches nothing the vendor sends (T-037).
 - Switching the device between Auto and Manual recording mode on the device itself erases its memory
   (CHANGELOG.md, "Manual-mode protocol").
 
@@ -560,16 +633,18 @@ None of this is in a recording (nobody has captured an erase on purpose). Three 
 ### 3.14 Manual Recording Protocol (`0xA0`/`0xD0`, `0xA2`/`0xD2`, `0xA3`/`0xD3`, `0xA7`/`0xD8`)
 
 > [!IMPORTANT]
-> **Documented, not yet implemented.** Found 2026-10-15 via a live USB capture
-> of the vendor's own SpO2 Assistant software reading a **Manual-mode**
-> recording, cross-referenced against its disassembly (`SpO2.exe` @
-> `0x004c4875` for the delta decoder). This is a **separate, parallel**
+> **Implemented in T-042** (`fiedle400/protocol/manual.py`, `SerialDeviceEngine.download_manual`):
+> `sessions`, `download` and the wizard list and read the Manual-mode recording when the Auto
+> list is empty. Found 2026-10-15 via a live USB capture of the vendor's own SpO2 Assistant
+> reading a **Manual-mode** recording. The layouts below were checked on 2026-10-21 against
+> `SpO2.exe`: header parser `0x4e92ac`, SpO2 subframe decoder `0x4e9440`, pulse `0x4e97ce`,
+> download dialog cases `0x4b6c46` (`D0`) and `0x4b75c6` (`D3`). (The `0x004c4875` cited here
+> before is an unrelated list helper.) This is a **separate, parallel**
 > protocol from the `0x9C`/`0x9D` flash-index commands used everywhere else
 > in this document, which only ever read **Auto-mode** sessions -- that is
 > the root cause of the Manual-mode session visibility question in
 > `RELEASE_PLAN.md` §3d: Manual-mode data was never reachable via `0x9C`/
-> `0x9D` at all, by design, not by a bug or a missing argument. No code in
-> this project implements the commands below yet.
+> `0x9D` at all, by design, not by a bug or a missing argument.
 >
 > **Opcode `0xA2` is reused.** §3.1's `UNLOCK_HANDSHAKE` already sends `0xA2`
 > as the second half of a combined `0xA7`-then-`0xA2` preamble. The request
@@ -585,15 +660,20 @@ Request: `A0 00 20` (sub-command `0x00`, checksum `0x20`).
 | Offset | Field | Format | Notes |
 | :--- | :--- | :--- | :--- |
 | `0x00` | Opcode | `0xD0` | Manual recording header response |
-| `0x01` | Unknown | `0x00` in every sample seen | Not yet identified -- always zero so far |
+| `0x01` | Kind | `0x00` in the capture | `SpO2.exe` maps `0`, `1` and `4` to an internal type; `fiedle400` decodes every kind like `0` |
 | `0x02..0x04` | Date | `YY MM DD` | e.g. `1A 0A 0F` = 2026-10-15 (`0x1A` = 26 -> `2000+26`) |
 | `0x05..0x07` | Time | `HH MM SS` | e.g. `13 22 10` = 19:34:16 |
-| `0x08..0x0A` | Duration (s) | 3 bytes, direct (not the 28-bit packing used elsewhere) | e.g. `00 00 3B` = 59 s. **Confirmed live (2026-10-15) against the real device with the offsets above -- the original draft had these one byte too early, missing the unknown byte at `0x01`.** |
+| `0x08..0x09` | Unknown | `00 00` in the capture | Not read by `SpO2.exe`'s header parser |
+| `0x0A..0x0C` | Sample count | 21-bit, 7-bit little-endian: `b0 \| b1<<7 \| b2<<14` | `3B 00 00` = 59. One sample per second (§F); `SpO2.exe` reads exactly this many samples per series. (Earlier drafts read `00 00 3B` at `0x08..0x0A` as a big-endian "duration", which gives the same 59 here only by chance) |
+| `0x0D` | Checksum | `0..127` | `sum(bytes[0x00..0x0C]) % 128` (`0x03` in the capture). The frame is 14 bytes; the rest of the report carries live-stream frames (`EB ...`) |
 
 #### B. SpO2 Data Block (`0xA3` -> `0xD3`)
 
-Request: `A3 00 00 00 23` (start at subframe 0; the last two bytes are a
-14-bit-packed subframe offset per §1.3, `00 00` = offset 0).
+Request: `A3 00 lo hi chk`: start at subframe `lo | hi << 7` (`A3 00 00 00 23` = from the
+start). `SpO2.exe` asks once; the device then sends every subframe, three per report, until the
+series is complete. When a subframe number is not the next one expected, `SpO2.exe` sends
+`A3 7F 00 00 22` and asks again from the missing subframe (`0x4b75c6`); `fiedle400` does the
+same, up to three times.
 
 Response: one 64-byte report holds **three** 20-byte subframes back to back,
 plus 4 bytes of trailing padding:
@@ -653,131 +733,76 @@ line by line, but consistent with everything confirmed above):
    download." Device resumes its normal continuous live stream (pulse,
    SpO2, waveform) for the on-device display.
 
-#### F. Delta-Nibble Decompression (`0xD3` / `0xD2` payload) -- CONFIRMED
+#### F. Delta-Nibble Decompression (`0xD3` / `0xD2` payload)
 
-**Solved and live-verified 2026-10-15.** Every one of the 8 data subframes in
-the reference capture decodes to physiologically valid values with no
-offset, scaling or post-correction.
-
-Within a 20-byte subframe `[opcode][seq][00][16 data bytes][checksum]`:
+**As `SpO2.exe` decodes it** (`0x4e9440` SpO2, `0x4e97ce` pulse; corrected 2026-10-21, T-042).
+Every subframe stands for exactly **27 samples, one per second**, and the series is read until
+the header's sample count is reached (the last subframe is cut there).
 
 | Record offset | Field | Meaning |
 | :--- | :--- | :--- |
-| `0x03..0x04` | Unknown | Not needed for decoding; see note below |
-| `0x05` | **Base value** | First sample, as a direct value: SpO2 in %, Pulse in bpm. `0x7F` here means the whole subframe is "no finger / no signal". |
-| `0x06..0x12` | Delta stream | 13 bytes, 2 samples per byte, high nibble first |
+| `0x01..0x02` | Subframe number | `b1 \| b2 << 7` |
+| `0x03..0x04` | Unknown | Not read by the decoder |
+| `0x05` | **First value** | SpO2 in % (valid 1..100), pulse in bpm (valid 1..254). An SpO2 outside that range is `0x7F` and makes the whole subframe "no finger" |
+| `0x06..0x12` | Deltas | 13 bytes, two deltas each, high nibble first: 26 more samples |
 | `0x13` | Checksum | `sum(bytes[0x00..0x12]) % 128` |
 
-So one subframe carries at most **27 samples** (1 base + 13x2 deltas).
+Each nibble is sign (bit 3) and magnitude (bits 0..2), added to the previous sample. There is
+**no terminator**: the nibble `0xF` (negative 7) marks an invalid sample (`0x7F` SpO2, `0xFF`
+pulse), and the deltas after it build on that invalid value, so the rest of the subframe stays
+invalid (`0x7F` filler bytes after the end of a recording do exactly that). After decoding,
+any SpO2 outside 1..100 and any pulse outside 1..254 is invalid.
 
-Each nibble is sign-and-magnitude: **bit 3 = sign** (1 = negative),
-**bits 2..0 = magnitude** (0-7). The value chain is running, not
-fixed-base: `S_n = S_(n-1) +/- magnitude`.
+The pulse decoder accepts a first value of `0x7F` (127 bpm), so the all-`0x7F` subframes decode
+to noise for pulse (127, 134, invalid, 6, ...: `0xFF + 7` wraps to 6). `fiedle400` therefore
+keeps a pulse value only where the SpO2 sample of the same second is valid.
 
-Two distinct terminators, checked in this order:
+**Reference capture: `archive/capture/bum400_20261015_194301.pcap`** (psytrap, 2026-10-15
+19:43, SpO2 Assistant downloading one manual recording; added to the archive 2026-10-21, not in
+git). The whole exchange, after the `8F 04` / `9A` traffic of the open dialog:
 
-1. **Whole byte `0x7F`** -- padding, the subframe ends here. Checked
-   *before* splitting into nibbles.
-2. **Nibble `0xF`** -- end marker for an odd sample count; the subframe
-   ends at that half-byte.
-
-Reference implementation:
-
-```python
-SENTINEL = 0x7F
-
-def decode_subframe(rec):            # rec = the 20 bytes
-    base = rec[5]
-    if base == SENTINEL:
-        return None                  # no finger for this whole subframe
-    values, cur = [base], base
-    for byte in rec[6:19]:
-        if byte == SENTINEL:         # byte-level padding -> end
-            break
-        for shift in (4, 0):         # high nibble first
-            nib = (byte >> shift) & 0xF
-            if nib == 0xF:           # odd-count end marker
-                return values
-            cur += -(nib & 7) if (nib & 8) else (nib & 7)
-            values.append(cur)
-    return values
+```
+OUT A0 00 20                 IN D0 00 1A 0A 0F 13 22 10 00 00 3B 00 00 03   2026-10-15 19:34:16, 59 s
+OUT 80                       (stop live stream)
+OUT A3 00 00 00 23           IN D3 x3 subframes (below)
+OUT A7 01 28                 IN D8 01 00 59
+OUT A2 00 00 00 22           IN D2 x3 subframes (below)
+OUT A7 00 27                 IN D8 00 00 58
+OUT A3 7F 00 00 22
+OUT A2 7F 00 00 21           (end; no erase of any kind is sent)
+OUT 9B 00 1B, 9B 01 1C       (live stream back on)
 ```
 
-Decoded reference capture (2026-10-15, 7 subframes per series):
+The host asks once per series, and one reply holds the whole recording. Every subframe checksum
+is correct:
 
-| seq | SpO2 | Pulse |
-| :--- | :--- | :--- |
-| 0 | no finger | no finger |
-| 1 | 96 flat (16 samples) | 66-67 (16) |
-| 2 | no finger | no finger |
-| 3 | 97 -> 98 (27) | 62 -> 65 (27) |
-| 4 | 96 -> 100 (9) | 65, ending 64 (9) |
-| 5 | no finger | no finger |
-| 6 | 98 -> 99 (7) | 63 -> 64 (7) |
+| seq | SpO2 (`D3`) | Pulse (`D2`) | bytes 3, 4 (SpO2 / Pulse) |
+| :--- | :--- | :--- | :--- |
+| 0 | no finger (all `7F`) | no finger | `7F 7F` / `7F 7F` |
+| 1 | 96 x5, then 97 x9 (14 samples) | 57, 63, 69, then 71 x11 (14 samples) | `08 7E` / `04 7E` |
+| 2 | no finger | no finger | `7F 7F` / `7F 7F` |
 
-Totals: SpO2 96-100%, Pulse 62-67 bpm, 59 samples with signal across a
-140-sample (~2m20s) timeline.
+Decoded as `SpO2.exe` does (§F), that is 59 one-second samples: 27 without a finger
+(19:34:16-19:34:42), 14 with SpO2 and pulse (19:34:43-19:34:56), and 18 without a finger to the
+end. "One per second" rests on the header count being named a duration and on `SpO2.exe`
+reading exactly that many samples; a stopwatch-timed recording would confirm it.
 
-> [!NOTE]
-> **How the earlier wrong decode went wrong.** Two prior attempts read the
-> base from record offset `0x03` instead of `0x05`. That inflated SpO2 to
-> 116-127 (apparently "over the 100% ceiling") and produced negative Pulse
-> values, which in turn motivated a bogus "subtract a constant 27-28"
-> hypothesis and a bogus "ramp-up transient" reading of subframes 1 and 3.
-> All of that was the off-by-two, nothing else. The relayed disassembly note
-> "byte `0x04` of the data region is the base value" was **correct** --
-> counting the data region from the `seq` byte (`rec[1]`), index 4 is exactly
-> `rec[5]`. Read field indices against a stated origin before trusting them.
+> [!WARNING]
+> **Corrected 2026-10-21 against the capture above.** Earlier drafts gave a "decoded reference
+> capture" with 7 subframes per series (SpO2 96-100%, Pulse 62-67, 59 samples with signal over
+> ~140), and quoted byte 4 as `0x7C, 0x00, 0x7F, 0x7F` / `0x7D, 0x00, 0x7F, 0x7F`. None of that
+> is in the only capture there is, which has the same header (19:34:16, 59 s). Where those values
+> came from is unknown. Byte 3 of the one
+> data subframe is `08` for SpO2 and `04` for Pulse, which is what the "channel marker" reading in
+> (a) predicted. The framing question from the docs review (M1) is settled: one 64-byte report
+> holds three 20-byte subframes and 4 padding bytes. The header example (M2) is this recording.
 
 > [!NOTE]
-> **Updated 2026-10-15 against a second relayed disassembly pass and a
-> fresh live re-pull of the same stored recording (byte-identical to the
-> earlier capture, confirming it is deterministic).**
->
-> (a) **Record offset `0x04` is not a channel ID.** A relayed disassembly
-> claimed `rec[0x03]` (its own indexing counts from the `seq` byte, so this
-> is `rec[4]` in this document's indexing) is a constant hardware channel
-> marker, `0x08` for SpO2 / `0x04` for Pulse. Checked directly against the
-> live capture: it is not constant. Across the four real SpO2 subframes it
-> reads `0x7C, 0x00, 0x7F, 0x7F`; across Pulse, `0x7D, 0x00, 0x7F, 0x7F`.
-> Still unidentified, and definitely not a fixed per-series tag.
->
-> A follow-up disassembly pass adds a negative finding rather than a
-> positive one: the host (`SpO2.exe`) decode path never reads this byte at
-> all anywhere in the loop -- it reads bytes 0/1/2 (opcode/seq/reserved)
-> and then jumps straight to byte 4 for the base value. That is consistent
-> with, not a resolution of, the open question: the *host* ignores it, but
-> what the *firmware* actually writes there -- a leading candidate guess is
-> per-sample status/quality bits from the MCU, unconfirmed -- is still
-> unidentified. Documenting it as unidentified rather than guessing is the
-> correct state here, not a gap to be filled in by assertion.
->
-> (b) **High-nibble-first is now corroborated two ways.** The empirical
-> smoothness check in this capture was a near-exact tie (23 vs 24) and could
-> not settle it alone. A second, independently relayed disassembly
-> description of the decode loop matches this document's nibble math
-> exactly (sign at bit 7 of the byte / bit 3 of the low nibble, magnitude in
-> the remaining 3 bits, high nibble consumed first) -- consistent with, not
-> derived from, the empirical tie-break already in place. Treat as settled
-> unless a sharp-transition capture disagrees.
->
-> (c) **Duration vs. sample count: a credible mechanism was offered, not
-> independently confirmed.** The same relayed source claims the device's
-> own reader stops consuming samples once a running count reaches the
-> header's duration value, and that everything past that point -- even
-> same-value deltas that look like genuine flat readings -- is block
-> padding the reader is instructed to discard. That would reconcile 41 s of
-> real data with a 59-sample decoded stream without requiring a
-> terminator at the cutoff. It cannot be checked from the raw bytes alone:
-> `0x00` deltas are indistinguishable from genuine "no change" samples by
-> design, which is exactly why this was ambiguous to begin with. A
-> precisely timed fresh recording (exact duration by stopwatch, compared
-> against the resulting header value and decoded sample count) is still
-> the only way to settle this directly.
->
-> (d) `0x7F` as padding is ambiguous with a legitimate `+7, -7` delta pair;
-> the device appears to reserve it, but a capture with large swings would
-> confirm.
+> **Superseded notes (2026-10-15).** Earlier versions of this section carried notes on the
+> wrong base offset (`0x03` instead of `0x05`), on bytes 3..4, on nibble order, on "41 s of real
+> data in a 59-sample stream" and on `0x7F` padding. The decoder in §F settles them: the base is
+> at `0x05`, bytes 3..4 are not read, high nibble first, and the 41 s are the 27 no-finger plus
+> 14 measured seconds of the capture above. See git history for the old text.
 
 
 ### 3.15 Reverse-engineering `SpO2.exe` -- what works, what does not

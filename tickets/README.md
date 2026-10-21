@@ -11,7 +11,7 @@ deliberately *not* carried over from the source this was adapted from
 ```
 tickets/
 ├── README.md    # this file
-├── INDEX.md     # live list of open tickets
+├── INDEX.md     # live list of open tickets; "Backlog (deferred)" table; "Open questions" section
 ├── DONE.md      # archive register of completed tickets
 ├── open/        # active tickets: T-NNN-slug.md
 └── done/        # completed tickets, one folder per ISO week: done/<ISO-year>-W<week>/
@@ -65,7 +65,7 @@ reopened; if the work becomes wanted again later, open a fresh ticket.
 ```markdown
 # T-NNN: <Descriptive Title>
 
-- **Status:** Open | In Progress | Done | Won't Do
+- **Status:** Open | Open (deferred) | In Progress | Done | Won't Do
 - **Priority:** P0 | High | Normal | Low
 - **Owner:** Local | Cloud | Either
 - **Scope & Relevant Files:**
