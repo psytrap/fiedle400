@@ -603,8 +603,7 @@ def _report_erase(ok, what: str = "the recordings") -> None:
     if ok:
         print(f"✅ Erased {what} from the device.")
     else:
-        print(f"⚠️ {what[:1].upper() + what[1:]} still listed on the device after the erase. "
-              f"A Manual-mode recording is not erased this way.")
+        print(f"⚠️ {what[:1].upper() + what[1:]} still listed on the device after the erase.")
 
 
 def command_read_time(args):

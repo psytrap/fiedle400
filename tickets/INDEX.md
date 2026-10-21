@@ -6,6 +6,7 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
+| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open |
 
 ## Backlog (deferred)
 

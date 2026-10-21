@@ -610,8 +610,8 @@ Delete User and Delete All.
 
 | What | Bytes | Where in `SpO2.exe` |
 | :--- | :--- | :--- |
-| Delete All, and the automatic delete after saving | `9D 7F 7F 7F 7F 00 00 19` | `0x4af695`. Called by the Delete All button (`0x453`, `0x4a3e76`) and, after a download, when the setting `bAutoDeleteSegmentSaveData` is unset or non-zero (`0x4a48fc`-`0x4a494b`). Only in Auto mode (category `0x40`, §3.9) |
-| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]` (pulse series), then `9D 7F 01 …` (SpO2), then `9D 7F 03 …` if the recording has a third series (§3.2) | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`), sends the first. The reply handler sends the next one when the device confirms the last (`0x4b9e19`-`0x4ba07d`, T-066). `user`/`entry` as in the `0xEC` header (§3.2) |
+| Delete All, and the automatic delete after saving | `9D 7F 7F 7F 7F 00 00 19` | `0x4af695`. Called by the Delete All button (`0x453`, `0x4a3e76`) and, after a download, when the setting `bAutoDeleteSegmentSaveData` is unset or non-zero (`0x4a48fc`-`0x4a494b`). Only in Auto mode (category `0x40`, §3.9). **Confirmed against a real device (2026-10-21, T-074):** `ED 7F` status 0, both sessions actually gone afterwards |
+| Delete (the selected recordings) | `9D 7F 02 [user] [entry] 00 00 [chk]` (pulse series), then `9D 7F 01 …` (SpO2), then `9D 7F 03 …` if the recording has a third series (§3.2). **Tried against a real device (2026-10-21, T-074): does not erase anything.** The device answers with a plain `F0 70` ack (not `ED 7F`), and the session is unchanged afterwards -- unlike Delete All below, this byte layout is static analysis only and has never been seen on the wire | `0x4af43c`, Delete button (`0x3e8`, `0x4a3ddd`), sends the first. The reply handler sends the next one when the device confirms the last (`0x4b9e19`-`0x4ba07d`, T-066). `user`/`entry` as in the `0xEC` header (§3.2) |
 | Delete User | no command for this device | `0x4af5ef` sends `A1 00`, or `0xAE` in a `7D 80` frame, on other device types, and nothing on the `0x9C`/`0x9D` path |
 | Delete for the `0x91`..`0x96` data category | `91 7F` | `0x4af547` |
 | Delete on the Manual-mode path | `A1 00 21`, then `A1 01 22`, then `A1 04 25` if the third-series flag is set, each after a `D1` reply | §3.14 G (T-072) |
@@ -862,10 +862,15 @@ above against more than one data point:
 - **`D0` kind byte:** still `0x00` in this capture too; kinds `1` and `4` remain unobserved,
   with no known way to trigger them.
 
-#### G. Erase (`0xA1` -> `0xD1`) -- static analysis only (T-072)
+#### G. Erase (`0xA1` -> `0xD1`) -- confirmed against real hardware (T-072/T-073)
 
-`SpO2.exe` has an erase for this path. It has never been captured on the wire; `fiedle400` sends
-steps 1 and 2 (`clear`, 0.4.40+) on SpO2.exe's own static-analysis byte layout, unconfirmed.
+`SpO2.exe` has an erase for this path, reverse-engineered by static analysis and never captured
+on the wire. `fiedle400` sends steps 1 and 2 (`clear`, 0.4.40+); as of 2026-10-21 this has been
+run against a real device holding a real Manual-mode recording, got a status-0 `D1` reply for
+each step, and the recording was actually gone afterwards (`fiedle400 sessions` -- "No stored
+recording sessions found", not just unlisted). The byte layout below is now confirmed to erase;
+whether it is byte-for-byte what the vendor app itself sends is still open (no packet capture of
+SpO2.exe's own Delete exists -- T-073).
 
 | Step | Host | Device reply |
 | :--- | :--- | :--- |
@@ -886,7 +891,10 @@ steps 1 and 2 (`clear`, 0.4.40+) on SpO2.exe's own static-analysis byte layout, 
     automatic delete.
 - **Not seen in the capture:** `bum400_20261015_194301.pcap` has no `A1` (and no `9F 1F`), so
   SpO2 Assistant erased nothing there.
-- **Not confirmed:** that the device erases on `A1 00`, and what steps 2 and 3 add.
+- **Confirmed on real hardware (2026-10-21, T-073):** `A1 00` then `A1 01` erases the Manual-mode
+  recording -- both got a status-0 `D1` reply, and the recording was gone afterwards. Step 3
+  (`A1 04`) is still unconfirmed; `fiedle400` never sends it (no known way to read the
+  third-series flag in Manual mode).
 - **`fiedle400 clear`** sends step 1 (`A1 00`), then step 2 (`A1 01`) once the device confirms the
   first, exactly as it does for the Auto-mode `9D 7F` path (§3.13); it never sends step 3 (`A1
   04`), since Manual mode has no known way to tell whether the third-series flag applies. Like

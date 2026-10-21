@@ -31,22 +31,51 @@ live attempt.
 
 ## Criteria
 
-- [ ] Run `fiedle400 -v clear -s 1 -y` against a real device holding a
+- [x] Run `fiedle400 -v clear -s 1 -y` against a real device holding a
       Manual-mode recording (expendable test data, not something that
       still needs the recording) and record exactly what happens with
       `--debug`/`-v` output
-- [ ] If possible, also capture the real SpO2 Assistant's own Delete
+- [x] If possible, also capture the real SpO2 Assistant's own Delete
       button against a Manual-mode recording, to compare against the
-      static-analysis byte layout
-- [ ] Update `PROTOCOL.md` §3.14 G from "static analysis only,
+      static-analysis byte layout (done informally -- psytrap ran the
+      vendor app's own erase and confirmed it works, but no packet
+      capture was taken; byte-for-byte comparison is still open, see
+      Execution Notes)
+- [x] Update `PROTOCOL.md` §3.14 G from "static analysis only,
       unconfirmed" to the real result (confirmed layout, or a
       correction to it)
-- [ ] If the real result differs from what `_clear_manual` sends, fix
+- [x] If the real result differs from what `_clear_manual` sends, fix
       it; if it matches, remove the "not yet tried against a real
       device" caveat from the ticket/changelog history (next entry
       only, not the historical ones)
-- [ ] Tests pass
+- [x] Tests pass (411/411, unchanged by this round -- no code changed)
 
 ## Execution Notes
 
-(Not started.)
+**Real-hardware confirmation (local, 2026-10-21).** psytrap independently erased a Manual-mode
+recording with the real SpO2 Assistant app first (confirmed it works there), then made a short
+test recording at 17:13:45 (142 samples, 2m22s) specifically so `fiedle400 clear` could be tried
+against real data without risking anything that mattered.
+
+`python3 -m fiedle400 -v clear -s 1 -y` against the real device:
+
+```
+[DEBUG OUT] Manual delete step 0x00 (0xA1): a1002100...
+[DEBUG] Erase reply status: 0
+[DEBUG OUT] Manual delete step 0x01 (0xA1): a1012200...
+[DEBUG] Erase reply status: 0
+[DEBUG IN] Manual header: ManualHeader(start=None, samples=0, kind=0)
+✅ Erased Session #1 from the device.
+```
+
+`fiedle400 sessions` afterwards: "No stored recording sessions found" -- the recording is
+actually gone, not just unlisted. This is the first real-device confirmation that `A1 00` then
+`A1 01` (the static-analysis byte layout from patch 0033) is the correct Manual-mode erase: both
+steps got a real `D1 ... 00` (status 0) reply, and the header query that used to return the
+recording now returns nothing at all.
+
+**Still open:** no packet capture of SpO2 Assistant's own Delete exists yet to compare
+byte-for-byte against `manual.delete_step()` -- this result confirms `fiedle400`'s own sequence
+works, not that it is identical to what the vendor app sends. Good enough to retire T-072/T-073's
+core open question (`clear` on a Manual-mode recording now erases correctly on real hardware);
+a byte-for-byte vendor capture would still be a nice-to-have, not pursued further here.
