@@ -178,6 +178,21 @@ done 2026-10-21, see T-051.)
 **2026-10-21, Ring 0:** `git tag -a v0.4.38 -m "Release v0.4.38"` on
 `a5fbbf5` (the commit G10 was confirmed on). Tag stays local until Ring 1.
 
+**2026-10-21, Ring 1 (workflow_dispatch dry run):** dispatched
+`build-release.yml` on `master` (`a866936`), run
+[39619023406](https://github.com/psytrap/fiedle400/actions/runs/39619023406).
+All jobs green on ubuntu/windows/macos (psytrap: ubuntu+windows matter,
+macos non-blocking); `Create GitHub Release` correctly shows **skipped**
+-- the dry-run ref guard works, no release published. Linux binary
+smoke-tested against the real device: `--version` (`0.4.38`), `--help`,
+`info` (correct hardware descriptors, `/dev/hidraw10`), `sessions`
+(Session #1, 315 records, Manual mode, matching the recording from
+earlier this cycle). Linux binary confirmed good by psytrap. **psytrap's call:** skipping the
+Windows manual smoke test for now, doing it after the final release
+instead -- a deliberate deviation from Ring 1's "all three binaries
+smoke-tested" step, not an oversight. macOS binary not smoke-tested
+either (no Mac hardware); same non-blocking status as G10.
+
 **2026-10-21, G10 confirmed on the exact pushed commit (`7655266`):**
 ubuntu-latest and windows-latest both green (14s/30s); macOS also green
 this run, though psytrap confirmed macOS is non-blocking for this gate.
