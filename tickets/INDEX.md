@@ -6,7 +6,7 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
-| [T-051](open/T-051-manual-mode-remaining-protocol-questions.md) | Manual-mode protocol -- remaining open questions | Local | Open |
+| [T-051](open/T-051-manual-mode-remaining-protocol-questions.md) | Local inspection -- G7 visual confirmation and Manual-mode protocol questions | Local | Open |
 
 ## Backlog (deferred)
 

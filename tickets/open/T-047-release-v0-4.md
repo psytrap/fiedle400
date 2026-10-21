@@ -98,9 +98,8 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 - [ ] G6: `FIEDLE400_LIVE=1` tests pass, Linux (`hidraw` + `hid`) and
       Windows (`hid`) -- **Linux `hidraw` done, see notes; Windows still
       needed**
-- [ ] G7: a real-finger session downloaded and opened with
-      `fiedle400 view`; psytrap confirms the chart looks physiologically
-      plausible (per `.agents/rules/implausible_data_warning.md`)
+- [ ] G7: technical half done (export + pre-check, see notes); visual
+      confirmation tracked in [T-051](T-051-manual-mode-remaining-protocol-questions.md)
 - [ ] G9 (optional, non-blocking): a Manual-mode real-device recording
       checked against SpO2 Assistant, or explicitly skipped and noted
 - [ ] Re-run the desaturation-algorithm validation against the real

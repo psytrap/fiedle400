@@ -1,9 +1,10 @@
-# T-051: Manual-mode protocol -- remaining open questions
+# T-051: Local inspection -- G7 visual confirmation and Manual-mode protocol questions
 
 - **Status:** Open
-- **Priority:** Low
+- **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
+  - `output/g7-check/rc.html` (already downloaded, see below)
   - `PROTOCOL.md` §3.2, §3.14 (Manual-mode frames and the `0xEC` header)
   - `fiedle400/protocol/manual.py`
 
@@ -11,11 +12,26 @@
 
 ## Description & Context
 
-Split out of `tickets/INDEX.md`'s "Open questions" list, where these sat
-without a ticket of their own. Distinct from T-047's G9 (which only checks
-one Manual-mode recording's `sessions`/`download` output against SpO2
-Assistant) -- these are specific decode questions that need a *particular*
-kind of real-device capture, not just any recording:
+Grouped together because both halves need psytrap to physically look at
+something, not just run a command -- tracked in addition to
+[T-047](T-047-release-v0-4.md), not folded into it.
+
+**1. G7 visual confirmation (T-047's technical half already done).**
+Session 1 (160 records, 0 sequence gaps) downloaded in all four formats to
+`output/g7-check/`: `rc.html`, `rc.spo2`, `rc.csv`, `rc.json`. The CSV
+pre-check: SpO2 94-99% (avg 96.9), HR 63-86 bpm (avg 73.7), 0 probe-out
+samples -- same shape as the 0.3.9 cycle's G7 data, no
+`.agents/rules/implausible_data_warning.md` pattern. What's missing is
+psytrap opening `fiedle400 view output/g7-check/rc.html` and confirming
+the chart itself looks physiologically plausible -- that confirmation is
+what actually satisfies G7 (`RELEASE_PLAN.md` §2), not the technical
+export alone.
+
+**2. Manual-mode protocol -- remaining open questions.** Split out of
+`tickets/INDEX.md`'s "Open questions" list. Distinct from T-047's G9
+(which only checks one Manual-mode recording's `sessions`/`download`
+output against SpO2 Assistant) -- these need a *particular* kind of
+real-device capture, not just any recording:
 
 - **Manual-mode sample timing.** `fiedle400` reads one sample per second
   (the header count, as `SpO2.exe` does). A recording timed with a
@@ -36,15 +52,17 @@ What is NOT known:
 
 ## Criteria
 
+- [ ] G7: `fiedle400 view output/g7-check/rc.html` opened; psytrap
+      confirms the chart looks physiologically plausible
 - [ ] Manual-mode sample timing confirmed (or contradicted) with a
-      stopwatch-timed recording.
+      stopwatch-timed recording
 - [ ] Subframe bytes 3..4 and `D0` bytes 8..9 decoded, or recorded as
-      still unknown with what was tried.
+      still unknown with what was tried
 - [ ] `D0` kinds 1 and 4 captured at least once, or recorded as not
-      reproducible on this hardware.
-- [ ] `0xEC` byte 1 bits 0..3 decoded, or recorded as still unknown.
-- [ ] `PROTOCOL.md` updated with whatever is settled.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+      reproducible on this hardware
+- [ ] `0xEC` byte 1 bits 0..3 decoded, or recorded as still unknown
+- [ ] `PROTOCOL.md` updated with whatever is settled
+- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ---
 
