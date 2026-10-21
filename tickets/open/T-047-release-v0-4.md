@@ -112,9 +112,9 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 - [ ] Ring 2: tag pushed; GitHub Release published
 - [ ] Ring 3: published assets verified (SHA-256 matches CI, `--version`
       matches the tag)
-- [ ] `RELEASE_PLAN.md`'s stale "nothing has been tagged" header line
+- [x] `RELEASE_PLAN.md`'s stale "nothing has been tagged" header line
       corrected
-- [ ] Gate results recorded in `CHANGELOG.md`'s "Gate re-verification log"
+- [x] Gate results recorded in `CHANGELOG.md`'s "Gate re-verification log"
       (same convention as the 0.3.9 cycle)
 - [ ] Phase 2 (minor bump, after psytrap's review of the feature work):
       `scripts/bump_version.py minor`

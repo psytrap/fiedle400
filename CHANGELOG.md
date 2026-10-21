@@ -447,3 +447,32 @@ cleanly, after T8 had reproduced on `hid` moments earlier following a
 device unplug/replug (see RELEASE_PLAN.md T8). `FIEDLE400_LIVE=1` suite
 7/7 pass. Windows: re-synced, rebuilt, `info`/`selftest` correct,
 `FIEDLE400_LIVE=1` suite 5/5 applicable pass.
+
+**`0.4.32`-`0.4.38` (psytrap, 2026-10-21), T-047 v0.4.x release cycle:**
+first re-verification since `0.3.9`. Linux (HEAD `a5b4685`): G1-G4 full
+suite green; G5 `pyinstaller` build's `info`/`sessions` against the real
+device match the mock-run exactly (2 sessions, 160+30 records); G6
+`FIEDLE400_LIVE=1` 7/7 pass on `hidraw` (`hid` still fails, T8, won't-fix).
+Windows 8.1 laptop (HEAD `b47fa36`, T-053's procedure): two real bugs
+found and fixed along the way (T-062 `TestViewerTmpDir`'s POSIX-path
+assumption, T-063 `pyproject.toml`'s wrong `hid`-family dependency); full
+suite 401 tests `OK (skipped=81)`; G5/G6 both match the Linux pass exactly
+(same session/record counts, `hid` backend; one USB re-enumeration needed
+mid-session). G7: downloaded a real 160-record session, pre-checked
+(SpO2 94-99 %, HR 63-86 bpm, 0 probe-out) and visually confirmed by
+psytrap in the HTML viewer (T-051, 2026-10-21). G9: a real 5-minute,
+315-record Manual-mode recording, downloaded with `fiedle400` and opened
+in the real SpO2 Assistant -- matching 5:15 duration, and psytrap
+confirmed the desaturation events "look similar" between the two viewers.
+Desat-algorithm re-validation (T-032/T-044's display-wiring fix):
+confirmed by inspection, not a fresh SpO2 Assistant run, that T-019's
+already-validated `artifact_pct`/`time_below_criteria_s` values now flow
+directly into the viewer's displayed rows (`spo2_viewer.py:490`/`:500`);
+a genuinely fresh re-run is deferred as T-070. G10: found and fixed a
+real CI/README bug along the way -- `python -m unittest discover tests`
+(no `-t .`) resolves `top_level_dir` to `tests/` itself, so
+`tests/__init__.py` (and its `RUNNING_FIEDLE400_TESTS` guard added in
+0.4.37) never runs, making every `cli.main()` error-exit test pause for
+real and blow the suite's time budget; fixed in both `tests.yml` and
+`README.md`. Ubuntu and Windows green on the fix (`ead401b` onward);
+macOS treated as non-blocking for this gate per psytrap.
