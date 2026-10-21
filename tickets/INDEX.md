@@ -42,6 +42,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud | Open (deferred) |
 | [T-058](open/T-058-username-wizard-and-html-editable.md) | Set a username via the wizard; show and edit it in the HTML viewer | Cloud | Open (deferred) |
 | [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open (deferred) |
+| [T-076](open/T-076-viewer-event-band-toggle.md) | Checkbox to toggle drawing desaturation/pulse-rate event bands in the HTML viewer | Either | Open (deferred) |
 
 ## Open questions
 
