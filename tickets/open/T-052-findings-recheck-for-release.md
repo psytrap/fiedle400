@@ -1,6 +1,6 @@
 # T-052: Re-check findings T1-T8 against this release's hardware testing
 
-- **Status:** Open
+- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
