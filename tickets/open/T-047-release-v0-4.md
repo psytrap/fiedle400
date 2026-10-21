@@ -84,7 +84,7 @@ which has no known bug behind it: [T-048](T-048-pty-input-mocking-review.md)
 
 Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 
-- [ ] G1-G4 green locally (suite, pcap regression, version sync, clean-venv
+- [x] G1-G4 green locally (suite, pcap regression, version sync, clean-venv
       zero-dependency smoke test) on the current `HEAD`
 - [ ] Diff audit re-confirmed immediately before tagging (not just the one
       above, if more commits land before this closes)
@@ -93,9 +93,11 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
       as done until this reports back
 - [ ] G5: built binary (`pyinstaller fiedle400.spec`) runs `info`/
       `sessions` against the real device, Linux *and* Windows, against a
-      session with actual stored data
+      session with actual stored data -- **Linux done, see notes; Windows
+      still needed**
 - [ ] G6: `FIEDLE400_LIVE=1` tests pass, Linux (`hidraw` + `hid`) and
-      Windows (`hid`)
+      Windows (`hid`) -- **Linux `hidraw` done, see notes; Windows still
+      needed**
 - [ ] G7: a real-finger session downloaded and opened with
       `fiedle400 view`; psytrap confirms the chart looks physiologically
       plausible (per `.agents/rules/implausible_data_warning.md`)
@@ -124,4 +126,26 @@ Taken directly from `RELEASE_PLAN.md` §6, scoped to this cycle:
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**2026-10-21, Linux pass (hardware present, HEAD `a5b4685`):**
+- G1-G4: full suite green (`python3 -m unittest discover -s tests -t .`).
+- G5 (Linux): `pyinstaller fiedle400.spec` built cleanly; `./dist/fiedle400
+  --version/info/sessions` against the real device show 2 real stored
+  sessions (160 + 30 records), matching the mock-run `fiedle400 sessions`
+  output exactly.
+- G6 (Linux): `FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live`
+  -- 7/7 pass on `hidraw`. `hid` fails its handshake/clock steps
+  consistently (3/3 `selftest` retries, no unplug/replug in between) --
+  this is T8, already known and won't-fix for this release; see the fresh
+  confirmation logged in `RELEASE_PLAN.md` §3d. `hidraw` is the real Linux
+  path and it's fully green.
+- G7 (technical half only -- still needs psytrap's visual confirmation):
+  downloaded session 1 (160 records, 0 sequence gaps) as `.html`/`.spo2`/
+  `.csv`/`.json`. Pre-check from the CSV: SpO2 94-99% (avg 96.9), HR
+  63-86 bpm (avg 73.7), 0 probe-out samples -- same shape as the 0.3.9
+  cycle's G7 data, no implausible-data pattern
+  (`.agents/rules/implausible_data_warning.md`). Files in
+  `output/g7-check/`; needs `fiedle400 view output/g7-check/rc.html`
+  opened and confirmed by psytrap before G7 counts as done.
+
+Windows (G5/G6 Windows leg, G7 confirmation, G9, the Manual-mode protocol
+items, pushing/tagging/rings) not yet done.

@@ -6,6 +6,7 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-047](open/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local | Open |
+| [T-051](open/T-051-manual-mode-remaining-protocol-questions.md) | Manual-mode protocol -- remaining open questions | Local | Open |
 
 ## Backlog (deferred)
 
@@ -34,18 +35,8 @@ the line here.
 
 ### Waiting on a local check (device or Windows)
 
-- **`fiedle400 clear` on the device:** it now sends the vendor's `9D 7F` commands and reports
-  whether the recordings are gone. Delete-all is confirmed by the vendor captures; delete-one
-  (`clear -s N`, `9D 7F 02 <user> <entry>`) has never been captured. Throwaway recordings only.
-  [T-037](done/2026-W43/T-037-clear-command-undefined-behavior.md), [`PROTOCOL.md`](../PROTOCOL.md) §3.13.
-- **Manual mode on the real device (T-042):** `fiedle400 sessions` and `download` on a PO-400
-  in Manual mode, compared with SpO2 Assistant's result for the same recording. Also whether a
-  device in Auto mode with no recordings minds the `A0` header query (never sent to one).
-  [T-042](done/2026-W43/T-042-manual-mode-download.md).
-- **Manual-mode sample timing:** `fiedle400` reads one sample per second (the header count, as
-  `SpO2.exe` does). A recording timed with a stopwatch would confirm it.
-  [`PROTOCOL.md`](../PROTOCOL.md) §3.14.
-- **Manual-mode unknown bytes:** subframe bytes 3..4 (`08 7E` SpO2, `04 7E` Pulse in the data
-  subframe), `D0` bytes 8..9, and `D0` kinds 1 and 4 (only 0 seen). [`PROTOCOL.md`](../PROTOCOL.md) §3.14.
-- **`0xEC` byte 1, bits 0..3:** `0` in every capture; `SpO2.exe` compares it with 1 to pick a
-  download path. [`PROTOCOL.md`](../PROTOCOL.md) §3.2.
+- **`fiedle400 clear` on the device** and **Manual mode on the real device**: folded into
+  [T-047](open/T-047-release-v0-4.md)'s G5/G6/G9 gates, not tracked separately any more.
+- **Manual-mode sample timing, unknown bytes, and `0xEC` byte 1 bits 0..3**: now
+  [T-051](open/T-051-manual-mode-remaining-protocol-questions.md), tracked alongside T-047,
+  not deferred.

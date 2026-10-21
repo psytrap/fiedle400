@@ -224,6 +224,16 @@ matching `hidraw` exactly. Consistent with, not yet confirmation of, the
 "needs a genuine USB re-enumeration" theory; still not reliably
 reproducible on demand, so still open, still not a blocker.
 
+**T-047 G5/G6 re-verification (2026-10-21):** `hid` fails consistently
+(3/3 `selftest` runs, handshake + clock both "no data returned"); `hidraw`
+passes consistently (3/3 runs, plus the full `info`/`sessions` gate and
+`FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live` -- all 7
+tests pass) with no unplug/reconnect in between. Unlike the "same day"
+entry above, this run never saw `hid` pass -- a different device/session
+state than whatever let it pass before. Doesn't change T8's status: Linux
+real path is `hidraw`, confirmed working; `hid` remains won't-fix for this
+release.
+
 **Serial-stream device support: deliberately deferred, not a gap
 (psytrap, 2026-10-15).** This hardware unit only exercises the
 flash/storage path (`0x9C`/`0x9D`); the serial-stream device family
