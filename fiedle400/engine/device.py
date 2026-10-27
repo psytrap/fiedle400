@@ -1,5 +1,7 @@
 """High-level device controller managing streaming, packet detection, and session extraction."""
 
+import queue
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any, Union
@@ -17,11 +19,38 @@ from .detector import SerialPacketDetector, DecodedPacket
 # The device answers the clock query, but with the same bytes every time (PROTOCOL.md §3.3).
 CLOCK_NOT_REPORTED = "not reported by the device"
 
+# T-084: how long a read loop backs off after finding nothing to read. Only applied when a
+# read comes back empty -- sleeping unconditionally on every iteration throttles draining below
+# the device's burst rate and risks overflowing the kernel's inbound HID report queue (silent
+# report loss) on a long, high-volume transfer.
+IDLE_READ_SLEEP = 0.005
+
+# T-087: session discovery used to stop dead at 31 slots, undercounting devices with more
+# sessions than that. MAX_SESSION_SLOTS is the protocol's own session-index limit: the index
+# byte only has 7 usable bits (0..127), the 8th being reserved for command/flag data, not an
+# arbitrary safety number. SLOT_READ_ATTEMPTS gives a slow response a few tries before a slot
+# is treated as "no more sessions".
+MAX_SESSION_SLOTS = 127
+SLOT_READ_ATTEMPTS = 3
+
+# T-082/T-085: the `ED 7F` erase reply only confirms the command was accepted, not that the
+# flash write has actually committed -- per psytrap, a flat settle delay before the post-erase
+# re-list, no poll/retry loop: just give the device more time, then report success or failure
+# from that one check.
+ERASE_SETTLE_SECONDS = 3.0
+
+# T-088: tests that simulate a device at the OS/fd level (hwsim's HidrawSim, the fake `hid`
+# module) set this so no background reader thread starts underneath their single-threaded
+# fakes, even when they exercise real CLI code that asks for one. Deliberately not an env var:
+# scrub_env() (used throughout the test suite to give cli.main() a clean environment) strips
+# every FIEDLE400_-prefixed var, so a flag that has to survive that lives here instead.
+SIMULATED_DEVICE_ACTIVE = False
+
 
 class SerialDeviceEngine:
     """High-level device controller managing streaming, packet detection, and session extraction."""
 
-    def __init__(self, device):
+    def __init__(self, device, background_reader: bool = False):
         self.dev = device
         self.buffer = SerialByteStreamBuffer()
         self.detector = SerialPacketDetector()
@@ -30,8 +59,84 @@ class SerialDeviceEngine:
         self._is_mock = hasattr(device, "responses")  # test doubles script replies; real devices never do
         self.single_erase_unsupported = False  # set by clear_memory, T-074
 
+        # T-088: an opt-in background thread that continuously drains the HID fd into a queue,
+        # decoupled from whatever this engine's caller is doing at the time -- removing read-loop
+        # pacing entirely as a possible cause of report loss (see T-084). Off by default and
+        # forced off for test doubles (`_is_mock`); real CLI command handlers pass
+        # `background_reader=True` explicitly. Nothing else may call `self.dev.read_report()`
+        # directly once this is on -- everything goes through `_dequeue_report()` instead, so
+        # the fd only ever has one reader.
+        self._report_queue: "queue.Queue[bytes]" = queue.Queue()
+        self._reader_thread: Optional[threading.Thread] = None
+        self._reader_stop = threading.Event()
+        self._use_background_reader = background_reader and not self._is_mock and not SIMULATED_DEVICE_ACTIVE
+        if self._use_background_reader:
+            self._start_reader_thread()
+
+    def _start_reader_thread(self):
+        self._reader_stop.clear()
+        self._reader_thread = threading.Thread(target=self._reader_loop, name="fiedle400-hid-reader", daemon=True)
+        self._reader_thread.start()
+
+    def _reader_loop(self):
+        while not self._reader_stop.is_set():
+            try:
+                rep = self.dev.read_report(64)
+            except Exception:
+                break
+            if rep:
+                self._report_queue.put(rep)
+            else:
+                time.sleep(0.001)  # avoid busy-spinning the CPU while genuinely idle
+
+    def _stop_reader_thread(self):
+        if self._reader_thread is None:
+            return
+        self._reader_stop.set()
+        self._reader_thread.join(timeout=1.0)
+        self._reader_thread = None
+
+    def close(self):
+        """Stops the background reader thread (if running) and closes the underlying device."""
+        self._stop_reader_thread()
+        self.dev.close()
+
+    def _dequeue_report(self, timeout: float = 0.0) -> Optional[bytes]:
+        """Returns the next HID report, or None if none is available within `timeout` seconds.
+
+        With the background reader active, reports already pulled off the fd are served from
+        its queue; otherwise (including all test doubles) this reads the driver directly, exactly
+        as every call site here did before T-088 -- so nothing changes unless a caller explicitly
+        opts in."""
+        if not getattr(self, "_use_background_reader", False):
+            return self.dev.read_report(64)
+        try:
+            return self._report_queue.get(block=True, timeout=timeout) if timeout > 0 else self._report_queue.get_nowait()
+        except queue.Empty:
+            return None
+
+    def _flush_before_command(self, debug: Union[bool, int] = 0):
+        """Drains whatever is already queued/buffered before writing a new command (T-090).
+
+        Unifies what was ~9 separate `while self._dequeue_report(): pass` copies into one
+        helper -- same behavior as before (just drains until nothing is immediately available),
+        no retry budget or timing changed. Does NOT make this a true synchronization point
+        against the T-088 background reader thread still filling the queue concurrently --
+        that race is tracked separately (T-091), deferred rather than solved here.
+        """
+        drained = 0
+        while self._dequeue_report():
+            drained += 1
+        if int(debug) >= 1 and drained:
+            print(f"[DEBUG] _flush_before_command() dropped {drained} stale report(s)")
+
+    def read_raw_report(self, timeout: float = 0.0) -> Optional[bytes]:
+        """Reads one raw HID report with no packet decoding -- for one-off protocol steps (like
+        the CLI's initial handshake probe) that need the device's immediate reply directly."""
+        return self._dequeue_report(timeout=timeout)
+
     def _sleep(self, seconds: float):
-        if not self._is_mock:
+        if not getattr(self, "_is_mock", False):
             time.sleep(seconds)
 
     def _log_dump(self, direction: str, report_bytes: bytes, summary: str = ""):
@@ -54,7 +159,7 @@ class SerialDeviceEngine:
 
     def read_packets(self, base_timestamp: Optional[datetime] = None, debug: Union[bool, int] = 0) -> List[DecodedPacket]:
         """Reads next available report from physical HID device and detects embedded packet events."""
-        report = self.dev.read_report(64)
+        report = self._dequeue_report()
         if not report:
             return []
 
@@ -80,6 +185,32 @@ class SerialDeviceEngine:
                 hr_str = f"{ev.heart_rate} bpm" if ev.heart_rate is not None else "N/A"
                 print(f"[DEBUG IN] Packet Type={ev.packet_type:<15} | Payload={raw_str:<24} | SpO2={spo2_str:<6} | HR={hr_str:<8} | Status={ev.status_str}")
         return events
+
+    def wait_for_packet(
+        self,
+        expected_types: Union[str, tuple, list, set],
+        base_timestamp: Optional[datetime] = None,
+        timeout: float = 1.0,
+        debug: Union[bool, int] = 0,
+    ) -> Optional[DecodedPacket]:
+        """Reads packets until one with a `packet_type` in `expected_types` arrives, or
+        `timeout` seconds pass with no match -- the "wait for the expected reply, discard
+        anything else" half of a clean request/response exchange (T-089). Every decoded
+        event that doesn't match is simply dropped, same as what every call site below did
+        by hand before this existed; it does not resend the request on its own -- callers
+        still write their own command first.
+        """
+        if isinstance(expected_types, str):
+            expected_types = (expected_types,)
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            events = self.read_packets(base_timestamp, debug=debug)
+            match = next((ev for ev in events if ev.packet_type in expected_types), None)
+            if match is not None:
+                return match
+            if not events:
+                self._sleep(IDLE_READ_SLEEP)
+        return None
 
     def wait_for_eb_stream(self, target_count: int = 10, max_timeout: float = 10.0, debug: Union[bool, int] = 0) -> int:
         """Enables periodic streaming (0x9B) and listens until target_count (default 10) 0xEB messages have been reported before starting other communication."""
@@ -108,7 +239,11 @@ class SerialDeviceEngine:
                         eb_count += 1
                         if eb_count >= target_count:
                             break
-            self._sleep(0.005)
+            if not events:
+                # T-084: only back off when there was nothing to read -- sleeping unconditionally
+                # here throttles draining below the device's burst rate and risks overflowing the
+                # kernel's inbound HID report queue (silent report loss) on a busy stream.
+                self._sleep(IDLE_READ_SLEEP)
 
         if int(debug) >= 1:
             print(f"[DEBUG IN] Received {eb_count}/{target_count} 0xEB stream messages (elapsed: {time.time() - start_t:.2f}s).")
@@ -125,7 +260,7 @@ class SerialDeviceEngine:
         drained_reports = 0
         drain_empty_count = 0
         while (time.time() - last_msg_time < 0.20) and (time.time() - drain_start < 2.0):
-            rep = self.dev.read_report(64)
+            rep = self._dequeue_report()
             if rep:
                 drain_empty_count = 0
                 if rep[0] == 0xEB or (len(rep) >= 3 and rep[2] == 0xEB):
@@ -138,7 +273,7 @@ class SerialDeviceEngine:
                 drain_empty_count += 1
                 if drain_empty_count >= 2:
                     break
-                self._sleep(0.005)
+                self._sleep(IDLE_READ_SLEEP)
 
         if int(debug) >= 1:
             print(f"[DEBUG IN] Drained {drained_reports} residual HID reports (quiet period: 200ms verified).")
@@ -155,7 +290,7 @@ class SerialDeviceEngine:
         base_timestamp = sess_info.timestamp or datetime.now()
 
         # Step 1: Flush stale reports & send unlock handshake + storage init
-        while self.dev.read_report(64): pass
+        self._flush_before_command(debug=debug)
 
         c_unlock = Commands.unlock_handshake()
         c_init = Commands.storage_init()
@@ -170,7 +305,7 @@ class SerialDeviceEngine:
         self._write_report(c_init, "Storage Init (0x9D 0x02)")
         self._sleep(0.05)
 
-        while self.dev.read_report(64): pass  # Flush ACK
+        self._flush_before_command(debug=debug)  # Flush ACK
 
         SerialPacketDetector.reset_decoder_state()
 
@@ -307,7 +442,12 @@ class SerialDeviceEngine:
                                 (block_spo2_pkts if ev.block_id % 2 == 1 else block_hr_pkts).append(ev)
                 if flash_sentinel_hit:
                     break
-                self._sleep(0.005)
+                if not events:
+                    # T-084: only back off when nothing came back -- an unconditional sleep here
+                    # caps drain rate below the device's burst rate during a long transfer, which
+                    # risks the kernel's inbound HID report queue overflowing (silent report loss,
+                    # seen as CORRUPT_FRAME/sequence gaps downstream).
+                    self._sleep(IDLE_READ_SLEEP)
 
             if flash_sentinel_hit:
                 flush_block_buffers()
@@ -383,7 +523,9 @@ class SerialDeviceEngine:
                                     (block_spo2_pkts if ev.block_id % 2 == 1 else block_hr_pkts).append(ev)
                     if flash_sentinel_hit:
                         break
-                    self._sleep(0.005)
+                    if not events:
+                        # T-084: see the matching comment in the SpO2 page loop above.
+                        self._sleep(IDLE_READ_SLEEP)
 
             flush_block_buffers()
 
@@ -420,7 +562,7 @@ class SerialDeviceEngine:
         # Step 1: Send Unlock Handshake & Storage Negotiation (0xA7 + 0xA2)
         self.dev.write_report(Commands.unlock_handshake())
         time.sleep(0.15)
-        neg_res = self.dev.read_report(64)
+        neg_res = self._dequeue_report()
         if neg_res:
             active_user_id = Parsers.parse_user_id(neg_res)
 
@@ -434,7 +576,7 @@ class SerialDeviceEngine:
         # Step 3: Query Info (0xAD)
         self.dev.write_report(Commands.build_hid(0xAD))
         time.sleep(0.15)
-        report = self.dev.read_report(64)
+        report = self._dequeue_report()
         if report:
             parsed_info = Parsers.parse_device_info(report)
             if parsed_info.firmware_version:
@@ -445,7 +587,7 @@ class SerialDeviceEngine:
         # Step 4: Query 0x81 (Firmware Version Query)
         self.dev.write_report(Commands.build_hid(0x81, [0x01]))
         time.sleep(0.1)
-        fw_report = self.dev.read_report(64)
+        fw_report = self._dequeue_report()
         if fw_report and fw_report[0] == 0x81:
             fw_info = Parsers.parse_device_info(fw_report)
             if fw_info.firmware_version:
@@ -456,10 +598,17 @@ class SerialDeviceEngine:
             info.hardware_id = "".join(c for c in model if c.isalnum() or c in "-_ ").strip() or None
 
         # Step 5: Query 0x8E (Serial Number / User Profile Query)
+        # T-089: NOT migrated to wait_for_packet(). The detector's SERIAL_PROFILE branch only
+        # fires on buf[0] == 0x8E (detector.py ~line 291), but the real reply's first byte is
+        # 0xF1 or 0xFE -- which the DEVICE_INFO branch above it (buf[0] in [0x81, 0xFE, 0xF1,
+        # 0xF0], ~line 276) catches first and parses with parse_device_info(), which never
+        # extracts user_profile. So the 16-byte detector path cannot reach parse_serial() for
+        # this reply at all; the two paths are not equivalent. Confirmed by a real test
+        # regression (lost User Profile String) when this was tried. Stays a direct read.
         self.dev.write_report(Commands.build_hid(0x8E, [0x03, 0x11]))
         time.sleep(0.1)
         for _ in range(3):
-            serial_report = self.dev.read_report(64)
+            serial_report = self._dequeue_report()
             if serial_report:
                 sn, up = Parsers.parse_serial(serial_report)
                 if sn:
@@ -469,13 +618,14 @@ class SerialDeviceEngine:
             time.sleep(0.05)
 
         # Step 6: Query 0x9E (Extended Storage Architecture Query)
+        # T-089: migrated onto wait_for_packet() -- Parsers.parse_geometry() only ever reads
+        # offsets 0..2, so the detector's 16-byte GEOMETRY_INFO chunk and the old 64-byte
+        # direct parse are equivalent. A/B-tested against real hardware: both report "not
+        # reported by the device" for this field (pre-existing, not a migration regression).
         self.dev.write_report(Commands.build_hid(0x9E, [0x40, 0x04]))
-        time.sleep(0.1)
-        geom_report = self.dev.read_report(64)
-        if geom_report:
-            geom = Parsers.parse_geometry(geom_report)
-            if geom:
-                info.flash_geometry = geom
+        geom_ev = self.wait_for_packet("GEOMETRY_INFO", timeout=0.1, debug=debug)
+        if geom_ev and geom_ev.device_info and geom_ev.device_info.flash_geometry:
+            info.flash_geometry = geom_ev.device_info.flash_geometry
 
         return {
             "device_info": info,
@@ -483,23 +633,43 @@ class SerialDeviceEngine:
             "rtc_time_str": rtc_time_str,
         }
 
-    def list_sessions(self, debug: Union[bool, int] = 0) -> List[SessionInfo]:
-        """Queries device session index table using packet detection."""
+    def list_sessions(self, debug: Union[bool, int] = 0, attempts: int = 3, retry_delay: float = 0.3) -> List[SessionInfo]:
+        """Queries device session index table using packet detection.
+
+        An empty result is known to show up sporadically even when the device does have
+        stored sessions (a transient/first-command USB hiccup, T-078) -- so an empty read is
+        retried up to `attempts` times, a short `retry_delay` apart, before it's trusted and
+        returned. A real empty device (no sessions at all) retries the same number of times
+        and still correctly comes back empty, so this only protects against false negatives.
+        """
+        for attempt in range(1, attempts + 1):
+            sessions = self._list_sessions_once(debug=debug)
+            if sessions:
+                return sessions
+            if attempt < attempts:
+                if int(debug) >= 1:
+                    print(f"[DEBUG] list_sessions came back empty (attempt {attempt}/{attempts}), retrying...")
+                self._sleep(retry_delay)
+        return sessions
+
+    def _list_sessions_once(self, debug: Union[bool, int] = 0) -> List[SessionInfo]:
         self.dev.write_report(Commands.unlock_handshake())
         time.sleep(0.15)
-        while self.dev.read_report(64): pass  # Flush ACK
+        self._flush_before_command(debug=debug)  # Flush ACK
 
         self.dev.write_report(Commands.reset_session_index())
         time.sleep(0.08)
-        while self.dev.read_report(64): pass  # Flush ACK
+        self._flush_before_command(debug=debug)  # Flush ACK
 
         session_map = {}
-        for slot in range(1, 32):
+        # T-087: this upper bound is a safety net against a runaway loop, not a real limit on
+        # how many sessions a device can hold -- actual termination is the 0x40 terminator bit
+        # below, or SLOT_READ_ATTEMPTS misses in a row (a device with no more sessions to report).
+        for slot in range(1, MAX_SESSION_SLOTS + 1):
             self.dev.write_report(Commands.query_sessions())
-            time.sleep(0.05)
-
-            events = self.read_packets(debug=debug)
-            ec_event = next((ev for ev in events if ev.packet_type == "SESSION_INDEX"), None)
+            # SLOT_READ_ATTEMPTS misses in a row at 0.05s apiece -- same total budget as before
+            # this used wait_for_packet(), just polled more finely instead of in 3 fixed steps.
+            ec_event = self.wait_for_packet("SESSION_INDEX", timeout=SLOT_READ_ATTEMPTS * 0.05, debug=debug)
 
             if not ec_event or not ec_event.session_info:
                 break
@@ -528,7 +698,7 @@ class SerialDeviceEngine:
         got: List[bytes] = []
         start = last = time.time()
         while time.time() - start < timeout and time.time() - last < quiet:
-            report = self.dev.read_report(64)
+            report = self._dequeue_report()
             if report:
                 self._log_dump("IN", report, "manual mode")
                 if int(debug) >= 2:
@@ -540,12 +710,12 @@ class SerialDeviceEngine:
                     if done(got):
                         break
             else:
-                self._sleep(0.005)
+                self._sleep(IDLE_READ_SLEEP)
         return got
 
     def read_manual_header(self, debug: Union[bool, int] = 0) -> Optional[manual.ManualHeader]:
         """Asks for the Manual-mode recording's header (`A0`); None when the device does not answer."""
-        while self.dev.read_report(64): pass
+        self._flush_before_command(debug=debug)
         self._write_report(manual.header_query(), "Manual header (0xA0)")
         got = self._manual_frames(lambda fr: any(f[0] == manual.HEADER for f in fr), timeout=0.5, debug=debug)
         header = next((manual.parse_header(f) for f in got if f[0] == manual.HEADER), None)
@@ -591,7 +761,7 @@ class SerialDeviceEngine:
         then `A3 7F` / `A2 7F` to end. Read-only: nothing here erases the recording."""
         samples = sess_info.record_count
         base_timestamp = sess_info.timestamp or datetime.now()
-        while self.dev.read_report(64): pass
+        self._flush_before_command(debug=debug)
         self._write_report(bytes([0x80]) + bytes(63), "Stop live stream (0x80)")
         self._manual_frames(lambda fr: False, timeout=0.1, quiet=0.05)
 
@@ -689,9 +859,7 @@ class SerialDeviceEngine:
         if int(debug) >= 1:
             print(f"[DEBUG OUT] Serial Engine Read RTC: {c_read[:16].hex()}")
         self.dev.write_report(c_read)
-        time.sleep(0.15)
-        events = self.read_packets(debug=debug)
-        rtc_ev = next((ev for ev in events if ev.packet_type == "RTC_RESPONSE"), None)
+        rtc_ev = self.wait_for_packet("RTC_RESPONSE", timeout=0.15, debug=debug)
         return rtc_ev.raw_payload if rtc_ev else None
 
     def set_rtc_time(self, target_dt: Optional[datetime] = None, debug: Union[bool, int] = 0) -> bool:
@@ -701,7 +869,7 @@ class SerialDeviceEngine:
             print(f"[DEBUG OUT] Serial Engine Unlock Handshake: {c_unlock[:16].hex()}")
         self.dev.write_report(c_unlock)
         time.sleep(0.15)
-        while self.dev.read_report(64): pass  # Flush ACK
+        self._flush_before_command(debug=debug)  # Flush ACK
 
         c_set = Commands.set_time(target_dt)
         if int(debug) >= 1:
@@ -712,13 +880,20 @@ class SerialDeviceEngine:
         return len(events) > 0
 
     def unlock_handshake(self, debug: Union[bool, int] = 0) -> int:
-        """Executes unlock handshake (0xA7) & storage negotiation (0xA2) and returns active User ID."""
+        """Executes unlock handshake (0xA7) & storage negotiation (0xA2) and returns active User ID.
+
+        T-089: left as a raw, unfiltered read rather than migrated onto wait_for_packet(). The
+        detector has no packet type for this reply, and -- unlike the erase/session/RTC replies
+        -- there's no other packet type it could realistically be confused with in practice, so
+        the risk this ticket exists to address isn't really present here. Revisit only if that
+        stops being true.
+        """
         c_unlock = Commands.unlock_handshake()
         if int(debug) >= 1:
             print(f"[DEBUG OUT] Serial Engine Unlock Handshake: {c_unlock[:16].hex()}")
         self.dev.write_report(c_unlock)
         time.sleep(0.2)
-        rep = self.dev.read_report(64)
+        rep = self._dequeue_report()
         if rep:
             if int(debug) >= 1:
                 print(f"[DEBUG IN] Handshake Response: {rep[:16].hex()}")
@@ -726,39 +901,90 @@ class SerialDeviceEngine:
         return 1
 
     def clear_memory(self, session_id: int = 0, debug: Union[bool, int] = 0) -> bool:
-        """Erases one recording (`session_id` > 0) or all of them, with SpO2 Assistant's own
-        commands (PROTOCOL.md 3.13): `9D 7F 7F 7F 7F` for all; for one, `9D 7F 02 [user] [entry]`
-        (pulse series), then `9D 7F 01 [user] [entry]` (SpO2 series) once the device has
-        confirmed the first, as the vendor tool does.
+        """Erases one recording (`session_id` > 0) or all of them -- dispatches to `_clear_auto()`
+        or `_clear_manual()` depending on which kind of recording `session_id` (or "erase all")
+        actually refers to on the device right now.
 
-        Like the vendor tool, it lists the recordings and opens the storage transfer (`9D 02`)
-        first. Afterwards it lists them again: returns True only if what should be gone is gone.
-        If the device does not answer the first single-entry step with an erase reply (a real
-        PO-400 does not, T-074), it stops there and sets `single_erase_unsupported`.
         A Manual-mode recording (there is at most one, T-042) is erased separately, with the
-        unconfirmed `A1`/`D1` sequence from PROTOCOL.md 3.14 G (T-072).
+        unconfirmed `A1`/`D1` sequence from PROTOCOL.md 3.14 G (T-072); everything else goes
+        through the Auto-mode `9D` sequence (PROTOCOL.md 3.13).
         """
         before = self.list_sessions(debug=debug)
         manual_target = next((s for s in before if s.manual and (session_id <= 0 or s.session_id == session_id)), None)
         if manual_target is not None:
             return self._clear_manual(debug=debug)
+        return self._clear_auto(session_id, before, debug=debug)
 
+    def _clear_auto(self, session_id: int, before: List[SessionInfo], debug: Union[bool, int] = 0) -> bool:
+        """Erases Auto-mode recording(s): `9D 7F 7F 7F 7F` for all (`_clear_auto_all`), or for
+        one, `9D 7F 02 [user] [entry]` (pulse series) then `9D 7F 01 [user] [entry]` (SpO2
+        series) once the device has confirmed the first (`_clear_auto_entry`), as the vendor
+        tool does.
+
+        Like the vendor tool, it lists the recordings (`before`, from `clear_memory()`) and opens
+        the storage transfer (`9D 02`) first -- unconditionally (T-092): even when nothing in
+        `before` matches `session_id`, it still goes through the same wire sequence rather than
+        returning without ever talking to the device. For "erase all" that's harmless either way
+        (there's always a valid `delete_all` to send, erasing nothing on an already-empty device
+        is a no-op) -- `_clear_auto_all()` runs regardless of whether `targets` is empty. For a
+        single `session_id` that matches nothing, there is no `(user_id, session_id)` pair to
+        build a `delete_entry` command from, so that one step is genuinely not possible to send;
+        the transfer is still opened, the delete step is just skipped.
+
+        Afterwards it lists the recordings again: returns True only if what should be gone is
+        gone, regardless of what the erase reply status bytes claimed. For a no-match single
+        `session_id`, "gone" can't be judged by timestamp (nothing was ever targeted), so it
+        falls back to the original check: no Auto-mode session with that id exists afterward.
+        """
         targets = [s for s in before if not s.manual and (session_id <= 0 or s.session_id == session_id)]
-        if not targets:
-            if int(debug) >= 1:
-                print("[DEBUG] Nothing to erase.")
-            return not any(s.session_id == session_id for s in before) if session_id > 0 else not before
+        if int(debug) >= 1 and not targets:
+            print("[DEBUG] Nothing matches the erase target -- opening the transfer anyway.")
 
         self._write_report(Commands.storage_init(), "Storage Init (0x9D 0x02)")
         self._sleep(0.05)
-        while self.dev.read_report(64): pass
+        self._flush_before_command(debug=debug)
         if session_id > 0:
-            t = targets[0]
-            steps = [(Commands.delete_entry(t.user_id, t.session_id, series),
-                      f"Delete user {t.user_id} entry {t.session_id}, series {series} (0x9D 0x7F 0x0{series})")
-                     for series in (2, 1)]
+            if targets:
+                self._clear_auto_entry(targets[0], debug=debug)
+            elif int(debug) >= 1:
+                print(f"[DEBUG] No entry for session {session_id} to delete -- skipping the delete step.")
         else:
-            steps = [(Commands.delete_all(), "Delete All (0x9D 0x7F)")]
+            self._clear_auto_all(debug=debug)
+
+        self._sleep(ERASE_SETTLE_SECONDS)
+        after = self.list_sessions(debug=debug)
+        if session_id > 0 and not targets:
+            return not any(not s.manual and s.session_id == session_id for s in after)
+        gone = {(t.user_id, t.session_id) for t in targets}
+        left = [s for s in after if not s.manual and (s.user_id, s.session_id) in gone]
+        if session_id > 0:
+            # Entries are renumbered after a delete; compare start times, not numbers.
+            left = [s for s in after if not s.manual and s.timestamp == targets[0].timestamp]
+        return not left
+
+    def _clear_auto_all(self, debug: Union[bool, int] = 0) -> None:
+        """Sends the "erase all" step (`9D 7F`) and waits for its erase-reply status. Just the
+        one step -- verification (did it actually disappear) happens back in `_clear_auto()`."""
+        cmd, desc = Commands.delete_all(), "Delete All (0x9D 0x7F)"
+        if int(debug) >= 1:
+            print(f"[DEBUG OUT] {desc}: {cmd[:16].hex()}")
+        self._write_report(cmd, desc)
+        self._sleep(0.5)
+        status = self._erase_status()
+        if int(debug) >= 1:
+            print(f"[DEBUG] Erase reply status: {'none' if status is None else status}")
+
+    def _clear_auto_entry(self, target: SessionInfo, debug: Union[bool, int] = 0) -> None:
+        """Sends the two-step single-entry delete for `target` -- pulse series (`9D 7F 02 [user]
+        [entry]`), then SpO2 series (`9D 7F 01 [user] [entry]`) -- each gated on the previous
+        step's erase-reply status, as the vendor tool does. If the device does not answer the
+        first step with a real erase reply (a real PO-400 answers it with the generic `F0 70`
+        ack only and erases nothing, T-074), this stops there and sets
+        `single_erase_unsupported` instead of sending the second step.
+        """
+        steps = [(Commands.delete_entry(target.user_id, target.session_id, series),
+                  f"Delete user {target.user_id} entry {target.session_id}, series {series} (0x9D 0x7F 0x0{series})")
+                 for series in (2, 1)]
         for n, (cmd, desc) in enumerate(steps):
             if int(debug) >= 1:
                 print(f"[DEBUG OUT] {desc}: {cmd[:16].hex()}")
@@ -769,19 +995,9 @@ class SerialDeviceEngine:
                 print(f"[DEBUG] Erase reply status: {'none' if status is None else status}")
             if status not in (None, 0):
                 break
-            if status is None and session_id > 0 and n == 0:
-                # A real PO-400 answers the single-entry delete with the generic `F0 70` ack only
-                # and erases nothing (T-074); stop instead of sending the next series.
+            if status is None and n == 0:
                 self.single_erase_unsupported = True
                 break
-
-        after = self.list_sessions(debug=debug)
-        gone = {(t.user_id, t.session_id) for t in targets}
-        left = [s for s in after if not s.manual and (s.user_id, s.session_id) in gone]
-        if session_id > 0:
-            # Entries are renumbered after a delete; compare start times, not numbers.
-            left = [s for s in after if not s.manual and s.timestamp == targets[0].timestamp]
-        return not left
 
     def _clear_manual(self, debug: Union[bool, int] = 0) -> bool:
         """Erases the Manual-mode recording with SpO2.exe's own, unconfirmed `A1`/`D1` sequence
@@ -805,7 +1021,7 @@ class SerialDeviceEngine:
     def _manual_delete_step(self, step: int, debug: Union[bool, int] = 0) -> Optional[int]:
         """Sends one Manual-mode erase step (`A1`) and returns its `D1` reply's status byte
         (0 = done), or None if no reply came."""
-        while self.dev.read_report(64): pass
+        self._flush_before_command(debug=debug)
         self._write_report(manual.delete_step(step), f"Manual delete step 0x{step:02X} (0xA1)")
         got = self._manual_frames(lambda fr: any(f[0] == manual.DELETE_REPLY for f in fr), timeout=1.0, debug=debug)
         reply = next((f for f in got if f[0] == manual.DELETE_REPLY), None)
@@ -814,15 +1030,27 @@ class SerialDeviceEngine:
         parsed = manual.parse_delete_reply(reply)
         return parsed[1] if parsed else None
 
-    def _erase_status(self) -> Optional[int]:
+    def _erase_status(self, timeout: float = 1.0, quiet: float = 0.3) -> Optional[int]:
         """Reads what the device sent after an erase command and returns the status byte of its
-        `ED 7F [series] [user] [entry] [status] [chk]` reply (0 = done), or None if none came."""
+        `ED 7F [series] [user] [entry] [status] [chk]` reply (0 = done), or None if none came.
+
+        T-089: loops for up to `timeout` seconds, or until `quiet` seconds pass with nothing
+        new -- a single non-blocking empty read used to end the search immediately, which only
+        worked because the caller was the fd's only reader; with the T-088 background reader
+        thread, an empty poll can land in a real gap between two reports still in flight, not
+        "nothing is coming". The `ED 7F` reply has no packet type in the detector, so this
+        stays a raw-byte scan rather than going through `wait_for_packet()`.
+        """
         status = None
-        while True:
-            rep = self.dev.read_report(64)
+        start = last = time.time()
+        while time.time() - start < timeout and time.time() - last < quiet:
+            rep = self._dequeue_report()
             if not rep:
-                return status
+                self._sleep(IDLE_READ_SLEEP)
+                continue
+            last = time.time()
             r = bytes(rep)
             i = r.find(b"\xed\x7f")
             if i >= 0 and i + 7 <= len(r) and (sum(r[i:i + 6]) & 0x7F) == r[i + 6]:
                 status = r[i + 5]
+        return status

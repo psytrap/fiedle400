@@ -67,6 +67,13 @@ class FlowCase(unittest.TestCase):
         patcher = mock.patch.dict(sys.modules, {"hid": self.fake_module})
         patcher.start()
         self.addCleanup(patcher.stop)
+        # T-088: the fake `hid` module isn't safe for a second thread to read from concurrently --
+        # tell SerialDeviceEngine not to start its background reader thread even when a test
+        # drives real CLI code that asks for one.
+        from fiedle400.engine import device as device_module
+        sim_patcher = mock.patch.object(device_module, "SIMULATED_DEVICE_ACTIVE", True)
+        sim_patcher.start()
+        self.addCleanup(sim_patcher.stop)
         # Same engine code as the Linux flows: time.sleep() in its polling
         # loops is real whichever backend sits underneath, so speed it up
         # the same way HidrawSim's tests do (fiedle400.engine.device.time).

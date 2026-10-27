@@ -38,7 +38,7 @@ as an HTML viewer page (default), `.SpO2`, CSV or JSON, and shows recordings alr
 | `config.py` | Settings file (`%APPDATA%\fiedle400` or `$XDG_CONFIG_HOME/fiedle400`), working-directory resolution, `FIEDLE400_*` environment variables (legacy `PO400_*` still honoured). |
 | `console.py` | Windows console encoding and window handling. |
 | `recording.py` | Stdlib-only readers for `.spo2`, `.csv`, `.json` recordings on disk (`load_session_file`, `find_latest_session_file`); feeds `view`. Replaced `plot.py` (T-006, T-013). |
-| `spo2_viewer.py` | Builds the self-contained HTML viewer page (chart, report, desaturation detection in JS, a port of `desat.py` that `tests/test_desat_js_parity.py` keeps in step). |
+| `spo2_viewer.py` | Builds the self-contained HTML viewer page (chart, report, desaturation detection in JS, a port of `desaturation.py` that `tests/test_desaturation_js_parity.py` keeps in step). |
 
 ## 3. Download flow
 

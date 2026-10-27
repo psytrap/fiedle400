@@ -391,7 +391,7 @@ def command_detect(args) -> int:
         print(f"Error connecting: {e}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     print("==================================================")
     print(f"  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE  (fiedle400 v{__version__})")
     print("==================================================")
@@ -411,7 +411,7 @@ def command_detect(args) -> int:
     except KeyboardInterrupt:
         print("\nPacket detector stopped by user.")
     finally:
-        dev.close()
+        engine.close()
 
     return 0
 
@@ -487,7 +487,7 @@ def command_download(args):
         print(f"Error connecting: {e}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     total_records = []
     try:
         total_records = engine.download_all_sessions(
@@ -500,7 +500,7 @@ def command_download(args):
     except KeyboardInterrupt:
         print("\nDownload interrupted by user.")
     finally:
-        dev.close()
+        engine.close()
 
     print(f"\nDownload complete. Total records collected across all sessions: {len(total_records)}")
     if not total_records:
@@ -536,14 +536,14 @@ def command_sessions(args):
         print(f"Error connecting: {e}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         sessions = engine.list_sessions(debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
         print("\nSession query interrupted by user.")
         return 1
     finally:
-        dev.close()
+        engine.close()
 
 
     print("\n==================================================")
@@ -585,14 +585,14 @@ def command_clear(args):
         print(f"Error connecting: {e}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         ok = engine.clear_memory(session_id=sess_id, debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
         print("\nOperation interrupted by user.")
         return 1
     finally:
-        dev.close()
+        engine.close()
 
     _report_erase(ok, target_str)
     if not ok and engine.single_erase_unsupported is True:
@@ -624,7 +624,7 @@ def command_read_time(args):
         print(f"Error connecting: {e}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         reply = engine.read_rtc_time(debug=getattr(args, "verbose", 0))
 
@@ -638,7 +638,7 @@ def command_read_time(args):
     except KeyboardInterrupt:
         print("\nRead RTC interrupted by user.")
     finally:
-        dev.close()
+        engine.close()
     return 0
 
 
@@ -663,7 +663,7 @@ def command_set_time(args):
         print(f"Error connecting: {e}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         print(f"Sending Set-RTC command (0x83) for timestamp: {ts_str}...")
         engine.set_rtc_time(target_dt, debug=getattr(args, "verbose", 0))
@@ -672,7 +672,7 @@ def command_set_time(args):
     except KeyboardInterrupt:
         print("\nSet RTC interrupted by user.")
     finally:
-        dev.close()
+        engine.close()
 
     print(f"✅ Successfully set PO-400 device clock to: {ts_str}")
     print(f"   Command format: python3 -m fiedle400.cli set-time \"{ts_str}\"")
@@ -720,13 +720,13 @@ def _run_backend_checks(backend: str, dev_path_arg: Optional[str]) -> list:
     if node_path is None:
         return checks
 
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         check("Handshake + device info", lambda: engine.read_device_info(debug=0)["device_info"].hardware_id)
         check("Clock query answered", lambda: (engine.read_rtc_time(debug=0) or b"").hex(" "))
         check("Session index", lambda: f"{len(engine.list_sessions(debug=0))} session(s)")
     finally:
-        dev.close()
+        engine.close()
 
     return checks
 
@@ -790,7 +790,7 @@ def command_info(args):
         return 1
 
     meta = dev.get_descriptor_info()
-    engine = serial_engine.SerialDeviceEngine(dev)
+    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         res = engine.read_device_info(debug=getattr(args, "verbose", 0))
         info = res["device_info"]
@@ -800,7 +800,7 @@ def command_info(args):
         print("\nOperation interrupted by user.")
         return 1
     finally:
-        dev.close()
+        engine.close()
 
     backend_label = "Linux hidraw (native)" if dev.backend_name == "hidraw" else "hid (cross-platform)"
 
@@ -973,12 +973,15 @@ def run_interactive_wizard(args) -> int:
             print(f"[✗] Error connecting to device: {e}")
             return 1
 
-        engine = serial_engine.SerialDeviceEngine(dev)
+        engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
         try:
             # 1. Progressive hardware handshake & active user
             dev.write_report(Commands.unlock_handshake())
             time.sleep(0.15)
-            neg_res = dev.read_report(64)
+            # T-088: goes through the engine (not a raw dev.read_report) -- once the background
+            # reader thread is running, it's the fd's only reader; anything else touching
+            # dev.read_report() directly here would race with it.
+            neg_res = engine.read_raw_report()
             active_user_id = Parsers.parse_user_id(neg_res) if neg_res else 1
             print(f"[✓] Hardware Handshake    : ACK (User #{active_user_id})")
 
@@ -1135,7 +1138,7 @@ def run_interactive_wizard(args) -> int:
             print("\nOperation cancelled by user.")
             return 1
         finally:
-            dev.close()
+            engine.close()
 
 
 def main(argv: Optional[List[str]] = None):

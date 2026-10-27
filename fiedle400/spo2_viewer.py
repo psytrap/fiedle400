@@ -8,7 +8,7 @@ with no server and no extra dependency (T-005).
 
 import json
 
-from fiedle400 import desat
+from fiedle400 import desaturation
 from fiedle400.export import pad_records
 
 _TEMPLATE = """<!doctype html>
@@ -89,9 +89,9 @@ _TEMPLATE = """<!doctype html>
 <script>
 (function () {
   var records = JSON.parse(document.getElementById('spo2-data').textContent);
-  // {events, summary, params, pulse: {events, summary, params}}, computed in Python (desat.py) for the page's initial
+  // {events, summary, params, pulse: {events, summary, params}}, computed in Python (desaturation.py) for the page's initial
   // load; re-derived here in JS (detectEvents/summarizeEvents, a 1:1 port of
-  // desat.py's detect_events/summarize) whenever the event parameters below change,
+  // desaturation.py's detect_events/summarize) whenever the event parameters below change,
   // so the page recomputes without a server round-trip (T-025).
   var analysis = JSON.parse(document.getElementById('spo2-events').textContent);
   var meta = document.getElementById('meta');
@@ -109,8 +109,8 @@ _TEMPLATE = """<!doctype html>
   var spo2Arr = records.map(function (r) { return r.spo2; });
   var pulseArr = records.map(function (r) { return r.heart_rate; });
 
-  // BEGIN desat-port (extracted and run under Node by tests/test_desat_js_parity.py, T-027)
-  // Desaturation-event detection, ported from fiedle400/desat.py (SPO2_FORMAT.md
+  // BEGIN desaturation-port (extracted and run under Node by tests/test_desaturation_js_parity.py, T-027)
+  // Desaturation-event detection, ported from fiedle400/desaturation.py (SPO2_FORMAT.md
   // §7.2). max_time/max_avg/oscillation stay fixed, matching SpO2 Assistant's own
   // Analyseparameter dialog, which doesn't expose them either (T-019 screenshot).
   var EVT_MAX_TIME = 180, EVT_MAX_AVG = 2, EVT_OSCILLATION = 1, EVT_LO = 0, EVT_HI = 100, EVT_INVALID = 127;
@@ -212,7 +212,7 @@ _TEMPLATE = """<!doctype html>
     return out;
   }
 
-  // Pulse-channel report values, ported from desat.summarize_pulse (valid pulse 1..250).
+  // Pulse-channel report values, ported from desaturation.summarize_pulse (valid pulse 1..250).
   function summarizePulse(pulse, events) {
     var valid = 0;
     for (var i = 0; i < pulse.length; i++) {
@@ -227,7 +227,7 @@ _TEMPLATE = """<!doctype html>
     out.avg_event_duration_s = events.length ? r1(sum(events, function (e) { return e.nadir - e.start; }) / events.length) : null;
     return out;
   }
-  // END desat-port
+  // END desaturation-port
 
   function recomputeEvents() {
     var drop = parseFloat(document.getElementById('dropPct').value);
@@ -480,7 +480,7 @@ _TEMPLATE = """<!doctype html>
     var a = analysis.summary;
     function avg(a) { return a.length ? (a.reduce(function (s, v) { return s + v; }, 0) / a.length) : null; }
     // "No-signal / probe-out" and the Time-below-criteria row below both come from
-    // analysis.summary (desat-port), so they use the same 1..100 valid-sample
+    // analysis.summary (desaturation-port), so they use the same 1..100 valid-sample
     // definition as every other report value instead of each filtering on its own (T-044).
     var rows = [
       ['__group__', 'Recording'],
@@ -559,22 +559,22 @@ def build_viewer_html(records):
     ]
     data_json = json.dumps(payload).replace("<", "\\u003c")
     spo2 = [p["spo2"] for p in payload]
-    events = desat.detect_events(spo2)
+    events = desaturation.detect_events(spo2)
     pulse = [p["heart_rate"] for p in payload]
-    pulse_events = desat.detect_pulse_events(pulse)
+    pulse_events = desaturation.detect_pulse_events(pulse)
     analysis = {
         "events": events,
-        "summary": desat.summarize(spo2, events),
+        "summary": desaturation.summarize(spo2, events),
         "params": {
-            "drop": desat.DROP,
-            "min_time": desat.MIN_TIME,
-            "max_time": desat.MAX_TIME,
-            "criteria": desat.CRITERIA,
+            "drop": desaturation.DROP,
+            "min_time": desaturation.MIN_TIME,
+            "max_time": desaturation.MAX_TIME,
+            "criteria": desaturation.CRITERIA,
         },
         "pulse": {
             "events": pulse_events,
-            "summary": desat.summarize_pulse(pulse, pulse_events),
-            "params": {"drop": desat.PULSE_DROP, "min_time": desat.PULSE_MIN_TIME},
+            "summary": desaturation.summarize_pulse(pulse, pulse_events),
+            "params": {"drop": desaturation.PULSE_DROP, "min_time": desaturation.PULSE_MIN_TIME},
         },
     }
     events_json = json.dumps(analysis).replace("<", "\\u003c")

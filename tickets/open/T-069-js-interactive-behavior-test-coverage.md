@@ -7,7 +7,7 @@
   - `fiedle400/spo2_viewer.py` (the inline `<script>` -- chart drawing,
     zoom/pan, tooltip hover, checkbox toggles, print)
   - `tests/test_spo2_viewer.py` (today's coverage)
-  - `tests/test_desat_js_parity.py` (today's *other* JS coverage)
+  - `tests/test_desaturation_js_parity.py` (today's *other* JS coverage)
 
 ---
 
@@ -17,9 +17,9 @@ Asked while reviewing what JS testing exists in the project (2026-10-21).
 Today there are two kinds of JS-related automated checks, both real but
 narrower than "the JS works":
 
-- `tests/test_desat_js_parity.py` (T-027): extracts the actual
+- `tests/test_desaturation_js_parity.py` (T-027): extracts the actual
   `detectEvents`/`summarizeEvents`/`summarizePulse` block from the shipped
-  HTML and runs it under Node, comparing output against `desat.py` for a
+  HTML and runs it under Node, comparing output against `desaturation.py` for a
   battery of cases. This covers the *data-computation* JS only.
 - `tests/test_spo2_viewer.py`: checks the *generated HTML/JS as text* --
   that a button exists, that a checkbox is wired to the right id, that no

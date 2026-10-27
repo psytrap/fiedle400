@@ -28,7 +28,7 @@ Open questions this ticket needs to settle, not yet decided:
   checked for this ticket).
 - Where it sits in the page (top, near the report table, printable or not).
 
-Related: [T-058](T-058-username-wizard-and-html-editable.md) wants an
+Related: [T-058](T-058-html-viewer-username-display-and-edit.md) wants an
 editable username in the same viewer, with the same "no backing store for
 a static HTML file" persistence question -- worth designing together.
 

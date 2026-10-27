@@ -6,6 +6,19 @@ protocol. The second half is the project timeline before and around the tickets.
 
 ## Tickets by week
 
+### 2026-W44 (Mon 2026-10-26 to Sun 2026-11-01)
+
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-084](done/2026-W44/T-084-download-checksum-failures-on-long-sessions.md) | Checksum-failed frames dropped silently on long session downloads, no retry | Local |
+| [T-088](done/2026-W44/T-088-continuous-background-reader.md) | Evaluate a continuously-running background reader thread for the serial engine | Local |
+| [T-089](done/2026-W44/T-089-finish-request-response-sequencing-cleanup.md) | Finish cleaning up request/response sequencing (remaining single-shot reads, erase status, flush/watermark race) | Local |
+| [T-090](done/2026-W44/T-090-unify-flush-before-command-helper.md) | Unify the "flush stale reports" idiom into `_flush_before_command()` | Local |
+| [T-092](done/2026-W44/T-092-clear-memory-no-early-return.md) | `clear_memory()` should not early-return when nothing matches the erase target | Local |
+| [T-083](done/2026-W44/T-083-arduino-servo-test-fixture.md) | Arduino + servo mechanical test fixture for the PO-400 sensor | Local |
+| [T-068](done/2026-W44/T-068-viewer-desaturation-event-legend.md) | Legend entry for desaturation/pulse event markers in the HTML viewer (Won't Do -- superseded by T-076) | Either |
+| [T-081](done/2026-W44/T-081-group-backlog-tickets-by-ai-judgment.md) | Group backlog tickets by AI judgment | Either |
+
 ### 2026-W43 (Mon 2026-10-19 to Sun 2026-10-25)
 
 | Ticket | Title | Owner |
@@ -55,8 +68,10 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-066](done/2026-W43/T-066-0xec-byte1-low-nibble.md) | Decode `0xEC` byte 1, bits 0..3 (third data series; `clear -s` sends the whole delete sequence) | Cloud |
 | [T-075](done/2026-W43/T-075-auto-session-duration-reads-half-the-real-time.md) | Auto-mode session duration/record count reads ~half the real recording time (the count is seconds; T3 reversed) | Either |
 | [T-047](done/2026-W43/T-047-release-v0-4.md) | Ship the next release (v0.4.x) -- re-run the Runbook Checklist | Local |
+| [T-086](done/2026-W43/T-086-clean-up-desat-py.md) | Clean up `fiedle400/desat.py` | Either |
+| [T-087](done/2026-W43/T-087-session-count-mismatch-device-vs-fiedle400.md) | Device's on-unit "51 Seg" display vs. `fiedle400 sessions` listing only 31 | Local |
 
-Every ticket closed so far falls in W43, so there is one folder. The week of each was taken from
+Tickets closed before W44 all fall in W43, giving it one folder. The week of each was taken from
 the commit that closed it (the commit subjects in the git reflog), not guessed; check with
 `git log --follow --format=%ad --date=format:%G-W%V -- <path>` if in doubt.
 

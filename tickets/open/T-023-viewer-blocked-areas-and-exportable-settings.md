@@ -5,7 +5,7 @@
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
   - `fiedle400/spo2_viewer.py` (chart, drag-select already used for zoom)
-  - `fiedle400/desat.py` (event detection / `summarize()` -- whether
+  - `fiedle400/desaturation.py` (event detection / `summarize()` -- whether
     exclusion feeds into these or is display-only)
   - `tickets/done/2026-W43/T-007-html-viewer-feature-evaluation.md` (item 14,
     "Hide or exclude part of the data" -- previously **Skip**)
@@ -40,9 +40,9 @@ vanish from the chart) so it doesn't become the thing T-007 was right to
 avoid.
 
 **Not decided here, for whoever picks this up:**
-- Whether excluded ranges affect `desat.py`'s event detection and
+- Whether excluded ranges affect `desaturation.py`'s event detection and
   `summarize()` (basal SpO2, index, etc.), or are display-only -- affects
-  whether this also touches `fiedle400/desat.py`'s functions or stays
+  whether this also touches `fiedle400/desaturation.py`'s functions or stays
   purely in the JS/template layer.
 - Interaction with T-024: this ticket's exclusion state is what T-024 would
   persist, so the in-page data structure for "excluded ranges" should be
@@ -62,7 +62,7 @@ avoid.
 - [ ] Excluded ranges are clearly marked as excluded, never silently
       removed from the chart -- keeps this distinct from T-007 item 14's
       "wrong default" concern.
-- [ ] Decided and documented: does exclusion affect `desat.py`'s event
+- [ ] Decided and documented: does exclusion affect `desaturation.py`'s event
       detection/summary, or is it display-only for this ticket (with
       analysis-affecting exclusion as a possible later extension)?
 - [ ] A test covering the exclusion state (selection, visual marking, and

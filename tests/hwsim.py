@@ -352,12 +352,17 @@ class HidrawSim:
                     raise OSError(errno.ENODEV, "No such device")
             return real_read(fd, n)
 
+        from fiedle400.engine import device as device_module
         self._patches = [
             mock.patch.object(hid_driver, "SYSFS_HIDRAW_ROOT", self.sysfs_root),
             mock.patch.object(hid_driver, "DEV_ROOT", os.path.join(self._tmp, "dev")),
             mock.patch.object(os, "open", sim_open),
             mock.patch.object(os, "write", sim_write),
             mock.patch.object(os, "read", sim_read),
+            # T-088: FakeOximeter/this socketpair aren't safe for a second thread to read from
+            # concurrently -- tell SerialDeviceEngine not to start its background reader thread
+            # even when a test drives real CLI code that asks for one.
+            mock.patch.object(device_module, "SIMULATED_DEVICE_ACTIVE", True),
         ]
         for p in self._patches:
             p.start()

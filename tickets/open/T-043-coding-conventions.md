@@ -6,7 +6,7 @@
 - **Scope & Relevant Files:**
   - `.agents/rules/` (where the conventions file would sit, next to
     `code-review-standards.md`)
-  - `fiedle400/desat.py` (`_detect` -- the concrete example below)
+  - `fiedle400/desaturation.py` (`_detect` -- the concrete example below)
   - `AGENTS.md` (would need to point at the new rules file, as it does for
     `code-review-standards.md`)
 
@@ -23,7 +23,7 @@ write one -- naming first, since that is what prompted it.
 whether a name is legible in the first place. So a reviewer has no rule to
 cite when a name is simply too short to read.
 
-The concrete case: `fiedle400/desat.py`'s `_detect` uses `x` for the
+The concrete case: `fiedle400/desaturation.py`'s `_detect` uses `x` for the
 normalized series, `st`/`en` for the open descent's start and end indices,
 `v`/`p` for the current and previous sample, and `cur`/`n`/`c` for
 candidates in the merge and acceptance steps. Reading the function requires
@@ -38,7 +38,7 @@ What is NOT decided:
   `code-review-standards.md` already carry some of this, so the new file
   should not restate or contradict them -- part of this ticket is deciding
   what belongs where.
-- Whether existing code gets renamed, and if so in what order. `desat.py` is
+- Whether existing code gets renamed, and if so in what order. `desaturation.py` is
   the obvious first candidate, but renaming it touches product code, so it
   would be a cloud patch and its own ticket, not part of writing the
   conventions.

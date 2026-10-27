@@ -1,20 +1,27 @@
-# T-058: Set a username via the wizard; show and edit it in the HTML viewer
+# T-093: Set a username via the wizard
 
 - **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**
   - `fiedle400/cli.py` (`run_interactive_wizard`)
-  - `fiedle400/spo2_viewer.py` (the generated HTML/JS)
   - `PROTOCOL.md` §3.2, `SPO2_FORMAT.md` (the `0xEC`/username field)
+  - A local persistence store (`~/.config/fiedle400` or similar -- not yet
+    decided)
+  - [T-058](T-058-html-viewer-username-display-and-edit.md) (the HTML
+    viewer's display/edit half of the original combined request --
+    split out from this ticket 2026-10-27)
 
 ---
 
 ## Description & Context
 
-psytrap request (German): "Nutzernahmen setzen via Wizard und Nutzernahmen
-im HTML anzeigen und Editierbar machen" -- set a username through the
-interactive wizard, and show/edit it in the HTML viewer.
+**Split 2026-10-27** from the original combined ticket (psytrap request,
+German: "Nutzernahmen setzen via Wizard und Nutzernahmen im HTML anzeigen
+und Editierbar machen" -- set a username via the wizard, and show/edit it
+in the HTML viewer). The wizard/local-persistence half and the HTML
+viewer's display/edit half are separable concerns -- this ticket is just
+the wizard side; the viewer side is now [T-058](T-058-html-viewer-username-display-and-edit.md).
 
 **Important existing context, already decoded (T-039, `PROTOCOL.md:166`):**
 the `0xEC` SESSION_INDEX header *does* have a real 6-byte ASCII username
@@ -35,16 +42,8 @@ assumed.
 - Where does a locally-set name attach: to the `user_id` number (so it's
   remembered across sessions/downloads for "User #1"), or typed fresh per
   download/export?
-- How does it reach the HTML viewer -- baked in at export time (read-only
-  display unless regenerated), or live-editable in the browser with the
-  same persistence question as [T-056](T-056-html-viewer-comment-field.md)'s
-  comment field (no backing store for a static HTML file to save back to)?
-  These two tickets likely want the same persistence mechanism -- worth
-  deciding together, not independently.
 - Does the always-`"user"` device field ever get *read* and shown as a
   fallback/default, distinct from the locally-editable name?
-
----
 
 ## Criteria
 
@@ -53,11 +52,7 @@ assumed.
       anything new
 - [ ] Wizard has a step to set/edit a local username, persisted per
       `user_id`
-- [ ] HTML viewer displays the username and allows editing it in the
-      browser, with the persistence approach decided jointly with T-056
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
-
----
 
 ## Execution Notes
 

@@ -1,10 +1,10 @@
-"""The viewer's JS detectEvents/summarizeEvents must give exactly what desat.py gives (T-027).
+"""The viewer's JS detectEvents/summarizeEvents must give exactly what desaturation.py gives (T-027).
 
-The JS is a hand-written port of desat.py that runs in the browser when the user changes
+The JS is a hand-written port of desaturation.py that runs in the browser when the user changes
 the parameters. This test extracts the marked block from the shipped page, runs it under
 Node (no npm packages; skipped when `node` is not installed -- GitHub's runners have it)
 and compares events and every summary value with the Python original for the cases of
-tests/test_desat.py, the T-019 probe, parameter variants and a seeded random fuzz.
+tests/test_desaturation.py, the T-019 probe, parameter variants and a seeded random fuzz.
 """
 
 import json
@@ -18,10 +18,10 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
-from fiedle400 import desat, spo2_viewer  # noqa: E402
+from fiedle400 import desaturation, spo2_viewer  # noqa: E402
 import make_desat_probe  # noqa: E402
 
-BEGIN, END = "// BEGIN desat-port", "// END desat-port"
+BEGIN, END = "// BEGIN desaturation-port", "// END desaturation-port"
 
 RUNNER = """
 var fs = require('fs');
@@ -50,8 +50,8 @@ def _fall(start, depth, dur):
     return [start - -(-depth * k // dur) for k in range(1, dur + 1)]
 
 
-def _desat_cases():
-    """The sequences of tests/test_desat.py."""
+def _desaturation_cases():
+    """The sequences of tests/test_desaturation.py."""
     return [
         [97] * 20 + _fall(97, 4, 12) + [94, 95, 96, 97] + [97] * 10,
         [97] * 20 + _fall(97, 3, 12) + [97] * 10,
@@ -116,19 +116,19 @@ class TestJsMatchesPython(unittest.TestCase):
         got = self._run_js(cases)
         self.assertEqual(len(got), len(cases))
         for case, js in zip(cases, got):
-            events = desat.detect_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
+            events = desaturation.detect_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
             py = json.loads(json.dumps({"events": events,
-                                        "summary": desat.summarize(case["spo2"], events, case["criteria"])}))
+                                        "summary": desaturation.summarize(case["spo2"], events, case["criteria"])}))
             where = f"drop={case['drop']} min_time={case['min_time']} criteria={case['criteria']} spo2={case['spo2']}"
             self.assertEqual(js["events"], py["events"], where)
             self.assertEqual(js["summary"], py["summary"], where)
 
     def test_cases_of_the_python_tests(self):
-        self._compare(_desat_cases(), self.PARAMS)
+        self._compare(_desaturation_cases(), self.PARAMS)
 
     def test_basal_is_not_computed_when_every_valid_sample_is_in_an_event(self):
         series = [None] + [97 - k for k in range(13)]
-        self.assertEqual(len(desat.detect_events(series)), 1)
+        self.assertEqual(len(desaturation.detect_events(series)), 1)
         got = self._run_js([dict(spo2=series, drop=4, min_time=10, criteria=88)])[0]
         self.assertIsNone(got["summary"]["basal_spo2"])
         self._compare([series], [(4, 10, 88)])
@@ -142,7 +142,7 @@ class TestJsMatchesPython(unittest.TestCase):
 
     def test_seeded_random_sequences(self):
         series = _fuzz_cases(300)
-        found = sum(len(desat.detect_events(s)) for s in series)
+        found = sum(len(desaturation.detect_events(s)) for s in series)
         self.assertGreater(found, 50)  # the fuzz must actually produce events to compare
         self._compare(series, self.PARAMS[:4])
 
@@ -152,9 +152,9 @@ class TestJsMatchesPython(unittest.TestCase):
         x = []
         for dur in (10, 10, 10, 11):
             x += [97] * 15 + _fall(97, 4, dur) + [96, 97]
-        events = desat.detect_events(x)
+        events = desaturation.detect_events(x)
         self.assertEqual(len(events), 4)
-        self.assertEqual(desat.summarize(x, events)["avg_event_duration_s"], 10.2)
+        self.assertEqual(desaturation.summarize(x, events)["avg_event_duration_s"], 10.2)
         self._compare([x], [(4, 10, 88)])
 
     # Pulse series (T-030): same detector with range 0..254 / probe-out 255, plus summarize_pulse.
@@ -165,8 +165,8 @@ class TestJsMatchesPython(unittest.TestCase):
         got = self._run_js(cases)
         self.assertEqual(len(got), len(cases))
         for case, js in zip(cases, got):
-            events = desat.detect_pulse_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
-            py = json.loads(json.dumps({"events": events, "summary": desat.summarize_pulse(case["spo2"], events)}))
+            events = desaturation.detect_pulse_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
+            py = json.loads(json.dumps({"events": events, "summary": desaturation.summarize_pulse(case["spo2"], events)}))
             where = f"pulse drop={case['drop']} min_time={case['min_time']} series={case['spo2']}"
             self.assertEqual(js["events"], py["events"], where)
             self.assertEqual(js["summary"], py["summary"], where)
@@ -191,7 +191,7 @@ class TestJsMatchesPython(unittest.TestCase):
         for s in _fuzz_cases(150, seed=30):
             off = rng.choice((0, 40, 100, 160))  # lift into the pulse range, incl. above 100
             series.append([v if v is None or v in (127, 255) or v == 0 else v + off for v in s])
-        self.assertGreater(sum(len(desat.detect_pulse_events(s)) for s in series), 30)
+        self.assertGreater(sum(len(desaturation.detect_pulse_events(s)) for s in series), 30)
         self._compare_pulse(series, self.PULSE_PARAMS[:2])
 
 

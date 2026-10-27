@@ -229,7 +229,7 @@ def read_spo2_file(data: bytes) -> Tuple[datetime, List[dict]]:
 
 Reference material from T-017 (2026-10-20). This section describes how the vendor's
 SpO2 Assistant computes its report values. It is **not** a `fiedle400` feature spec;
-`fiedle400/desat.py` implements it for the HTML viewer (T-018).
+`fiedle400/desaturation.py` implements it for the HTML viewer (T-018).
 
 Sources: [M] = *SpO2 Assistant User Manual*, CONTEC, 2010-05-27
 (`http://manual.pulseoximeter.org/SPO2_Assistant_Manual.pdf`), section given;
@@ -242,13 +242,13 @@ predicted numbers; `SPO2_ASSISTANT_CHECKS.md` is the procedure for that check.
 
 | Report label | Definition | Source |
 | :--- | :--- | :--- |
-| Basal SpO2 (%) | Mean of the valid SpO2 samples (any value but the `0x7F` sentinel) **outside every event's descent** (start to nadir, both included): (sum of valid samples - sum of the event samples) / (valid count - event sample count). Not computed when that count is 0; printed `%3.1f`. Decoded in T-031: the report object's field `+0x50` (getter `0x468a30`, XML `<basal>` written at `0x4fdbcd`) is set at `0x54ced1`-`0x54d059`, which sums a value/count list of the SpO2 channel skipping `0x7F` (`0x468920`), then walks the SpO2 event list (`start`, `duration`) and subtracts every sample from `start` to `start + duration`. This is the rule `fiedle400/desat.py` uses; T-019's real run (96.2 vs. 96.23 predicted, plain mean 95.39) fits it. A probe on which the candidate rules diverge is ready for a real-program check (T-035). Small difference: the program counts a raw 0 as valid, `desat.py` only 1..100 (fiedle400's own files never contain a 0). | [M] §5.4.7.3, [X] |
+| Basal SpO2 (%) | Mean of the valid SpO2 samples (any value but the `0x7F` sentinel) **outside every event's descent** (start to nadir, both included): (sum of valid samples - sum of the event samples) / (valid count - event sample count). Not computed when that count is 0; printed `%3.1f`. Decoded in T-031: the report object's field `+0x50` (getter `0x468a30`, XML `<basal>` written at `0x4fdbcd`) is set at `0x54ced1`-`0x54d059`, which sums a value/count list of the SpO2 channel skipping `0x7F` (`0x468920`), then walks the SpO2 event list (`start`, `duration`) and subtracts every sample from `start` to `start + duration`. This is the rule `fiedle400/desaturation.py` uses; T-019's real run (96.2 vs. 96.23 predicted, plain mean 95.39) fits it. A probe on which the candidate rules diverge is ready for a real-program check (T-035). Small difference: the program counts a raw 0 as valid, `desaturation.py` only 1..100 (fiedle400's own files never contain a 0). | [M] §5.4.7.3, [X] |
 | Total Event | Number of SpO2 desaturation events (7.2). | [M] §5.4.7.3 |
 | Index (1/hr) | "the event number per hour" (events / recording hours). | [M] §5.4.7.3 |
 | Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |
 | Artifact (%) | Share of non-effective data: "that zero value area and excluding data area" (zero/invalid samples plus user-excluded ranges, see [M] §5.4.2 Exclude data). | [M] §5.4.7.3 |
 | Avg. Low SpO2 (%) | "the average value of 'Minimum SpO2' for all SpO2 events" (mean of event nadirs). | [M] §5.4.7.3 |
-| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). `desat.py`'s `summarize`/the viewer's `summarizeEvents` compute it as `time_below_criteria_s`, over the same 1..100 valid samples as `artifact_pct` and the other values here -- not a separately-filtered count (T-032 found it wasn't, fixed in T-044). | [M] §5.4.7.3, [X] |
+| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). `desaturation.py`'s `summarize`/the viewer's `summarizeEvents` compute it as `time_below_criteria_s`, over the same 1..100 valid samples as `artifact_pct` and the other values here -- not a separately-filtered count (T-032 found it wasn't, fixed in T-044). | [M] §5.4.7.3, [X] |
 
 ### 7.2 Desaturation event algorithm
 
@@ -309,7 +309,7 @@ a dropout cannot fall inside a single descent, since it would have closed it, so
 lands inside an event is a join bridging the gap it sits in -- which is what the mark records.
 
 **Implementation detail.** `SpO2.exe` splits the above across three functions, and
-`fiedle400/desat.py` mirrors that split: one walk over the samples builds a complete candidate
+`fiedle400/desaturation.py` mirrors that split: one walk over the samples builds a complete candidate
 list, a second walk joins and resolves it, and the dropout rule stays a literal re-read of each
 surviving span instead of a propagated flag. That form is easier to write and to check against the
 disassembly, and it buys no extra lookahead over the single walk. The addresses are **detection**
@@ -366,7 +366,7 @@ least 6 bpm (start value minus nadir), lasting 8-180 s to the nadir, with an ave
 above 254 (the `0xFF` sentinel) breaks it. A rise in pulse rate is never an event, because
 step 2 of the detection ends a candidate on any rise. The pulse event list feeds the pulse
 columns of the report XML (`0x4fd8e1`-`0x4fdb63`): event count, total and average event
-duration, index and adjusted index, artifact %. `fiedle400/desat.py`'s `detect_pulse_events`
+duration, index and adjusted index, artifact %. `fiedle400/desaturation.py`'s `detect_pulse_events`
 implements it, `summarize_pulse` computes the pulse report values, and the viewer shows the
 events as bands on the heart-rate series with adjustable parameters (T-030). Not yet checked
 against the real program: `scripts/make_pulse_basal_probe.py` writes a probe with predicted counts (T-035).

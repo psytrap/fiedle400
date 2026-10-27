@@ -1,6 +1,6 @@
 # T-068: Legend entry for desaturation/pulse event markers in the HTML viewer
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
+- **Status:** Won't Do (superseded by [T-076](T-076-viewer-event-band-toggle.md))
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**
@@ -28,4 +28,11 @@ than a key.
 
 ## Execution Notes
 
-(Not started.)
+**2026-10-27:** Closed as superseded by
+[T-076](../../open/T-076-viewer-event-band-toggle.md) during a backlog
+review -- not an identical ask (this wanted a static swatch+label, T-076
+wants an actual toggle checkbox), but implementing T-076's checkbox means
+adding exactly the labeled legend entry this ticket asked for; there is no
+scenario where someone builds an unlabeled toggle and leaves this as
+separate follow-up work. This ticket's swatch-per-event-type requirement
+was folded into T-076's criteria so nothing is lost. No code changed.

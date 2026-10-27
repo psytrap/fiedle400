@@ -17,7 +17,7 @@ from datetime import datetime
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
-from fiedle400.desat import detect_events  # noqa: E402
+from fiedle400.desaturation import detect_events  # noqa: E402
 from fiedle400.export import build_spo2_binary  # noqa: E402
 
 BASE = 97

@@ -125,7 +125,7 @@ class TestViewerDesaturationEvents(unittest.TestCase):
         self.assertEqual(analysis["events"], [])
 
     def test_basal_spo2_is_no_longer_labelled_as_an_estimate(self):
-        # T-031 decoded the program's rule, which is the one desat.py uses.
+        # T-031 decoded the program's rule, which is the one desaturation.py uses.
         html = spo2_viewer.build_viewer_html([])
         self.assertIn("'Basal SpO2'", html)
         self.assertNotIn("estimate", html)
@@ -155,10 +155,10 @@ class TestViewerAcrossSessionGap(unittest.TestCase):
         return out
 
     def test_no_false_event_across_the_pause(self):
-        from fiedle400 import desat
+        from fiedle400 import desaturation
         recs = self._two_sessions()
         # What the viewer used to see: the sessions side by side, an event across the join.
-        self.assertEqual(len(desat.detect_events([r["spo2"] for r in recs])), 1)
+        self.assertEqual(len(desaturation.detect_events([r["spo2"] for r in recs])), 1)
         data, analysis = self._blocks(spo2_viewer.build_viewer_html(recs))
         self.assertEqual(analysis["events"], [])
         self.assertEqual(analysis["summary"]["total_event"], 0)
@@ -174,10 +174,10 @@ class TestViewerAcrossSessionGap(unittest.TestCase):
 class TestViewerConfigurableEventParameters(unittest.TestCase):
     """T-025: the desaturation-event parameters (drop %, min duration, criteria
     level) are adjustable inputs in the page, pre-filled from the same values
-    desat.py used to compute the page's initial `analysis` block -- not
+    desaturation.py used to compute the page's initial `analysis` block -- not
     hardcoded separately, which would let the two drift apart. The actual
     live-recompute behaviour (detectEvents/summarizeEvents, a JS port of
-    desat.py) needs a browser and was verified by hand against the T-019
+    desaturation.py) needs a browser and was verified by hand against the T-019
     probe recording: drop=3 -> 8 events, min_time=8 -> 9 events, both an
     exact match to the real SpO2 Assistant numbers from that ticket."""
 
@@ -194,9 +194,9 @@ class TestViewerConfigurableEventParameters(unittest.TestCase):
         self.assertIn('id="minDur" min="1" max="180"', self.html)
         self.assertIn('id="critLevel" min="1" max="99"', self.html)
 
-    def test_defaults_are_not_hardcoded_separately_from_desat_py(self):
+    def test_defaults_are_not_hardcoded_separately_from_desaturation_py(self):
         # No value="..." on these inputs in the template itself -- they're set
-        # from analysis.params in JS, so desat.py's constants stay the one
+        # from analysis.params in JS, so desaturation.py's constants stay the one
         # source of truth for the page's initial numbers.
         for input_id in ("dropPct", "minDur", "critLevel"):
             self.assertNotRegex(self.html, r'id="%s"[^>]*value=' % input_id)
@@ -209,9 +209,9 @@ class TestViewerConfigurableEventParameters(unittest.TestCase):
 
 
 class TestViewerPulseRateEvents(unittest.TestCase):
-    """T-030: the pulse-rate event parameters are live inputs, pre-filled from desat.py,
+    """T-030: the pulse-rate event parameters are live inputs, pre-filled from desaturation.py,
     and the page carries the Python-computed pulse events and summary. The JS port is
-    checked against Python in tests/test_desat_js_parity.py."""
+    checked against Python in tests/test_desaturation_js_parity.py."""
 
     def setUp(self):
         self.html = spo2_viewer.build_viewer_html([])
@@ -235,14 +235,14 @@ class TestViewerPulseRateEvents(unittest.TestCase):
         self.assertIn('id="pulseDropBpm" min="2" max="20"', self.html)
         self.assertIn('id="pulseMinDur" min="1" max="180"', self.html)
 
-    def test_defaults_come_from_desat_py_not_the_template(self):
-        from fiedle400 import desat
+    def test_defaults_come_from_desaturation_py_not_the_template(self):
+        from fiedle400 import desaturation
         for input_id in ("pulseDropBpm", "pulseMinDur"):
             self.assertNotRegex(self.html, r'id="%s"[^>]*value=' % input_id)
         self.assertIn("document.getElementById('pulseDropBpm').value = analysis.pulse.params.drop", self.html)
         self.assertIn("document.getElementById('pulseMinDur').value = analysis.pulse.params.min_time", self.html)
         params = self._analysis([])["pulse"]["params"]
-        self.assertEqual(params, {"drop": desat.PULSE_DROP, "min_time": desat.PULSE_MIN_TIME})
+        self.assertEqual(params, {"drop": desaturation.PULSE_DROP, "min_time": desaturation.PULSE_MIN_TIME})
         self.assertEqual((params["drop"], params["min_time"]), (6, 8))  # the real program's defaults
 
     def test_inputs_recompute_on_change(self):

@@ -112,7 +112,9 @@ class TestCliInteractive(unittest.TestCase):
         args = MagicMock(device=None, verbose=0)
         ret = run_interactive_wizard(args)
         self.assertEqual(ret, 0)
-        mock_dev.close.assert_called()
+        # T-088: the CLI now closes the engine (which itself stops the background reader thread,
+        # then closes the device) rather than the device directly.
+        mock_engine.close.assert_called()
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")

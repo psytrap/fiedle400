@@ -18,13 +18,13 @@ specifics.
      fails it (a boundary on each side), and where candidate rules exist, a case on which
      they give clearly different numbers at the program's printed precision (usually one
      decimal);
-   - predictions computed with fiedle400's own implementation (`fiedle400/desat.py`), with
+   - predictions computed with fiedle400's own implementation (`fiedle400/desaturation.py`), with
      each case's expected outcome asserted in the script, so a probe cannot silently
      drift from its design;
    - output: `<name>.SpO2` (written by `export.build_spo2_binary`, so the run also checks
      that the program opens a fiedle400 file), `<name>.csv` with the same series, and
      `expected.json` (summary values, values for changed parameters, per-case outcome).
-3. **Pin the predictions in a test** (`tests/test_desat.py`) so they stay reproducible.
+3. **Pin the predictions in a test** (`tests/test_desaturation.py`) so they stay reproducible.
 4. **Generate the files**: `python3 scripts/<script>.py OUTDIR`. The cloud keeps a copy in
    the project files under `probe-spo2/<ticket>/`.
 
@@ -77,8 +77,8 @@ operation is needed.
   personal data).
 - In `SPO2_FORMAT.md` §7: mark the hypothesis validated (name the ticket), or correct it and
   say what the program did instead.
-- If a prediction was wrong: open a cloud ticket to fix `fiedle400/desat.py` and the viewer's
-  JS port together (the parity test, `tests/test_desat_js_parity.py`, keeps them in step),
+- If a prediction was wrong: open a cloud ticket to fix `fiedle400/desaturation.py` and the viewer's
+  JS port together (the parity test, `tests/test_desaturation_js_parity.py`, keeps them in step),
   and update the probe's assertions.
 
 ## Checks so far

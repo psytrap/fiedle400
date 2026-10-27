@@ -6,7 +6,7 @@
 - **Scope & Relevant Files:**
   - `fiedle400/recording.py` (`read_spo2_file` and friends)
   - `SPO2_FORMAT.md`, `PROTOCOL.md`
-  - `fiedle400/spo2_viewer.py`, `fiedle400/desat.py`
+  - `fiedle400/spo2_viewer.py`, `fiedle400/desaturation.py`
 
 ---
 

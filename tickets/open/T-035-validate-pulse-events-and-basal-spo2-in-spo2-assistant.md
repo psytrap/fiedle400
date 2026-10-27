@@ -10,7 +10,7 @@
     being validated
   - `tickets/done/2026-W43/T-029-pulse-rate-desaturation-decode.md`,
     `tickets/done/2026-W43/T-031-basal-spo2-rule-confirmation.md` (the decodes)
-  - `fiedle400/desat.py` (`detect_pulse_events`, `summarize`'s `basal_spo2`)
+  - `fiedle400/desaturation.py` (`detect_pulse_events`, `summarize`'s `basal_spo2`)
 
 ---
 
@@ -18,7 +18,7 @@
 
 **Deferred by psytrap, 2026-10-20.** T-030 was implemented without waiting for this
 check, so the viewer shows pulse events from the static decode alone. If this check later
-finds a difference, fix `desat.py` and the viewer's JS port together (the T-027 parity test
+finds a difference, fix `desaturation.py` and the viewer's JS port together (the T-027 parity test
 keeps them in step).
 
 psytrap, 2026-10-20: confirm the new findings in the real Windows program once the
@@ -29,7 +29,7 @@ addresses in `SPO2_FORMAT.md`):
   pulse change 6 bpm, minimum time 8 s, valid range 0..254, max 180 s, max average fall
   2 bpm/s, oscillation 1. Only **falls** in pulse rate are events, never rises.
 - **Basal SpO2** is the mean of the valid SpO2 samples outside every event's descent
-  (start to nadir). That is the rule `desat.py` already used; T-019's single data point
+  (start to nadir). That is the rule `desaturation.py` already used; T-019's single data point
   (96.2 reported) could not tell it apart from "mean of samples >= 88 %".
 
 Follow `SPO2_ASSISTANT_CHECKS.md` (the reusable procedure split out of this ticket into
@@ -74,7 +74,7 @@ flash for this; it only needs the laptop and the probe file.
       `expected.json`; every difference listed.
 - [ ] Re-run with pulse change = 5 and with pulse time = 7; counts compared (5 and 5)
       (`scripts/check_spo2_assistant_report.py report.xml expected.json --variant "pulse change=5"`).
-- [ ] `SPO2_FORMAT.md` §7.1 / §7.3 marked as validated, or corrected; `desat.py` fixed if
+- [ ] `SPO2_FORMAT.md` §7.1 / §7.3 marked as validated, or corrected; `desaturation.py` fixed if
       a prediction was wrong (cloud follow-up if needed).
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
