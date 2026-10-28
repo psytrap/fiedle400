@@ -5,7 +5,8 @@ protocol; `DONE.md` for the archive.
 
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
-| [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local | Open |
+| [T-095](open/T-095-beta-rollout-advertise-and-find-users.md) | Beta rollout -- advertise `fiedle400` and find users | Local | Open |
+| [T-096](open/T-096-release-v0-5.md) | Ship the next release (v0.5.x) -- re-run the Runbook Checklist | Local | Open |
 
 ## Backlog (deferred)
 
@@ -53,6 +54,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-073](open/T-073-validate-manual-erase-against-real-device.md) | Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware | Local | Open (deferred) |
 | [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open (deferred) |
 | [T-082](open/T-082-wizard-erase-reports-success-but-sessions-persist.md) | Wizard reports erase succeeded, but the session is still there afterward | Local | Open (deferred) |
+| [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local | Open (deferred) |
 
 ### Process & docs
 

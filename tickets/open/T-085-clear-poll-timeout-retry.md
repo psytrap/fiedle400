@@ -1,6 +1,6 @@
 # T-085: `clear_memory` should poll with a timeout/retry, not a single immediate re-list
 
-- **Status:** Open
+- **Status:** Open (deferred)
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**
