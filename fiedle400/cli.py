@@ -1102,6 +1102,7 @@ def run_interactive_wizard(args) -> int:
             if not file_confirmed:
                 continue
 
+            engine.download_warnings = []
             all_records = []
             for idx, s in enumerate(selected_sessions, 1):
                 print(f"\nDownloading Session #{s.session_id} ({idx}/{len(selected_sessions)})...")
@@ -1109,7 +1110,12 @@ def run_interactive_wizard(args) -> int:
                 all_records.extend(recs)
 
             saved_path = _export_records_to_file(all_records, out_fn, fmt_choice)
-            print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
+            if engine.download_warnings:
+                print(f"\n⚠️  Saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: "
+                      f"{saved_path} -- but {len(engine.download_warnings)} warning(s) were raised during "
+                      f"download (see above); some data may be missing.")
+            else:
+                print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
             if fmt_choice == "html":
                 # T-012: the page is the saved file; opening it now is optional (default no).
                 if clean_input("Open it in your browser now? [y/N]: ").lower() in ("y", "yes"):

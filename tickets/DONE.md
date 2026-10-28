@@ -18,6 +18,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-083](done/2026-W44/T-083-arduino-servo-test-fixture.md) | Arduino + servo mechanical test fixture for the PO-400 sensor | Local |
 | [T-068](done/2026-W44/T-068-viewer-desaturation-event-legend.md) | Legend entry for desaturation/pulse event markers in the HTML viewer (Won't Do -- superseded by T-076) | Either |
 | [T-081](done/2026-W44/T-081-group-backlog-tickets-by-ai-judgment.md) | Group backlog tickets by AI judgment | Either |
+| [T-094](done/2026-W44/T-094-manual-mode-long-download-resume-budget-exhausted.md) | Manual-mode download of a long recording loses almost all samples -- resume budget exhausted | Local |
 
 ### 2026-W43 (Mon 2026-10-19 to Sun 2026-10-25)
 

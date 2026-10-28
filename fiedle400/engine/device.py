@@ -58,6 +58,7 @@ class SerialDeviceEngine:
         self.last_dump_time = None
         self._is_mock = hasattr(device, "responses")  # test doubles script replies; real devices never do
         self.single_erase_unsupported = False  # set by clear_memory, T-074
+        self.download_warnings: List[str] = []  # populated by download_session/download_manual, T-094
 
         # T-088: an opt-in background thread that continuously drains the HID fd into a queue,
         # decoupled from whatever this engine's caller is doing at the time -- removing read-loop
@@ -723,12 +724,36 @@ class SerialDeviceEngine:
             print(f"[DEBUG IN] Manual header: {header}")
         return header
 
+    MAX_CONSECUTIVE_STALLS = 20  # T-094: give up only after this many *consecutive* no-progress resumes
+
     def _manual_series(self, opcode: int, reply: int, samples: int, debug: Union[bool, int] = 0) -> List[int]:
         """One series, 27 values per subframe. A missing subframe is asked for again from where
-        the series broke off, as SpO2 Assistant does (`9N 7F`, then `9N 00` from that subframe)."""
+        the series broke off, as SpO2 Assistant does (`9N 7F`, then `9N 00` from that subframe).
+
+        T-094: a batch of frames from one read round is no longer abandoned at the first
+        out-of-order subframe. On real hardware, subframes routinely arrive with small gaps
+        (e.g. 0,1,2,4,5,7,8 -- 3 and 6 missing) even outside a resume, and after a resume the
+        freshly-requested subframe often arrives interleaved with stale ones still in flight
+        from before the stop took effect, in any order. The old code treated the *first*
+        out-of-order frame as "the rest of this batch is junk" and broke out of the loop,
+        permanently discarding the actually-needed in-order frame sitting right after it --
+        which is why real downloads stalled almost immediately and never recovered even with
+        many resumes.
+
+        A subframe that arrives ahead of `expected` is now cached (by subframe number) instead
+        of being thrown away -- it was real, already-received data; discarding it just meant
+        re-requesting it later over another explicit stop/resume round-trip, which is what made
+        every gap costly. `expected` is drained against that cache (possibly several subframes
+        at once, including ones unlocked earlier in the same batch regardless of arrival order)
+        before falling back to asking the device again.
+
+        A resume (stop + re-request) is only issued when a whole round made zero progress, and
+        gives up only after `MAX_CONSECUTIVE_STALLS` *consecutive* no-progress rounds, reset on
+        any progress -- not a fixed total budget that a single early gap could exhaust."""
         values: List[int] = []
         self._write_report(manual.series_request(opcode), f"Manual series (0x{opcode:02X})")
-        resumes = 0
+        consecutive_stalls = 0
+        pending: Dict[int, List[int]] = {}  # subframe seq -> decoded values, received ahead of `expected`
         while len(values) < samples:
             got = self._manual_frames(
                 lambda fr: len(values) + manual.SAMPLES_PER_SUBFRAME * sum(f[0] == reply for f in fr) >= samples,
@@ -740,19 +765,29 @@ class SerialDeviceEngine:
                 if seq == expected:
                     values.extend(manual.decode_subframe(f))
                     progressed = True
-                elif seq > expected:
-                    break  # a gap: the rest of this batch is out of order
+                elif seq > expected and seq not in pending:
+                    pending[seq] = manual.decode_subframe(f)
+                # seq < expected: a stale repeat of a subframe we already have -- nothing to do.
+            expected = len(values) // manual.SAMPLES_PER_SUBFRAME
+            while expected in pending:
+                values.extend(pending.pop(expected))
+                progressed = True
+                expected = len(values) // manual.SAMPLES_PER_SUBFRAME
             if len(values) >= samples:
                 break
-            if resumes >= 3:
+            if progressed:
+                consecutive_stalls = 0
+                continue  # the stream is flowing -- keep reading, no need to interrupt it
+            consecutive_stalls += 1
+            if consecutive_stalls > self.MAX_CONSECUTIVE_STALLS:
                 break
-            resumes += 1
             expected = len(values) // manual.SAMPLES_PER_SUBFRAME
             if int(debug) >= 1:
-                print(f"[DEBUG OUT] Manual series 0x{opcode:02X}: asking again from subframe {expected}")
+                print(f"[DEBUG OUT] Manual series 0x{opcode:02X}: asking again from subframe {expected} "
+                      f"(stall {consecutive_stalls}/{self.MAX_CONSECUTIVE_STALLS})")
             self._write_report(manual.series_end(opcode), f"Manual series stop (0x{opcode:02X} 7F)")
             self._write_report(manual.series_request(opcode, expected), f"Manual series (0x{opcode:02X}) from {expected}")
-            if not progressed and not got:
+            if not got:
                 self._sleep(0.05)
         return values[:samples]
 
@@ -789,8 +824,10 @@ class SerialDeviceEngine:
         missing = samples - min(len(spo2), len(pulse))
         print(f"\nManual recording download complete ({len(out)} records).")
         if missing > 0:
-            print(f"WARNING: the device sent {missing} sample(s) fewer than its header announced; "
-                  f"those seconds are empty. Download it again.")
+            warning = (f"the device sent {missing} sample(s) fewer than its header announced; "
+                       f"those seconds are empty. Download it again.")
+            print(f"WARNING: {warning}")
+            self.download_warnings.append(warning)
         return out
 
     def download_all_sessions(
