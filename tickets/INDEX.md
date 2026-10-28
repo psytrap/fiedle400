@@ -5,7 +5,6 @@ protocol; `DONE.md` for the archive.
 
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
-| [T-079](open/T-079-final-beta-testing-before-phase-2.md) | Final beta testing before Phase 2 (the minor version bump) | Local | Open |
 | [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local | Open |
 
 ## Backlog (deferred)

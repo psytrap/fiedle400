@@ -1,6 +1,6 @@
 # T-079: Final beta testing before Phase 2 (the minor version bump)
 
-- **Status:** Open
+- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -36,17 +36,44 @@ and bumping to `0.5.0`.
 
 ## Criteria
 
-- [ ] Some real, everyday use of the shipped `v0.4.41` binary (not a
+- [x] Some real, everyday use of the shipped `v0.4.41` binary (not a
       scripted gate run) -- download, view, clear, across a few sessions
       over a few days, on whatever recordings actually happen
-- [ ] No new finding from that use that should block Phase 2 (if one
+- [x] No new finding from that use that should block Phase 2 (if one
       turns up, it gets its own ticket, same as this cycle's T-074/076/
       077/078; this ticket just has to wait for it or decide it's
       non-blocking)
-- [ ] psytrap explicitly confirms: ready for Phase 2
-- [ ] `scripts/bump_version.py minor` run, `0.4.x -> 0.5.0`
-- [ ] Tests pass
+- [x] psytrap explicitly confirms: ready for Phase 2
+- [x] `scripts/bump_version.py minor` run, `0.4.x -> 0.5.0`
+- [x] Tests pass
 
 ## Execution Notes
 
-(Not started.)
+**2026-10-27/28 (real-device use, several long recordings):** Beyond the
+scripted gates, the device saw substantial real day-to-day use over this
+window -- including the T-083 Arduino+servo wiggler fixture runs, several
+multi-hour Auto-mode sessions, and one real 11h38m52s/41,932-record
+Manual-mode recording used repeatedly for download-reliability testing.
+This use surfaced two real findings, both their own tickets (same pattern
+as this cycle's T-074/076/077/078):
+
+- [T-082](../done/2026-W44/T-082-wizard-erase-reports-success-but-sessions-persist.md)
+  (wizard erase reporting success without persisting) -- investigated at
+  length, root cause not conclusively nailed down, mitigated with a
+  longer settle delay; left open as a possible-recurrence watch, not
+  blocking.
+- [T-094](../done/2026-W44/T-094-manual-mode-long-download-resume-budget-exhausted.md)
+  (Manual-mode download of a long recording losing 97-100% of its
+  samples) -- found, root-caused (an out-of-order-frame handling bug,
+  not the retry budget itself as first suspected), fixed, and confirmed
+  with a 10x full-length real-hardware re-download: byte-for-byte
+  identical across all 10 runs, 0 missing samples. This was a real,
+  serious bug that only a long real recording could have surfaced --
+  exactly what this ticket's "whatever recordings actually happen"
+  criterion was for.
+
+psytrap (2026-10-28): "t79 is complete I'd say. Lots of long recordings
+with some findings" -- explicit confirmation that T-094's fix (now
+shipped and installed locally as `v0.4.43`) closes out the beta period
+with no further blocking findings. `scripts/bump_version.py minor` run:
+`0.4.43 -> 0.5.0`. Full suite passes (423 tests, 7 skipped -- live-only).
