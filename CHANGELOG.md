@@ -463,6 +463,55 @@ protocol side is documented and ready.
 Full history of G5/G6 hardware re-checks on both platforms, moved here to
 keep `RELEASE_PLAN.md`'s gate table current-state-only (2026-10-16).
 
+**`0.5.0` (psytrap/Claude, 2026-10-28), T-096 full runbook for the Phase 2
+minor bump (`0.4.43` -> `0.5.0`, see T-079):**
+- G1-G4: 423 tests green (`skipped=7`), diff audit clean (`git diff --stat
+  v0.4.41..HEAD` -- 55 files changed, no debris patterns), version sync
+  confirmed, clean-venv stdlib-only smoke test passes.
+- G5/G6 (Linux): `pyinstaller` build clean; `info`/`sessions`/`download`
+  against the real device (454 records, 7m34s session) -- 0 sequence
+  gaps; `FIEDLE400_LIVE=1` 423 tests green on both `hidraw` and `hid`
+  backends (`skipped=1`, 6 live-device tests ran).
+- G5/G6 (Windows, SSH to `192.168.2.165`): repo there was stale at the
+  old T-047 commit, `git pull` fast-forwarded it to `HEAD`. `pip install
+  hid` initially grabbed the wrong PyPI package (ctypes-based, needs a
+  separate `hidapi.dll`) and clobbered the correct `hidapi` (cython)
+  install `pyproject.toml` actually wants; fixed with `pip uninstall
+  hid` + `pip install --force-reinstall hidapi`. Build clean; `info`/
+  `sessions`/`download` against the real device -- same 454-record
+  session, 0 sequence gaps. `FIEDLE400_LIVE=1` suite: first attempt
+  silently ran the mock suite because `set VAR=1 && ...` on one cmd.exe
+  line leaves a trailing space in the value and the live-gate check is
+  an exact `== "1"` comparison; fixed by quoting the assignment (`set
+  "VAR=1"`). Re-run: 423 tests, `skipped=83` (4 live-hardware tests ran
+  for real).
+- G7: `fiedle400 view` on the 454-record session -- SpO2/HR traces,
+  stats table, desaturation/pulse-event sections all render correctly,
+  visually confirmed in a browser.
+- G10: green on ubuntu/windows/macos on the exact pushed commit
+  (`ece8626`, [40643539388](https://github.com/psytrap/fiedle400/actions/runs/40643539388)).
+- **Extra real-hardware exercise beyond the standard gates:** psytrap
+  separately ran a ~9h real recording + erase on the Windows machine
+  ("Fine Windows works with 9 hour recording and erases") after this
+  cycle's 0.5.0 build was installed there, on top of the 10x
+  full-length Linux confirmation already done for T-094's fix.
+- Ring 0-3: tag `v0.5.0` created on `ece8626`. Ring 1 dry run
+  ([40713552179](https://github.com/psytrap/fiedle400/actions/runs/40713552179))
+  -- first attempt's `Build macos (arm64)` job queued ~15 min then came
+  back `cancelled` (GitHub macOS-runner capacity; the `Test
+  macos-latest` job in the same run had already passed), `gh run rerun
+  --failed` re-ran just that job and it went green; final state all
+  `Test`/`Build`/`Windows Installer` jobs green, `Create GitHub Release`
+  correctly skipped. Linux and Windows portable artifacts smoke-tested
+  (`--version`/`--help`); macOS has no Mac available to hand-test, same
+  as every prior cycle (RELEASE_PLAN.md D2) -- its `Test` job passing is
+  the gate. Ring 2
+  ([40717598236](https://github.com/psytrap/fiedle400/actions/runs/40717598236))
+  published <https://github.com/psytrap/fiedle400/releases/tag/v0.5.0>
+  with all four assets. Ring 3: all four assets' SHA-256 match the CI
+  build artifacts byte-for-byte; extracted Linux asset's `--version`
+  prints `0.5.0`.
+
 **`0.3.7` (psytrap, 2026-10-16), docs-review patch (0015):** Linux (`.venv`,
 `hidraw`): `info`/`sessions` correct against the real device. Windows 8.1
 laptop (reached over SSH): PyInstaller for `py -3.8`, `dist\fiedle400.exe
