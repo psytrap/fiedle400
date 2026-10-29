@@ -1,6 +1,6 @@
 # T-103: Analyse SpO2 Review; download compatibility matrix for the CMS50 family
 
-- **Status:** Done (SpO2 Review unavailable)
+- **Status:** Done (SpO2 Review installer unavailable; its request captured)
 - **Priority:** Normal
 - **Owner:** Either
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)
@@ -44,10 +44,10 @@ recordings.
 - [x] SpO2 Review obtained and stored under `archive/`, or recorded as unavailable
       (unavailable: the known download link is dead, psytrap 2026-10-29)
 - [x] Its download protocol documented, compared with OSCAR's
-      `cms50_loader.cpp` (OSCAR's side only, `PROTOCOL.md` §6.1 protocol A; SpO2 Review
-      itself could not be analysed)
+      `cms50_loader.cpp` (`CMS50_COMPATIBILITY.md` §4: a 2014 serial capture shows SpO2 Review
+      sending OSCAR's protocol-A request; the reply side is from OSCAR only)
 - [x] Compatibility matrix written (in `PROTOCOL.md` or its own doc), every cell
-      with evidence or "unknown" (`PROTOCOL.md` §6)
+      with evidence or "unknown" (`CMS50_COMPATIBILITY.md`, first in `PROTOCOL.md` §6)
 - [x] T-061 and its subtickets updated with the result
 
 ## Execution Notes
@@ -68,5 +68,15 @@ recordings.
   pulseoxstore.com) but the cloud's network policy blocks those hosts, and psytrap found the
   link dead (2026-10-29). Recorded as unavailable; protocol A is taken from OSCAR's
   `cms50_loader.cpp` alone. Ticket closed.
+- **Second source (2026-10-29, psytrap: "Check for another source"):** no other installer mirror
+  found (Software Informer gates its download, pulseoxstore.com is gone). Instead SleepyHead bug
+  #207 has two Eltima serial captures of a CMS50F 3.7, one with SpO2 Review and one with SpO2
+  Assistant 2.x, copied to `archive/capture/cms50f37-2014/` with `decode_spm.py`. They show
+  SpO2 Review = protocol A (19200 8O1, `F5 F5`), SpO2 Assistant 2.x = protocol B, byte for byte
+  OSCAR's `cms50f37_loader` sequence (`CMS50_COMPATIBILITY.md` §2, §4).
 - **Follow-up candidates (not created):** protocol B support (CMS50F 3.7/CMS50I/CMS50H, reuses the
   serial backend, mock-testable from OSCAR's source); protocol A support (older models).
+- **Moved (psytrap, 2026-10-29: "Do the extra document, not protocol.md"):** the CMS50 material
+  now lives in `CMS50_COMPATIBILITY.md`, with a byte map of the 2014 protocol-B capture (§6);
+  `PROTOCOL.md` §6 only points there. Protocol-B support is on hold as T-105 ("We will only
+  support PO-250 and PO-300").

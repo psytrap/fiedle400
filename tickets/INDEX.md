@@ -70,6 +70,7 @@ Open tickets parked until psytrap picks them up again.
 | :---: | :--- | :---: | :--- |
 | [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either | Open (deferred) |
 | [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local | Open (deferred) |
+| [T-105](open/T-105-cms50f37-protocol-b-download.md) | Download from CMS50F v3.7 / CMS50I (protocol B) | Either | Open (deferred, on hold) |
 
 ### Process & docs
 

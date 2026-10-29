@@ -181,7 +181,8 @@ If you own one of these models, please run `fiedle400 info` and `fiedle400 sessi
 the output (T-102).
 
 Contec's CMS50 oximeters (CMS50D+, CMS50E, CMS50F, CMS50I), the ones OSCAR reads, use two other
-protocols and are **not supported**; `fiedle400` reports no oximeter for them. See `PROTOCOL.md` §6
+protocols and are **not supported** (fiedle400 supports the PO-400, PO-250 and PO-300 only);
+`fiedle400` reports no oximeter for them. See [`CMS50_COMPATIBILITY.md`](CMS50_COMPATIBILITY.md)
 for the compatibility matrix.
 
 ---

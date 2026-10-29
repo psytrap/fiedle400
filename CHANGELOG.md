@@ -8,6 +8,15 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.5 (2026-10-29)
+
+- **T-103** (docs): `PROTOCOL.md` §6 gains wire evidence for the CMS50F (`cms50f37`) protocol from
+  two 2014 serial captures posted in SleepyHead bug #207; §6.4 rewritten. The captures and a small
+  decoder are in `archive/capture/cms50f37-2014/` (not in git).
+- **T-103/T-105** (docs): the CMS50 material moves from `PROTOCOL.md` §6 to its own
+  `CMS50_COMPATIBILITY.md`, with a byte map of the capture's protocol-B download. Scope: fiedle400
+  supports the PO-400, PO-250 and PO-300 only; CMS50 protocol-B support is on hold (T-105).
+
 ## 0.5.4 (2026-10-29)
 
 - **First real-hardware run of the serial emulator** (a genuine Arduino Uno, not just the PC
