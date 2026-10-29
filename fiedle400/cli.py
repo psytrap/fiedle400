@@ -585,6 +585,11 @@ def command_clear(args):
         print(f"Error connecting: {e}")
         return 1
 
+    if not _erase_supported(dev):
+        print(f"⚠️ {ERASE_REFUSED}")
+        dev.close()
+        return 1
+
     engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
     try:
         ok = engine.clear_memory(session_id=sess_id, debug=getattr(args, "verbose", 0))
@@ -599,6 +604,45 @@ def command_clear(args):
         print("   The device did not accept erasing a single recording (T-074). "
               "'fiedle400 clear' without -s erases all of them.")
     return 0 if ok else 1
+
+
+ERASE_USB_ID = ("28E9", "028A")  # the PO-400, the only device erase was ever tested on
+
+
+def _erase_supported(dev) -> bool:
+    """Erase is only sent to the PO-400's USB ID (T-101: other models are download-only)."""
+    if getattr(dev, "backend_name", None) == "serial":
+        return False
+    try:
+        meta = dev.get_descriptor_info()
+        vid, pid = meta.get("vid_hex"), meta.get("pid_hex")
+    except Exception:
+        return True  # a test double without descriptors: behave as before
+    if not isinstance(vid, str) or not isinstance(pid, str):
+        return True
+    return (vid.upper(), pid.upper()) == ERASE_USB_ID
+
+
+ERASE_REFUSED = ("Erase is only enabled for the PO-400 (USB 28E9:028A). This device is "
+                 "download-only in fiedle400; erase its recordings on the device itself.")
+
+
+def _model_lines(dev, model_string) -> List[str]:
+    """What T-104 shows about the connected device: model, transport, and a request for
+    the `info` output when the model is not one fiedle400 was tested with."""
+    try:
+        meta = dev.get_descriptor_info()
+    except Exception:
+        meta = {}
+    vid, pid = meta.get("vid_hex"), meta.get("pid_hex")
+    vid = vid if isinstance(vid, str) and vid else "?"
+    pid = pid if isinstance(pid, str) and pid else "?"
+    transport = "USB serial" if getattr(dev, "backend_name", None) == "serial" else "USB HID"
+    lines = [f"{protocol.describe_model(model_string)}  ({transport}, {vid}:{pid})"]
+    if not protocol.is_known_model(model_string):
+        lines.append("This model has not been tested with fiedle400 yet. Downloading should work but is "
+                     f"unconfirmed; please send the output of 'fiedle400 info' to {PROJECT_URL}/issues")
+    return lines
 
 
 def _report_erase(ok, what: str = "the recordings") -> None:
@@ -802,15 +846,16 @@ def command_info(args):
     finally:
         engine.close()
 
-    backend_label = "Linux hidraw (native)" if dev.backend_name == "hidraw" else "hid (cross-platform)"
+    backend_label = {"hidraw": "Linux hidraw (native)", "serial": "USB serial (115200 baud)"}.get(
+        dev.backend_name, "hid (cross-platform)")
 
     readable, writable = True, True
     if node_path.startswith("/dev/"):
         readable = os.access(node_path, os.R_OK)
         writable = os.access(node_path, os.W_OK)
 
-    vid_hex = meta.get("vid_hex", "28E9")
-    pid_hex = meta.get("pid_hex", "028A")
+    vid_hex = meta.get("vid_hex") or "unknown"
+    pid_hex = meta.get("pid_hex") or "unknown"
     decoded_model, model_source = protocol.decode_usb_vid_pid(vid_hex, pid_hex)
 
     not_reported = "not reported by the device"
@@ -821,11 +866,13 @@ def command_info(args):
     model_str = (info.hardware_id if info else None) or not_reported
 
     print("\n==================================================")
-    print("  PULSOX PO-400 DEVICE & HARDWARE INFORMATION")
+    print("  PULOX OXIMETER DEVICE & HARDWARE INFORMATION")
     print("==================================================")
     print(f"  fiedle400 Tool Version     : {tool_version_line()}")
     print(f"  Device Path / Node     : {node_path}")
-    print(f"  Active HID Backend     : {backend_label}")
+    model_lines = _model_lines(dev, info.hardware_id if info else None)
+    print(f"  Detected Model         : {model_lines[0]}")
+    print(f"  Active Backend         : {backend_label}")
     print(f"  Hardware Model         : {decoded_model}")
     print(f"  └─ Provenance Source   : [{model_source}]")
     print(f"  USB Vendor:Product ID  : {vid_hex}:{pid_hex}")
@@ -847,6 +894,8 @@ def command_info(args):
     print(f"  Device Clock           : {rtc_time_str}")
     print(f"  Storage Memory Geometry: {geom_str}")
     print("==================================================\n")
+    for line in model_lines[1:]:
+        print(f"⚠️ {line}\n")
 
     return 0
 
@@ -996,6 +1045,11 @@ def run_interactive_wizard(args) -> int:
             sn_str = info.serial_number or not_reported
             up_str = info.user_profile or not_reported
 
+            model_lines = _model_lines(dev, info.hardware_id)
+            can_erase = _erase_supported(dev)
+            print(f"[✓] Detected Model        : {model_lines[0]}")
+            for line in model_lines[1:]:
+                print(f"[!] {line}")
             print(f"[✓] Device Descriptor     : {model_str}")
             print(f"[✓] Firmware Version      : {fw_str} | Serial: {sn_str}")
             print(f"[✓] Device Clock (RTC)    : {rtc_str}")
@@ -1013,7 +1067,9 @@ def run_interactive_wizard(args) -> int:
                 print("  [Q]   Quit")
                 print("------------------------------------------------------------")
                 act = clean_input("Select action [c, q]: ").lower()
-                if act in ("c", "clear"):
+                if act in ("c", "clear") and not can_erase:
+                    print(f"[!] {ERASE_REFUSED}")
+                elif act in ("c", "clear"):
                     confirm = clean_input("⚠️ Are you sure you want to format device flash memory? [y/N]: ").lower()
                     if confirm in ("y", "yes"):
                         _report_erase(engine.clear_memory(0, debug=verbose_level))
@@ -1047,6 +1103,9 @@ def run_interactive_wizard(args) -> int:
             elif choice.lower() in ("q", "quit", "exit"):
                 print("Goodbye!")
                 return 0
+            elif choice.lower() in ("c", "clear") and not can_erase:
+                print(f"[!] {ERASE_REFUSED}")
+                continue
             elif choice.lower() in ("c", "clear"):
                 confirm = clean_input("⚠️ Are you sure you want to permanently DELETE ALL recordings from device memory? [y/N]: ").lower()
                 if confirm in ("y", "yes"):
@@ -1126,11 +1185,14 @@ def run_interactive_wizard(args) -> int:
                     _open_spo2_viewer(all_records, saved_path)
 
             # Offer flash erase with default = YES
-            erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()
-            if erase_input in ("", "y", "yes"):
-                _report_erase(engine.clear_memory(0, debug=verbose_level))
+            if not can_erase:
+                print(f"\n[!] {ERASE_REFUSED}")
             else:
-                print("Flash recordings preserved.")
+                erase_input = clean_input("\nErase recordings from device flash? [Y/n]: ").lower()
+                if erase_input in ("", "y", "yes"):
+                    _report_erase(engine.clear_memory(0, debug=verbose_level))
+                else:
+                    print("Flash recordings preserved.")
 
             # Offer return to menu with default = NO
             ret_input = clean_input("\nReturn to main menu? [y/N]: ").lower()
@@ -1157,7 +1219,7 @@ def main(argv: Optional[List[str]] = None):
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
-    parser.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=None, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
+    parser.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid", "serial"], default=None, help="Driver backend: 'hidraw' (default on Linux), 'hid' (default on Windows / Linux testing) or 'serial' (USB-serial models; picked automatically when no HID device is found).")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
     
     subparsers = parser.add_subparsers(dest="command", help="Available subcommands")
@@ -1228,7 +1290,7 @@ def main(argv: Optional[List[str]] = None):
     parser_view.set_defaults(func=command_view)
 
     for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det, parser_selftest]:
-        p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid"], default=argparse.SUPPRESS, help="HID driver backend: 'hidraw' (default on Linux) or 'hid' (default on Windows / Linux testing).")
+        p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid", "serial"], default=argparse.SUPPRESS, help="Driver backend: 'hidraw' (default on Linux), 'hid' (default on Windows / Linux testing) or 'serial' (USB-serial models; picked automatically when no HID device is found).")
 
     args = parser.parse_args(argv)
     handler = args.func if args.command else run_interactive_wizard

@@ -1,15 +1,21 @@
 """Pulsox PO-400 USB HID Device Driver.
 
-Supports dual driver backends:
+Supports three driver backends:
   - 'hidraw': Direct Linux kernel /dev/hidraw nodes (default on Linux, 0 external dependencies).
   - 'hid': Cross-platform HID library via `import hid` (default on Windows & macOS,
            selectable on Linux for cross-platform development/testing).
+  - 'serial': USB-serial Contec models (`serial_port.py`, T-101). Picked automatically
+              when no HID device is found but a serial one is, or when --device names a
+              serial port.
 """
 
 import os
 import sys
 import time
 from typing import List, Optional, Tuple
+
+from .protocol.hardware import HID_USB_IDS
+from . import serial_port
 
 VENDOR_ID_HEX = "28E9"
 PRODUCT_ID_HEX = "028A"
@@ -46,8 +52,22 @@ def available_backends() -> List[str]:
     return ["hid"]
 
 
+def _uevent_matches(uevent: str) -> bool:
+    """True if a hidraw uevent belongs to one of the HID IDs SpO2 Assistant scans (T-104)."""
+    for line in uevent.splitlines():
+        if line.startswith("HID_ID="):
+            parts = line.split("=", 1)[1].strip().split(":")
+            if len(parts) >= 3:
+                try:
+                    return (int(parts[1], 16), int(parts[2], 16)) in HID_USB_IDS
+                except ValueError:
+                    return False
+    up = uevent.upper()
+    return any(f"{v:04X}" in up and f"{p:04X}" in up for v, p in HID_USB_IDS)
+
+
 def find_pulsox_hid_devices() -> List[Tuple[str, str, bool]]:
-    """Scans system for connected Pulsox PO-400 HID devices via Linux sysfs.
+    """Scans system for connected Contec HID oximeters (PO-400 and the other SpO2 Assistant HID ID) via Linux sysfs.
     
     Returns:
         List of tuples: (dev_path, uevent_info, is_readable)
@@ -64,7 +84,7 @@ def find_pulsox_hid_devices() -> List[Tuple[str, str, bool]]:
             try:
                 with open(uevent_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
-                    if VENDOR_ID_HEX in content.upper() and PRODUCT_ID_HEX in content.upper():
+                    if _uevent_matches(content):
                         dev_path = os.path.join(DEV_ROOT, node)
                         is_readable = os.access(dev_path, os.R_OK | os.W_OK)
                         found_devices.append((dev_path, content.strip(), is_readable))
@@ -140,6 +160,8 @@ class LinuxHidrawBackend:
                 raise RuntimeError(
                     "No Pulsox PO-400 device found! Ensure USB cable is plugged in and device is powered ON."
                 )
+            # The PO-400's own ID first: 0483:5751 is ST's generic HID ID and gets probed (T-104).
+            devices.sort(key=lambda d: 0 if "28E9" in d[1].upper() else 1)
             self.dev_path, _, is_readable = devices[0]
             if not is_readable:
                 raise PermissionError(
@@ -279,9 +301,11 @@ class HidBackend:
             matched_list = []
             enumerate_error = None
             try:
-                matched_list = hid.enumerate(VENDOR_ID_INT, PRODUCT_ID_INT)
-                if matched_list:
-                    self._enum_info = matched_list[0]
+                for vid, pid in HID_USB_IDS:
+                    matched_list = hid.enumerate(vid, pid)
+                    if matched_list:
+                        self._enum_info = matched_list[0]
+                        break
             except Exception as e:
                 # A hidapi that cannot load its native library fails here. Keep
                 # going (the explicit-path case below may still work) but hold
@@ -448,19 +472,25 @@ class PulsoxHidDevice:
 
     def __init__(self, dev_path: Optional[str] = None, backend: Optional[str] = None):
         self.dev_path = dev_path
+        # With no backend chosen, a missing HID device falls back to a USB-serial one (T-101).
+        self._auto_backend = backend is None and not dev_path
 
         if backend is None:
-            self.backend_name = resolve_default_backend()
+            self.backend_name = "serial" if serial_port.is_serial_path(dev_path) else resolve_default_backend()
         else:
             b = backend.lower().strip()
             if b in ("raw", "hidraw"):
                 self.backend_name = "hidraw"
             elif b in ("hid", "api", "hidapi"):
                 self.backend_name = "hid"
+            elif b in ("serial", "com", "tty"):
+                self.backend_name = "serial"
             else:
-                raise ValueError(f"Unknown HID backend '{backend}'. Supported backends: 'hidraw', 'hid'.")
+                raise ValueError(f"Unknown backend '{backend}'. Supported backends: 'hidraw', 'hid', 'serial'.")
 
-        if self.backend_name == "hidraw":
+        if self.backend_name == "serial":
+            self._backend = serial_port.SerialBackend(dev_path=self.dev_path)
+        elif self.backend_name == "hidraw":
             if not sys.platform.startswith("linux"):
                 raise RuntimeError(
                     f"The 'hidraw' backend is only supported on Linux (current OS: {sys.platform}).\n"
@@ -481,8 +511,40 @@ class PulsoxHidDevice:
             self._backend._fd = val
 
     def connect(self) -> str:
-        self.dev_path = self._backend.connect()
+        try:
+            self.dev_path = self._backend.connect()
+            self._probe_generic_hid()
+        except RuntimeError as e:
+            if not (self._auto_backend and str(e).startswith("No ")):  # no HID device, not a broken one
+                raise
+            if not serial_port.find_serial_candidates():
+                raise
+            self.backend_name = "serial"
+            self._backend = serial_port.SerialBackend()
+            self.dev_path = self._backend.connect()
         return self.dev_path
+
+    def _probe_generic_hid(self) -> None:
+        """0483:5751 is ST's generic HID demo ID, not an oximeter's own: probe it before use."""
+        if self.backend_name == "serial":
+            return
+        try:
+            meta = self._backend.get_descriptor_info()
+        except Exception:
+            return
+        vid, pid = meta.get("vid_hex"), meta.get("pid_hex")
+        if not isinstance(vid, str) or not isinstance(pid, str) or (vid.upper(), pid.upper()) != ("0483", "5751"):
+            return
+        if serial_port.probe_model(self._backend) is None:
+            path = self.dev_path
+            self._backend.close()
+            raise RuntimeError(f"No Pulsox PO-400 device found (the HID device 0483:5751 at {path} "
+                               "did not answer like an oximeter).")
+
+    @property
+    def transport(self) -> str:
+        """'serial' or 'hid', for messages (T-104)."""
+        return "serial" if self.backend_name == "serial" else "hid"
 
     def is_connected(self) -> bool:
         return self._backend.is_connected()

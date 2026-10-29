@@ -69,8 +69,6 @@ Open tickets parked until psytrap picks them up again.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either | Open (deferred) |
-| [T-104](open/T-104-detect-po250-po300-po400-for-wizard-and-info.md) | Detect PO-250 / PO-300 / PO-400 for the wizard and `info` | Either | Open (deferred) |
-| [T-101](open/T-101-download-recordings-from-other-models.md) | Download stored recordings from PO-250/PO-300 (no live/realtime mode) | Either | Open (deferred) |
 | [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local | Open (deferred) |
 | [T-103](open/T-103-spo2-review-analysis-and-cms50-compatibility.md) | Analyse SpO2 Review; download compatibility matrix for the CMS50 family | Either | Open (deferred) |
 

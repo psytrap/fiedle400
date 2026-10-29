@@ -46,7 +46,7 @@ class TestProtocol(unittest.TestCase):
     def test_decode_usb_vid_pid(self):
         arch, src = decode_usb_vid_pid("28E9", "028A")
         self.assertIn("GigaDevice MCU HID Oximeter", arch)
-        self.assertIn("hid_device.inf", src)
+        self.assertIn("SpO2.exe HID scan", src)
 
     def test_parsers_device_info(self):
         report_ver = bytes([0xF0, 0x70, 2, 0, 7] + [0]*59)

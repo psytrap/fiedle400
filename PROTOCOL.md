@@ -1042,7 +1042,19 @@ command frame (opcodes `0x83..0xBE`) without knowing the transport and queues th
 `ThrdHidCon` (`0x554c92`) and `ThrdComCon` (`0x554067`) run the same loop: take bytes from the
 queue and write them unchanged. HID sends them after report ID `0x00` (`0x47f645`); serial sends
 them with `WriteFile` (`0x41e608`). A serial model under SpO2 Assistant therefore speaks this
-document's protocol, not OSCAR's `7D 81` framing (`cms50f37_loader.cpp`).
+document's protocol. OSCAR's CMS50F v3.7 loader (`cms50f37_loader.cpp`) sends the same opcodes
+with the `7D 81` prefix that `fiedle400` also uses and the PO-400 accepts (§1.6), so it is the
+same family, not a different protocol (corrected 2026-10-29, T-101).
+
+**`fiedle400`'s serial backend** (`fiedle400/serial_port.py`, T-101): 115200 baud, 8N1, no flow
+control, DTR/RTS on. It writes each command without the HID report padding (`0x80` after a
+`7D 81` frame, `0x00` after a bare one; a bare command's checksum is kept even when it is `0x00`)
+and cuts the incoming byte stream into "reports" at quiet gaps of 10 ms or 64 bytes, so each reply
+starts at offset 0 as it does on HID. Before a serial candidate (or the generic HID ID
+`0483:5751`) is used it is probed: unlock `7D 81 A7 80×6 7D 81 A2`, then `7D 81 81 01`; it counts
+as an oximeter only if a valid `0xF1` model frame (§3, eight ASCII bytes, checksum = sum of the
+first nine bytes mod 128) arrives within 0.3 s. Byte format beyond the baud rate and DTR/RTS handling are
+assumptions, not traced in `SpO2.exe`; untested on a real serial device (T-102).
 
 **Optional wrapper.** `0x57f0c8` appends a 16-bit check value and pads the frame to a multiple
 of 8 bytes. It runs only when the setting `CustomProtocolInfo` (section `YHJ`) is on

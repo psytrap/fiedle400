@@ -72,8 +72,13 @@ from .parsers import (
 
 from .hardware import (
     decode_usb_vid_pid,
+    describe_model,
+    is_known_model,
     KNOWN_DEVICES,
     HARDWARE_PROFILES,
+    HID_USB_IDS,
+    SERIAL_USB_IDS,
+    MODEL_STRINGS,
 )
 
 __all__ = [
@@ -138,4 +143,9 @@ __all__ = [
     "decode_usb_vid_pid",
     "KNOWN_DEVICES",
     "HARDWARE_PROFILES",
+    "describe_model",
+    "is_known_model",
+    "HID_USB_IDS",
+    "SERIAL_USB_IDS",
+    "MODEL_STRINGS",
 ]

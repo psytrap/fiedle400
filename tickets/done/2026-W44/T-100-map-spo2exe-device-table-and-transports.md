@@ -66,3 +66,7 @@ device). Details and addresses are in `PROTOCOL.md` §5.
 **Answer to the open question:** a USB-serial model under SpO2 Assistant gets the PO-400's
 commands (`9D`, `EC`, `ED` ...), not OSCAR's `7D 81` framing. For T-101 that means a serial
 transport (115200 baud on the IDs above; byte format not traced) under the existing engine, not a new protocol.
+
+Correction (2026-10-29, T-101): OSCAR's `7D 81` framing is not a different protocol. It is the
+same opcode set with the `7D 81` prefix that `fiedle400` itself sends and the PO-400 accepts
+(`PROTOCOL.md` §1.6).

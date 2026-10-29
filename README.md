@@ -17,10 +17,11 @@ For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protoco
 
 **Driver**
 - **Dual-backend**: Linux defaults to `hidraw` -- 100% standard library, zero external dependencies (`pip install` is NOT required). Windows and macOS default to `hid` (`import hid`, pulled in automatically on those platforms). Pass `--backend hid` on Linux to develop and test the cross-platform path locally.
+- **USB-serial models (untested, T-101)**: a `serial` backend for Contec oximeters that connect as a serial port instead of HID, standard library only. See [Other models](#other-models-po-250-po-300-untested).
 
 **Everyday use**
 - **`fiedle400 selftest`**: a one-command, read-only hardware check (detection, connect, handshake, clock, sessions) against the real device -- no env var needed, unlike the test suite's opt-in live tests; running this command is itself the signal that a check is wanted. Automatically probes every backend this platform supports (e.g. both `hidraw` and `hid` on Linux) in one run; only the primary backend's result affects the exit code, so a known-flaky secondary backend never masks an otherwise-healthy device.
-- **`fiedle400 info`**: auto-detects the connected PO-400 (`VID 0x28E9`, `PID 0x028A`) and reports its hardware model, firmware version, serial number, user profile, and storage geometry -- printing "not reported by the device" rather than guessing at whatever it doesn't actually answer (most likely a device firmware limitation, not something more reverse-engineering would fix -- see `PROTOCOL.md` §3.3).
+- **`fiedle400 info`**: auto-detects the connected oximeter (the PO-400 is `VID 0x28E9`, `PID 0x028A`; other models see below), names the model from the device's own model string, and reports its hardware model, firmware version, serial number, user profile, and storage geometry -- printing "not reported by the device" rather than guessing at whatever it doesn't actually answer (most likely a device firmware limitation, not something more reverse-engineering would fix -- see `PROTOCOL.md` §3.3).
 - **`fiedle400 sessions`**: lists every recorded session in device memory from the stored index table. A session recorded in the PO-400's Manual mode (as opposed to its default Auto/flash-storage mode) is tagged `(Manual mode)`; `download` picks it up automatically, no separate flag needed.
 - **`fiedle400 clear`**: deletes stored sessions from device flash memory -- the only destructive command, confirmed by default. Erases Auto-mode and Manual-mode recordings alike; either way, it re-checks the device afterward and reports if a recording is still listed instead of claiming success blindly. Erasing a single Auto-mode session with `-s N` is not currently supported by this device's firmware (T-074): `clear` says so and that `clear` without `-s` erases all sessions instead.
 
@@ -143,6 +144,7 @@ You can explicitly choose the driver backend via the `--backend` (`--driver`) fl
 |---|---|---|---|
 | `hidraw` | Linux kernel direct `/dev/hidraw*` interface | **Linux** | Standard Library only (0 dependencies) |
 | `hid` | Cross-platform driver via `import hid` | **Windows, macOS** | `pip install hid` |
+| `serial` | USB-serial port (115200 baud) for Contec models that are not HID | used automatically when no HID device is found, or when `--device` names a serial port | Standard Library only |
 
 ```bash
 # Force hidraw (Linux default):
@@ -150,7 +152,33 @@ fiedle400 --backend hidraw info
 
 # Force hid (Windows default, or for testing on Linux):
 fiedle400 --backend hid info
+
+# A USB-serial model on a given port:
+fiedle400 --device /dev/ttyUSB0 sessions      # Windows: --device COM3
 ```
+
+### Other models (PO-250, PO-300): untested
+
+Nobody on the project owns a PO-250 or PO-300, so support for them is built from SpO2
+Assistant's own code and only tested against a simulated device (T-101, T-104; `PROTOCOL.md` §5):
+
+- `fiedle400` looks for every USB ID SpO2 Assistant scans: HID `28E9:028A` (PO-400) and
+  `0483:5751`; USB-serial `10C4:EA60`, `1CBE:0002`, `0483:5740` (Linux and Windows find these
+  by themselves; on macOS pass `--device /dev/cu.…`).
+- Before a serial port (or the generic HID ID `0483:5751`) is used, fiedle400 sends the two
+  read-only commands `info` starts with (unlock, model query) and uses the port only if it
+  answers like an oximeter within 0.3 s; other devices on those USB IDs (ESP32/Arduino boards,
+  STM32 adapters) are skipped. With several answering ports the first is used and the others
+  named; `--device` picks one.
+- The model is read from the device itself. A model fiedle400 has not been tested with is shown
+  with its raw model string and a request to send the `info` output to the project.
+- `sessions` and `download` work on these models; **`clear` and the wizard's erase are only
+  enabled for the PO-400** (USB `28E9:028A`). Erase recordings on the device itself.
+- On Linux a serial port needs your user in the `dialout` group (log out and in again after
+  `sudo usermod -aG dialout $USER`).
+
+If you own one of these models, please run `fiedle400 info` and `fiedle400 sessions` and send
+the output (T-102).
 
 ---
 

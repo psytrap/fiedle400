@@ -6,7 +6,7 @@
 - **Parent:** [T-061](T-061-po250-po300-download-recordings.md)
 - **Related:** [T-098](../done/2026-W44/T-098-identify-po250-po300-oem-model-and-software.md),
   [T-100](../done/2026-W44/T-100-map-spo2exe-device-table-and-transports.md),
-  [T-101](T-101-download-recordings-from-other-models.md)
+  [T-101](../done/2026-W44/T-101-download-recordings-from-other-models.md)
 - **Scope & Relevant Files:**
   - `archive/` (the SpO2 Review installer/binary, once obtained; not in git)
   - `PROTOCOL.md` (new section), `README.md` (supported models)

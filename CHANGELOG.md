@@ -8,6 +8,27 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.2 (2026-10-29)
+
+- **T-101** done, **new**: a `serial` backend for Contec oximeters that connect as a USB-serial
+  port (`fiedle400/serial_port.py`, standard library only: termios on Linux/macOS, the Win32 COM
+  API via ctypes on Windows; 115200 baud, as SpO2 Assistant uses). `sessions`, `download` and the
+  wizard run on it unchanged. It is picked with `-b serial`, by a serial `--device` path, or
+  automatically when no HID device is found but a serial one is. **Untested on real hardware**
+  (only against a simulated serial device replaying the PO-400 trace); an owner's run is T-102.
+- **T-104** done: the device search also takes SpO2 Assistant's second HID ID `0483:5751` and its
+  serial IDs; `info` and the wizard show a "Detected Model" line taken from the device's own model
+  string (`50F` = PO-400), with transport and USB ID. An untested model is shown with its raw
+  string and a request to send the `info` output to the project.
+- Serial ports (and the generic HID ID `0483:5751`) are **probed before use**: fiedle400 sends the
+  unlock and the model query `info` starts with and only uses a port that answers with a valid
+  model frame within 0.3 s, so ESP32/Arduino boards or STM32 adapters on the same USB IDs are
+  skipped. With several answering ports the first is used and the others named.
+- `clear` and the wizard's erase are now refused for anything but the PO-400's USB ID
+  `28E9:028A`: other models are download-only.
+- `PROTOCOL.md` §5 corrected: OSCAR's `7D 81` framing is the same opcode set with the prefix
+  `fiedle400` already sends, not a different protocol.
+
 ## 0.5.1 (2026-10-29)
 
 - **T-061** refocused on downloading stored recordings from the PO-250/PO-300 (psytrap: "download

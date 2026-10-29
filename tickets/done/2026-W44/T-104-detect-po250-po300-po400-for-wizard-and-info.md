@@ -1,11 +1,11 @@
 # T-104: Detect PO-250 / PO-300 / PO-400 for the wizard and `info`
 
-- **Status:** Open (deferred)
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
-- **Parent:** [T-061](T-061-po250-po300-download-recordings.md)
+- **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)
 - **Related:** [T-101](T-101-download-recordings-from-other-models.md) (uses the result),
-  [T-102](T-102-po250-po300-owner-test-run.md) (an owner runs it)
+  [T-102](../../open/T-102-po250-po300-owner-test-run.md) (an owner runs it)
 - **Scope & Relevant Files:**
   - `fiedle400/hid_driver.py` (device search), `fiedle400/protocol/hardware.py` (`KNOWN_DEVICES`)
   - `fiedle400/cli.py` (`command_info`, `run_interactive_wizard`)
@@ -45,12 +45,27 @@ says "PO-x00 family device (model unknown)".
 
 ## Criteria
 
-- [ ] Device search accepts the HID IDs above; serial candidates listed with "not supported yet"
-- [ ] Model taken from the `0xF1` model string; PO-400 still shown as PO-400
-- [ ] `info` and the wizard show model, VID:PID, transport and raw model string
-- [ ] Unsupported model: clear message plus a pointer to send the `info` output, no traceback
-- [ ] Mock tests for each ID and for an unknown model string; tests pass
+- [x] Device search accepts the HID IDs above; serial candidates are found too (and, with
+      T-101 done in the same patch, used rather than listed as "not supported yet")
+- [x] Model taken from the `0xF1` model string; PO-400 still shown as PO-400
+- [x] `info` and the wizard show model, VID:PID, transport and raw model string
+- [x] Unsupported model: clear message plus a pointer to send the `info` output, no traceback
+- [x] Mock tests for each ID and for an unknown model string; tests pass
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Done 2026-10-29 (cloud, with T-101; patch 0036). Mock tests only.
+
+- `protocol.hardware`: `HID_USB_IDS`, `SERIAL_USB_IDS`, `MODEL_STRINGS` (only `"50F"` ->
+  "Pulox PO-400", the one string seen on a real device), `describe_model()`, `is_known_model()`.
+  An unknown string is shown as `Unknown PO-x00 family device (model string "…")`, a missing one
+  as "model not reported"; nothing is guessed. `KNOWN_DEVICES` now lists the five SpO2.exe IDs
+  with sources that are in the repo (`PROTOCOL.md` §5, OSCAR); the INF-file citations, which
+  were not in the repo, are gone.
+- `info`: heading "PULOX OXIMETER DEVICE & HARDWARE INFORMATION", a "Detected Model" line
+  (model, USB HID/USB serial, VID:PID) and "Active Backend" (now also "USB serial"). For an
+  untested model it ends with a request to send the `info` output to the project's issues.
+- Wizard: "[✓] Detected Model" line plus the same request; erase is refused with a message for
+  anything but the PO-400's USB ID (T-101).
+- Not done: the `0xF1` strings of the PO-250/PO-300 are still unknown (T-102); `selftest` still
+  checks HID only.

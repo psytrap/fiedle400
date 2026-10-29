@@ -29,8 +29,8 @@ owner who runs it.
 
 ## Criteria
 
-- [ ] `fiedle400` finds a PO-250/PO-300 and says which model it is (T-104)
-- [ ] `sessions` and `download` work for it, read-only (T-101)
+- [x] `fiedle400` finds a PO-250/PO-300 and says which model it is (T-104; mock-tested)
+- [x] `sessions` and `download` work for it, read-only (T-101; mock-tested)
 - [ ] `README.md` lists the models as "untested on real hardware" until an owner
       confirms, then as supported (T-102)
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
@@ -43,13 +43,13 @@ owner who runs it.
 | :---: | :--- | :--- | :--- |
 | [T-098](../done/2026-W44/T-098-identify-po250-po300-oem-model-and-software.md) | Which hardware and PC software each model is | No | Done |
 | [T-100](../done/2026-W44/T-100-map-spo2exe-device-table-and-transports.md) | `SpO2.exe`'s device table and its serial path | No | Done |
-| [T-104](T-104-detect-po250-po300-po400-for-wizard-and-info.md) | Detect PO-250/PO-300/PO-400 for the wizard and `info` | Mock tests; an owner confirms | Open |
-| [T-101](T-101-download-recordings-from-other-models.md) | Download stored recordings | Mock tests; an owner confirms | Open |
+| [T-104](../done/2026-W44/T-104-detect-po250-po300-po400-for-wizard-and-info.md) | Detect PO-250/PO-300/PO-400 for the wizard and `info` | Mock tests; an owner confirms | Done |
+| [T-101](../done/2026-W44/T-101-download-recordings-from-other-models.md) | Download stored recordings | Mock tests; an owner confirms | Done |
 | [T-102](T-102-sample-file-from-po250-po300-owner.md) | An owner runs it (and, ideally, a USB capture) | An owner, not psytrap | Open |
 | [T-103](T-103-spo2-review-analysis-and-cms50-compatibility.md) | CMS50 family download compatibility matrix | No | Open |
 | [T-099](../done/2026-W44/T-099-read-other-vendor-oximetry-files.md) | Read other vendors' files | -- | Won't Do |
 
-Order: T-104, then T-101, then T-102 when an owner is found.
+T-104 and T-101 are done (mock-tested); what remains is T-102, an owner running it.
 
 ## Findings so far (T-098, T-100; 2026-10-29)
 
@@ -63,8 +63,8 @@ Order: T-104, then T-101, then T-102 when an owner is found.
   serial `10C4:EA60`, `1CBE:0002`, `0483:5740` and ports named `STM32`/`USB` (`PROTOCOL.md` §5).
   The model is read from the device (`0xF1` model string), not from the ID.
 - So if a model is HID with one of those IDs, today's engine should nearly work; if it is
-  USB-serial, it needs a serial transport under the same engine (T-101). Not yet known: each
-  model's actual VID:PID and model string; T-104 makes `fiedle400` report them.
+  USB-serial, it needs a serial transport under the same engine (T-101, now built). Not yet
+  known: each model's actual VID:PID and model string; `fiedle400 info` now reports them (T-104).
 
 ## Execution Notes
 
