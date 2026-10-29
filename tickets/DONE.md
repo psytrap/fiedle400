@@ -21,6 +21,9 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-094](done/2026-W44/T-094-manual-mode-long-download-resume-budget-exhausted.md) | Manual-mode download of a long recording loses almost all samples -- resume budget exhausted | Local |
 | [T-079](done/2026-W44/T-079-final-beta-testing-before-phase-2.md) | Final beta testing before Phase 2 (the minor version bump) | Local |
 | [T-096](done/2026-W44/T-096-release-v0-5.md) | Ship the next release (v0.5.x) -- re-run the Runbook Checklist | Local |
+| [T-098](done/2026-W44/T-098-identify-po250-po300-oem-model-and-software.md) | Identify the PO-250 / PO-300 hardware and their PC software | Either |
+| [T-100](done/2026-W44/T-100-map-spo2exe-device-table-and-transports.md) | Map `SpO2.exe`'s device table and its serial path | Cloud |
+| [T-099](done/2026-W44/T-099-read-other-vendor-oximetry-files.md) | Read the other vendor oximetry files (Won't Do -- psytrap: download from the device is the task) | Cloud |
 
 ### 2026-W43 (Mon 2026-10-19 to Sun 2026-10-25)
 

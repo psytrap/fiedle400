@@ -8,6 +8,17 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.1 (2026-10-29)
+
+- **T-061** refocused on downloading stored recordings from the PO-250/PO-300 (psytrap: "download
+  recording from device is the task"; no live mode) and split into T-101 to T-104 (tickets and docs
+  only, no code change). T-099 (reading other software's files) dropped.
+- **T-098** done: the PO-250 ships with SpO2 Assistant; the PO-300 has the PO-400's Auto and
+  Manual storage modes, so both most likely speak the PO-400's protocol.
+- **T-100** done, `PROTOCOL.md` §5: `SpO2.exe` sends the same command frames over HID and
+  USB-serial (115200 baud), picks devices by USB ID only and reads the model from the device.
+- **T-104** new: detect PO-250/PO-300/PO-400 in the wizard and `info`.
+
 ## 0.4.41 (2026-10-21)
 
 - **T-075** done, **behaviour change**: the `0xEC` sample count is seconds, one stored value per

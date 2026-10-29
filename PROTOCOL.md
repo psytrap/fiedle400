@@ -1018,3 +1018,35 @@ For the exhaustive specification, byte offsets, and reference code, see **[SPO2_
 | `0x0434` | `uint32_le` | Start Second |
 | `0x0438` | `uint32_le` | Total 1 Hz sample count ($N$) |
 | `0x043C` | `uint8[2] × N` | `[SpO2 %, Pulse Rate BPM]` pairs per second (`0x7F, 0xFF` for probe-out/invalid) |
+
+---
+
+## 5. Other devices in `SpO2.exe` (T-100)
+
+Static analysis of `archive/bruteforce/SpO2.exe` (2026-10-29), not confirmed on any device but
+the PO-400. It answers how SpO2 Assistant talks to models other than the PO-400 (T-061).
+
+**Port scan.** One connect routine (`0x504f6f`) builds the list of candidate devices:
+
+| Order | Transport | IDs | Code |
+| :---: | :--- | :--- | :--- |
+| 1 | HID | `0483:5751`, `28E9:028A` (PO-400) | `0x47c833` |
+| 2 | Serial (COM), 115200 baud | `10C4:EA60` (Silicon Labs CP210x), `1CBE:0002`, ports named `STM32`, `0483:5740` (STM32 virtual COM), ports named `USB` | `0x47acc6`, filter `0x47abf7` |
+| 3 | Serial, separate list | `0451:16AA` (TI CC254x USB dongle, the Bluetooth LE path) | `0x47acc6` |
+
+No ID carries a model name. Which model is connected comes from the device's replies
+(`0xF1` model string, §3), not from the USB ID.
+
+**Same frames on every transport.** `YhjProtocol`'s send helper (`0x4bc385`) builds each
+command frame (opcodes `0x83..0xBE`) without knowing the transport and queues the bytes.
+`ThrdHidCon` (`0x554c92`) and `ThrdComCon` (`0x554067`) run the same loop: take bytes from the
+queue and write them unchanged. HID sends them after report ID `0x00` (`0x47f645`); serial sends
+them with `WriteFile` (`0x41e608`). A serial model under SpO2 Assistant therefore speaks this
+document's protocol, not OSCAR's `7D 81` framing (`cms50f37_loader.cpp`).
+
+**Optional wrapper.** `0x57f0c8` appends a 16-bit check value and pads the frame to a multiple
+of 8 bytes. It runs only when the setting `CustomProtocolInfo` (section `YHJ`) is on
+(`0x52e48d`); it is independent of the transport, and no PO-400 capture shows it.
+
+Not traced yet: model-specific branches after the `0xF1` model string, and the serial byte
+format beyond the baud rate.

@@ -6,7 +6,6 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-095](open/T-095-beta-rollout-advertise-and-find-users.md) | Beta rollout -- advertise `fiedle400` and find users | Local | Open |
-| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly | Local | Open |
 
 ## Backlog (deferred)
 
@@ -41,6 +40,7 @@ Open tickets parked until psytrap picks them up again.
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
 | [T-065](open/T-065-installer-english-only.md) | Installer should only offer English, not German | Either | Open (deferred) |
 | [T-077](open/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either | Open (deferred) |
+| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly | Local | Open (deferred) |
 
 ### HTML viewer features & architecture
 
@@ -62,8 +62,17 @@ Open tickets parked until psytrap picks them up again.
 | :---: | :--- | :---: | :--- |
 | [T-021](open/T-021-broader-spo2-assistant-decode-coverage.md) | Broader real SpO2 Assistant `.spo2` decode coverage | Local | Open (deferred) |
 | [T-035](open/T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md) | Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant | Local | Open (deferred) |
-| [T-061](open/T-061-po250-po300-support-via-spo2-analysis.md) | PO-250 / PO-300 support via `.spo2` analysis | Either | Open (deferred) |
 | [T-070](open/T-070-fresh-spo2-assistant-desat-rerun.md) | Fresh real SpO2 Assistant run of the desaturation-event probe | Local | Open (deferred) |
+
+### Other PO-x00 models (T-061)
+
+| Ticket | Title | Owner | Status |
+| :---: | :--- | :---: | :--- |
+| [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either | Open (deferred) |
+| [T-104](open/T-104-detect-po250-po300-po400-for-wizard-and-info.md) | Detect PO-250 / PO-300 / PO-400 for the wizard and `info` | Either | Open (deferred) |
+| [T-101](open/T-101-download-recordings-from-other-models.md) | Download stored recordings from PO-250/PO-300 (no live/realtime mode) | Either | Open (deferred) |
+| [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local | Open (deferred) |
+| [T-103](open/T-103-spo2-review-analysis-and-cms50-compatibility.md) | Analyse SpO2 Review; download compatibility matrix for the CMS50 family | Either | Open (deferred) |
 
 ### Process & docs
 

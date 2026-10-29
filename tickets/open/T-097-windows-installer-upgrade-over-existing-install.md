@@ -1,6 +1,6 @@
 # T-097: Verify the real Windows installer upgrades a pre-existing install cleanly
 
-- **Status:** Open
+- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -57,6 +57,9 @@ something unexpected happen since `UsePreviousAppDir=no` normally
       against the in-place-upgrade path above
 - [ ] Note any divergence from what the manual T-096 swap already
       confirmed (if the real installer behaves differently, flag it)
+- [ ] Clean up the portable `fiedle400-windows-x64.exe` test binary
+      left on the Windows machine from this ticket's testing (and any
+      left from T-096's Ring 1 smoke test) once done with it
 - [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ## Execution Notes
