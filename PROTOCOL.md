@@ -607,6 +607,9 @@ Used on serial-stream device models:
 Tested on this (flash-storage) PO-400 for session ids 1-3: neither command gets any reply, not even an
 ACK (CHANGELOG.md, "Manual-mode protocol"). Serial-stream devices are untested.
 
+These are the CMS50F v3.7 protocol's "session start time" and "session data" commands (OSCAR
+`cms50f37_loader.cpp`), not `SpO2.exe` commands; see §6.
+
 ---
 
 ### 3.13 Deleting recordings (`0x9D 7F`; not `0xAA` or `0x91`..`0x96`)
@@ -1042,9 +1045,9 @@ command frame (opcodes `0x83..0xBE`) without knowing the transport and queues th
 `ThrdHidCon` (`0x554c92`) and `ThrdComCon` (`0x554067`) run the same loop: take bytes from the
 queue and write them unchanged. HID sends them after report ID `0x00` (`0x47f645`); serial sends
 them with `WriteFile` (`0x41e608`). A serial model under SpO2 Assistant therefore speaks this
-document's protocol. OSCAR's CMS50F v3.7 loader (`cms50f37_loader.cpp`) sends the same opcodes
-with the `7D 81` prefix that `fiedle400` also uses and the PO-400 accepts (§1.6), so it is the
-same family, not a different protocol (corrected 2026-10-29, T-101).
+document's protocol. OSCAR's CMS50F v3.7 loader (`cms50f37_loader.cpp`) shares only the `7D 81`
+prefix, the `0x80` padding and the `A7`/`A2` hello with it; its storage commands and its reply
+format are different, so it is a separate protocol (corrected again 2026-10-29, T-103; §6.2).
 
 **`fiedle400`'s serial backend** (`fiedle400/serial_port.py`, T-101): 115200 baud, 8N1, no flow
 control, DTR/RTS on. It writes each command without the HID report padding (`0x80` after a
@@ -1062,3 +1065,104 @@ of 8 bytes. It runs only when the setting `CustomProtocolInfo` (section `YHJ`) i
 
 Not traced yet: model-specific branches after the `0xF1` model string, and the serial byte
 format beyond the baud rate.
+
+---
+
+## 6. The CMS50 family: download compatibility (T-103)
+
+Desk research, 2026-10-29; no device was used. Only stored-recording download is covered (no live
+mode, no file formats). Each claim carries its evidence:
+
+- **Src**: OSCAR source, `oscar/SleepLib/loader_plugins/cms50_loader.cpp`, `cms50f37_loader.cpp` and
+  `oscar/SleepLib/serialoximeter.cpp` (gitlab.com/CrimsonNape/OSCAR-code, master, fetched 2026-10-29)
+- **RE**: static analysis of `archive/bruteforce/SpO2.exe` (SpO2 Assistant, file version 3.1.0.4)
+- **Cap**: PO-400 captures and traces in this repo (`analysis/`, `archive/`, `tests/fixtures/`)
+- **Forum**: a forum or blog report (links in §6.6), not checked by anyone on the project
+- **Inferred**: concluded from the above, not seen directly
+
+### 6.1 Three protocols
+
+| | **A: CMS50 legacy** (OSCAR `cms50_loader`) | **B: CMS50F v3.7** (OSCAR `cms50f37_loader`) | **C: PO-400 / SpO2 Assistant** (§1-§5) |
+| :--- | :--- | :--- | :--- |
+| Link | USB-serial, CP210x `10C4:EA60` in the cable (Src default ID; Forum) | USB-serial `10C4:EA60` in the device, or Bluetooth (`rfcomm` port) (Src) | HID `28E9:028A` (Cap); `SpO2.exe` also scans serial IDs (§5, RE) |
+| Line | 19200 baud, 8 data bits, odd parity, 1 stop (Src) | 115200 8N1 (Src) | 64-byte HID reports; 115200 on serial (RE) |
+| Request | `F5 F5` = send the recording, `F6 F6 F6` = back to live (Src). The user also has to start "upload" on the device (Src: OSCAR's error text and the comment "Newer CMS50 devices transmit from user input") | 9 bytes: `7D 81 [op] [arg\|80]…`, padded with `80`, **no checksum**, every argument byte has bit 7 **set** (Src `sendCommand`) | `7D 81 op args` or bare, 7-bit arguments, mod-128 checksum (§1) |
+| Reply | Byte stream; sync on bytes with bit 7 set (Src `processBytes`) | `[code 00..1F] [high bits] [data\|80]…`, length from a per-code table, no checksum (Src) | `[header ≥ 80] [7-bit data…] [checksum]` (§1, §2.2), the opposite bit-7 convention to B |
+| Model query | None. OSCAR guesses "CMS50D+" when the recording's start clock is 00:00 (Src) | `A8` → code `02`, two segments, e.g. `CMS50F`, `CMS50I`, `CMS50H` (Src) | `81 01` → `F1` `"50F"` (Cap) |
+| Hello | `F6 F6 F6` (Src) | `A7`, `A2` → `0C 80` (Src) | `A7`, `A2` → `F0 70` (Cap) |
+| List recordings | None: the device pushes its one recording (Src) | `A3` count (code `0A`), `A4 n` duration (code `08`), `A5 n` start date and time (codes `07`, `12`) (Src) | `9C 01` → `EC` headers (§3.2) |
+| Download | Three header trios `F2 hh mm`, then one trio `F0\|x pulse SpO2` per sample until the device goes quiet (Src) | `A6 n` → code `0F` frames with 3 samples each (CMS50F) or code `09` with one sample plus PI (CMS50I) (Src) | `9D 04 01/02` → `ED` subframes (§3.5); Manual mode `A0`/`A2`/`A3`/`A6`/`A7` (§3.14) |
+| Erase | None (Src) | `AE user session` (Src) | `9D 7F` (§3.13) |
+| Duration unit | One record per trio (Src) | `A4` reports half seconds (CMS50F) or quarter seconds (CMS50I, CMS50H) (Src `duration_divisor`) | Seconds (§1 rule 4) |
+
+### 6.2 Findings
+
+1. **B and C are different protocols** (corrects §5 as written for T-101). They share the `7D 81`
+   prefix, the `80` padding and the `A7`/`A2` hello, nothing else.
+   - *RE*: every call of `SpO2.exe`'s send helper (`0x4bc385`) with a constant opcode sends one of
+     `80 81 82 83 8E 8F 90..98 9A 9B 9C 9D 9F A0 A1 A2 A3 A6 A7 BE`. None of B's `A4 A5 A8 A9 AA
+     AB AD AE B0 B1 B2` is sent. Its `A2`, `A3` and `A6` share one argument handler (`0x4bc437`,
+     `[00|7F] [lo] [hi]`), the Manual-mode block request of §3.14, not B's commands. So **SpO2
+     Assistant 3.1.0.4 cannot download a protocol-B device** (inferred from the call sites;
+     older SpO2 Assistant versions are not in the repo).
+   - *Src vs Cap*: B expects `0C 80` after the hello and reply codes with bit 7 clear; the PO-400
+     answers `F0 70` and every reply header has bit 7 set.
+2. **§3.12's `A5`/`A6` "serial-stream" commands are B's** "get session start time" and "get session
+   data" (Src). `SpO2.exe` never sends `A5`; the PO-400 does not answer either (sweep,
+   `archive/bruteforce/sweep_results.dump`).
+3. **Whether the PO-400 firmware also understands B is unknown.** The sweep sent only `81 8E 94 9B 9C
+   9E A5 A6 A7 AD` with the `7D 81` prefix. A local read-only check on a PO-400 would be `7D 81 A8`
+   (model) and `7D 81 A9` (vendor). Never send B's `AE` (erase) or `AA` (listed as
+   `FLASH_CLEAR` in §2.1).
+4. **`fiedle400` cannot misdetect an A or B device as a PO-x00** (inferred from the probe in §5): it
+   needs a valid `F1` frame after `81 01`. A B device gets C's unlock, which is also B's hello, then
+   an opcode B does not list; an A device runs at 19200 8O1 and cannot decode 115200 bytes. Both
+   end as "no oximeter found".
+5. **OSCAR only opens serial ports** (`QSerialPort`, Src `serialoximeter.cpp`), so it cannot
+   download a HID device such as psytrap's PO-400 (inferred from the source).
+
+### 6.3 Compatibility matrix
+
+| Model | Pulox name | USB link | Vendor software | Protocol | OSCAR downloads it? | What `fiedle400` would need |
+| :--- | :--- | :--- | :--- | :---: | :--- | :--- |
+| CMS50D+ | PO-200 (Forum: luke.lol) | Serial cable with CP210x, `10C4:EA60` (Src default ID; Forum) | SpO2 Review (Forum: cpaptalk) | A (Src) | Yes, "CMS50" loader (Src; Forum) | Protocol A: line settings 19200 8O1, a push-style receiver, user starts the upload on the device. No clock in the device (Forum: Pugsy), so no real start time |
+| CMS50E | PO-300 (Forum: luke.lol; conflicts with T-098, see PO-300) | Serial cable with CP210x (Forum) | SpO2 Review (inferred: same generation as the D+) | A (Src: "CMS50E/F" label) | Yes, "CMS50" loader (Src) | Protocol A |
+| CMS50F, older firmware | unknown | Serial cable, CP210x (inferred) | SpO2 Review or the CD's software (Forum: cpaptalk) | A (Src: "CMS50E/F" label) | Yes, "CMS50" loader (Src) | Protocol A |
+| CMS50F, firmware 3.7; CMS50FW | unknown | Plain USB cable, CP210x in the device, `10C4:EA60` (Src; Forum); FW also Bluetooth (Src) | unknown (not SpO2 Assistant 3.1.0.4, finding 1) | B (Src) | Yes, "CMS50F3.7" loader (Src; Forum) | Protocol B: new command set and reply parser over the existing serial backend (its 115200 8N1 already matches) |
+| CMS50I, CMS50IW | PO-400 (Forum: luke.lol; does not fit psytrap's PO-400, which is HID and reports `"50F"`, Cap) | As CMS50F 3.7 (Src; Forum) | unknown | B with PI, code `09` (Src) | Yes (Src; Forum) | Protocol B |
+| CMS50H | unknown | unknown | unknown | B (Src: model-string check) | Yes (Src) | Protocol B |
+| PO-400 (psytrap's) | -- | HID `28E9:028A` (Cap) | SpO2 Assistant 3.1.0.4 (Cap) | C (Cap) | No, HID (finding 5) | Nothing, supported |
+| PO-250 | -- | unknown | SpO2 Assistant (T-098: manual, forum) | C (inferred: SpO2 Assistant speaks only C, finding 1) | unknown | Nothing beyond 0036 if it uses a scanned USB ID (T-101); otherwise its USB ID |
+| PO-300 | -- | unknown; non-standard cable (T-098) | unknown | unknown: Auto + Manual mode like the PO-400 suggests C (T-061); the luke.lol CMS50E mapping suggests A | unknown | C: nothing beyond 0036; A: protocol A |
+| PO-200 | CMS50D+ (Forum: luke.lol) | as CMS50D+ (inferred) | SpO2 Review (inferred) | A (inferred) | Yes if it is a CMS50D+ (inferred) | Protocol A |
+
+### 6.4 SpO2 Review
+
+Contec's older PC program for protocol-A devices (Forum: cpaptalk, apneaboard wiki).
+
+- **Not obtained, not analysed.** Version 1.2, `spo2setup_gen_1.2.zip` (5.2 MB, 2012, contains
+  `SpO2 Review.exe`; Software Informer), was linked from luke.lol (rehmann.co, dead link,
+  2026-10-29); version 1.0, `SpO2Setup_Gen_1.0.zip`, from pulseoxstore.com (Forum: cpaptalk).
+  Protocol A above is OSCAR's implementation only (T-103).
+- **What is known without it** (Forum: cpaptalk): the user selects the COM port and the model
+  ("CMS 50D+") in a pull-down, which fits protocol A having no model query; it needs the CP210x
+  driver.
+
+### 6.5 What adding the other protocols would take
+
+- **Protocol B** (CMS50F 3.7, CMS50I, CMS50H; current Contec models): the most useful next step. The
+  serial backend already uses B's line settings. It needs a command module (`A3`/`A4`/`A5`/`A6`,
+  model via `A8`), B's reply parser, and detection by the `A8` reply. Mock-testable from OSCAR's
+  source; an owner has to confirm.
+- **Protocol A** (CMS50D+, CMS50E, older CMS50F): different line settings, no listing (one pushed
+  recording), no clock. Older devices, lower payoff.
+- **Protocol C on other models**: done in 0036 (T-101, T-104); waiting for an owner (T-102).
+
+### 6.6 Sources (Forum)
+
+- cpaptalk, "CMS 50D+ oximeter on XP": https://www.cpaptalk.com/viewtopic.php?p=669848
+- cpaptalk, "CMS-50F and CMS-50i use with SleepyHead": https://www.cpaptalk.com/viewtopic.php?p=998263
+- cpaptalk, "how does an oximeter (Contec) hook up to Oscar": https://www.cpaptalk.com/viewtopic/t179448/how-does-an-oximeter-Contec-hook-up-to-Oscarmachine.html
+- luke.lol, "Drivers for Pulox / Contec CMS50D+, CMS50E, CMS50F and CMS50I": https://luke.lol/blog/tech/drivers-pulox-contec-cms50d-cms50e-cms50f-and-cms50i
+- Apnea Board wiki, "SpO2 software": https://www.apneaboard.com/wiki/index.php/SpO2_software
+- Software Informer, SpO2 1.2: https://spo2.software.informer.com/download/

@@ -90,9 +90,28 @@ def _linux_candidates() -> List[Tuple[str, str, str]]:
     return found
 
 
+def _windows_present_ports(winreg) -> Optional[set]:
+    """COM ports that exist right now (HARDWARE\\DEVICEMAP\\SERIALCOMM, the list SpO2.exe reads
+    too), or None if it cannot be read. The USB Enum keys also remember unplugged devices."""
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DEVICEMAP\SERIALCOMM")
+    except OSError:
+        return None
+    ports, i = set(), 0
+    while True:
+        try:
+            _name, value, _type = winreg.EnumValue(key, i)
+        except OSError:
+            break
+        ports.add(str(value).upper())
+        i += 1
+    return ports
+
+
 def _windows_candidates(winreg=None) -> List[Tuple[str, str, str]]:
     if winreg is None:
         import winreg  # noqa: F811  (Windows only)
+    present = _windows_present_ports(winreg)
     found = []
     for vid, pid in SERIAL_USB_IDS:
         key_path = rf"SYSTEM\CurrentControlSet\Enum\USB\VID_{vid:04X}&PID_{pid:04X}"
@@ -112,7 +131,7 @@ def _windows_candidates(winreg=None) -> List[Tuple[str, str, str]]:
                 port, _ = winreg.QueryValueEx(params, "PortName")
             except OSError:
                 continue
-            if port:
+            if port and (present is None or str(port).upper() in present):
                 found.append((str(port), f"{vid:04X}", f"{pid:04X}"))
     return found
 
@@ -166,8 +185,11 @@ def probe_model(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
             data += rep
             model = find_model_frame(data)
             if model is not None:
-                while backend.read_report(64):  # drop anything else the probe stirred up
-                    pass
+                # Drop anything else the probe stirred up, but never wait on a device that
+                # keeps streaming (live mode left on): a few reads at most.
+                for _ in range(16):
+                    if not backend.read_report(64):
+                        break
                 return model
         else:
             time.sleep(0.02)
@@ -199,12 +221,28 @@ class _PosixPort:
             speed = termios.B115200
             termios.tcsetattr(self.fd, termios.TCSANOW, [iflag, oflag, cflag, lflag, speed, speed, cc])
             termios.tcflush(self.fd, termios.TCIOFLUSH)
+            if hasattr(termios, "TIOCEXCL"):  # keep other programs (e.g. ModemManager) off the port
+                import fcntl
+                fcntl.ioctl(self.fd, termios.TIOCEXCL)
         except Exception:
             os.close(self.fd)
             raise
 
     def write(self, data: bytes) -> int:
-        return os.write(self.fd, data)
+        """Writes all of `data`. The fd is non-blocking, so a full output buffer means a short
+        write or EAGAIN; retry for up to a second instead of silently dropping bytes."""
+        view, deadline = memoryview(data), time.time() + 1.0
+        while view:
+            try:
+                n = os.write(self.fd, view)
+            except BlockingIOError:
+                n = 0
+            view = view[n:]
+            if view:
+                if time.time() > deadline:
+                    raise OSError(f"serial write timed out with {len(view)} of {len(data)} bytes unsent")
+                time.sleep(0.002)
+        return len(data)
 
     def read(self, n: int) -> bytes:
         try:
@@ -225,7 +263,18 @@ class _WindowsPort:
         self._ctypes = ctypes
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self._k32 = k32
-        k32.CreateFileW.restype = wintypes.HANDLE
+        # Explicit argtypes: without them ctypes passes ints as 32-bit C ints, which truncates a
+        # 64-bit HANDLE and overflows on GENERIC_READ (0x80000000).
+        H, D, P = wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p
+        k32.CreateFileW.argtypes = [wintypes.LPCWSTR, D, D, P, D, D, H]
+        k32.CreateFileW.restype = H
+        k32.GetCommState.argtypes = [H, P]
+        k32.SetCommState.argtypes = [H, P]
+        k32.SetCommTimeouts.argtypes = [H, P]
+        k32.PurgeComm.argtypes = [H, D]
+        k32.WriteFile.argtypes = [H, ctypes.c_char_p, D, ctypes.POINTER(D), P]
+        k32.ReadFile.argtypes = [H, ctypes.c_char_p, D, ctypes.POINTER(D), P]
+        k32.CloseHandle.argtypes = [H]
         name = path if path.startswith("\\\\.\\") else "\\\\.\\" + path
         GENERIC_READ, GENERIC_WRITE, OPEN_EXISTING = 0x80000000, 0x40000000, 3
         handle = k32.CreateFileW(name, GENERIC_READ | GENERIC_WRITE, 0, None, OPEN_EXISTING, 0, None)
@@ -270,8 +319,10 @@ class _WindowsPort:
     def write(self, data: bytes) -> int:
         from ctypes import wintypes
         written = wintypes.DWORD(0)
-        if not self._k32.WriteFile(self.handle, data, len(data), self._ctypes.byref(written), None):
+        if not self._k32.WriteFile(self.handle, bytes(data), len(data), self._ctypes.byref(written), None):
             raise OSError(self._ctypes.get_last_error(), "WriteFile failed")
+        if written.value != len(data):
+            raise OSError(f"serial write timed out with {len(data) - written.value} of {len(data)} bytes unsent")
         return written.value
 
     def read(self, n: int) -> bytes:

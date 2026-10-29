@@ -180,6 +180,10 @@ Assistant's own code and only tested against a simulated device (T-101, T-104; `
 If you own one of these models, please run `fiedle400 info` and `fiedle400 sessions` and send
 the output (T-102).
 
+Contec's CMS50 oximeters (CMS50D+, CMS50E, CMS50F, CMS50I), the ones OSCAR reads, use two other
+protocols and are **not supported**; `fiedle400` reports no oximeter for them. See `PROTOCOL.md` §6
+for the compatibility matrix.
+
 ---
 
 ## Usage Examples

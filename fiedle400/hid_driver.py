@@ -292,6 +292,11 @@ class HidBackend:
                 "(On Linux, the default 'hidraw' backend requires no extra libraries)."
             ) from e
 
+    def _matched_ids(self) -> Tuple[int, int]:
+        """VID/PID of the enumerated device, for opening it when hidapi gave no path."""
+        info = self._enum_info or {}
+        return info.get("vendor_id", VENDOR_ID_INT), info.get("product_id", PRODUCT_ID_INT)
+
     def connect(self) -> str:
         """Locates and opens the device via import hid."""
         hid = self._get_hid_module()
@@ -326,8 +331,9 @@ class HidBackend:
                         dev_inst = hid.Device(path=raw_path)
                         connected_path = raw_path.decode("utf-8", errors="ignore") if isinstance(raw_path, bytes) else str(raw_path)
                     else:
-                        dev_inst = hid.Device(VENDOR_ID_INT, PRODUCT_ID_INT)
-                        connected_path = f"hid:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}"
+                        vid, pid = self._matched_ids()
+                        dev_inst = hid.Device(vid, pid)
+                        connected_path = f"hid:{vid:04X}:{pid:04X}"
                 dev_inst.nonblocking = True
             elif hasattr(hid, "device"):
                 # cython-hidapi package (trezor/cython-hidapi)
@@ -343,8 +349,9 @@ class HidBackend:
                         dev_inst.open_path(raw_path)
                         connected_path = raw_path.decode("utf-8", errors="ignore") if isinstance(raw_path, bytes) else str(raw_path)
                     else:
-                        dev_inst.open(VENDOR_ID_INT, PRODUCT_ID_INT)
-                        connected_path = f"hid:{VENDOR_ID_HEX}:{PRODUCT_ID_HEX}"
+                        vid, pid = self._matched_ids()
+                        dev_inst.open(vid, pid)
+                        connected_path = f"hid:{vid:04X}:{pid:04X}"
                 dev_inst.set_nonblocking(1)
             else:
                 raise RuntimeError("Unsupported 'hid' module layout.")

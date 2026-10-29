@@ -26,6 +26,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-099](done/2026-W44/T-099-read-other-vendor-oximetry-files.md) | Read the other vendor oximetry files (Won't Do -- psytrap: download from the device is the task) | Cloud |
 | [T-104](done/2026-W44/T-104-detect-po250-po300-po400-for-wizard-and-info.md) | Detect PO-250 / PO-300 / PO-400 for the wizard and `info` | Either |
 | [T-101](done/2026-W44/T-101-download-recordings-from-other-models.md) | Download stored recordings from PO-250/PO-300 (no live/realtime mode) | Either |
+| [T-103](done/2026-W44/T-103-spo2-review-analysis-and-cms50-compatibility.md) | CMS50 family download compatibility matrix (SpO2 Review unavailable) | Either |
 
 ### 2026-W43 (Mon 2026-10-19 to Sun 2026-10-25)
 

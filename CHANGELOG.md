@@ -8,6 +8,20 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.3 (2026-10-29)
+
+- Review of the T-101 serial transport and the T-104 HID changes (still untested on real
+  hardware): fixes partial writes on Linux/macOS, 64-bit handles in the Windows COM code,
+  unplugged COM ports listed from the registry, a possible hang in the probe on a device that
+  keeps sending, and the hidapi open without a path using only the PO-400's USB ID.
+- **T-103** (docs): `PROTOCOL.md` §6 adds a CMS50-family compatibility matrix; §5 corrected again:
+  OSCAR's CMS50F (`cms50f37`) protocol is not the PO-400 protocol. README says the CMS50D+/E/F/I
+  are not supported. T-103 closed: the SpO2 Review installer is unavailable (dead link), so it
+  was not analysed.
+- `hardware/serial-emulator`: Arduino Uno sketch that emulates a USB-serial PO-x00 (PO-400 /
+  PO-300 / PO-250 placeholders, fault jumpers) for testing the serial backend on real hardware;
+  also runs on a PC pseudo-terminal in the tests.
+
 ## 0.5.2 (2026-10-29)
 
 - **T-101** done, **new**: a `serial` backend for Contec oximeters that connect as a USB-serial

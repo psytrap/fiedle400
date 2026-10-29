@@ -173,6 +173,34 @@ class TestDiscovery(unittest.TestCase):
                                        QueryValueEx=lambda key, name: (key[name], 1))
         self.assertEqual(serial_port._windows_candidates(winreg), [("COM7", "0483", "5740")])
 
+    def test_windows_skips_remembered_ports_that_are_not_present(self):
+        """The USB Enum keys also keep devices unplugged long ago; SERIALCOMM lists what exists now."""
+        tree = {r"SYSTEM\CurrentControlSet\Enum\USB\VID_10C4&PID_EA60": {"old": "COM4", "new": "COM9"}}
+        present = [("\\Device\\Silabser0", "COM9", 1)]
+
+        def open_key(root, path):
+            if path == r"HARDWARE\DEVICEMAP\SERIALCOMM":
+                return "SERIALCOMM"
+            if isinstance(root, dict):
+                return {"PortName": root[path.split("\\")[0]]}
+            if path not in tree:
+                raise OSError(path)
+            return tree[path]
+
+        def enum_key(key, i):
+            if i >= len(key):
+                raise OSError("no more")
+            return list(key)[i]
+
+        def enum_value(key, i):
+            if i >= len(present):
+                raise OSError("no more")
+            return present[i]
+
+        winreg = types.SimpleNamespace(HKEY_LOCAL_MACHINE="HKLM", OpenKey=open_key, EnumKey=enum_key,
+                                       EnumValue=enum_value, QueryValueEx=lambda key, name: (key[name], 1))
+        self.assertEqual(serial_port._windows_candidates(winreg), [("COM9", "10C4", "EA60")])
+
     def test_both_spo2_assistant_hid_ids_match(self):
         self.assertTrue(_uevent_matches("HID_ID=0003:000028E9:0000028A\n"))
         self.assertTrue(_uevent_matches("HID_ID=0003:00000483:00005751\n"))
@@ -205,6 +233,57 @@ class TestPosixPort(unittest.TestCase):
             if len(got) >= 4:
                 break
         self.assertEqual(got, bytes([0xF0, 0x70, 0x0D, 0x00]))
+
+
+class TestReviewFixes(unittest.TestCase):
+    """Defects found in the 0036 code review (2026-10-29), each pinned by a test."""
+
+    def test_posix_write_retries_short_writes_and_eagain(self):
+        port = serial_port._PosixPort.__new__(serial_port._PosixPort)
+        port.fd = 99
+        calls = []
+
+        def fake_write(fd, view):
+            calls.append(bytes(view))
+            if len(calls) == 1:
+                return 3                      # short write
+            if len(calls) == 2:
+                raise BlockingIOError()       # output buffer full
+            return len(view)
+
+        with mock.patch.object(serial_port.os, "write", fake_write), \
+                mock.patch.object(serial_port, "time", VirtualClock()):
+            self.assertEqual(port.write(b"0123456789"), 10)
+        self.assertEqual(calls, [b"0123456789", b"3456789", b"3456789"])
+
+    def test_probe_does_not_hang_on_a_device_that_keeps_streaming(self):
+        backend = mock.MagicMock()
+        backend.read_report.side_effect = [MODEL_REPLY] + [bytes([0xEB, 0x01, 0x02])] * 1000
+        with mock.patch.object(serial_port, "time", VirtualClock()):
+            self.assertEqual(serial_port.probe_model(backend), "50F")
+        self.assertLess(backend.read_report.call_count, 20)
+
+    def test_hid_without_a_path_opens_the_ids_it_enumerated(self):
+        from fiedle400 import hid_driver
+        opened = []
+
+        class Dev:
+            def open(self, vid, pid):
+                opened.append((vid, pid))
+
+            def set_nonblocking(self, flag):
+                pass
+
+        def enumerate_(vid, pid):
+            if (vid, pid) == (0x0483, 0x5751):
+                return [{"vendor_id": vid, "product_id": pid}]  # no "path" key
+            return []
+
+        hid = types.SimpleNamespace(enumerate=enumerate_, device=Dev)
+        with mock.patch.dict(sys.modules, {"hid": hid}):
+            path = hid_driver.HidBackend().connect()
+        self.assertEqual(opened, [(0x0483, 0x5751)])
+        self.assertEqual(path, "hid:0483:5751")
 
 
 class TestSerialFlows(SerialCase):

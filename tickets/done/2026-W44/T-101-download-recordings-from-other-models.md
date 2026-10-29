@@ -74,11 +74,19 @@ Done 2026-10-29 (cloud, with T-104; patch 0036). No device: mock tests only.
   same way; `28E9:028A` is not, and hidraw tries PO-400 nodes first.
 - **No erase:** `clear` and the wizard's erase are refused unless the device is on the PO-400's
   USB ID `28E9:028A`; nothing is sent.
-- **Tests:** `tests/test_serial_port.py` (30): padding rules, sysfs and registry discovery, the
+- **Review (patch 0037, v0.5.3):** a line-by-line review of the new transport code fixed five bugs before
+  any hardware saw it: short or `EAGAIN` writes on POSIX (now retried for up to 1 s), Win32
+  calls without `argtypes` (64-bit handles were truncated), stale COM ports from the registry
+  (now filtered by `HARDWARE\DEVICEMAP\SERIALCOMM`), a probe drain that could spin forever on a
+  streaming device (now at most 16 reads), and the hidapi open without a path using only the
+  PO-400 ID. Each has a test. Not fixed, noted for T-102: the 10 ms quiet gap may be short for
+  slow USB-serial adapters, ModemManager may grab a `ttyACM` port on Linux, `selftest` does not
+  cover serial, and some messages still say "Pulsox PO-400" for every model.
+- **Tests:** `tests/test_serial_port.py` (34): padding rules, sysfs and registry discovery, the
   real termios setup against a pty, `sessions`/`download`/`info` over a simulated serial port
   that replays the PO-400 trace in 7-byte and 1-byte pieces, CLI backend choice and fallback,
   erase refusal, and the probe (silent, garbage, bad-checksum and answering ports, several
-  candidates, explicit device, generic HID ID). Full suite: 453 tests, OK (13 skipped).
+  candidates, explicit device, generic HID ID). Full suite: 457 tests, OK (13 skipped).
 
 Left out / unknown: whether a real serial model answers like the simulated PO-400, the real
 serial byte format and DTR/RTS needs, and the Windows serial code path (never run). T-102
