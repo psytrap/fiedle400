@@ -14,6 +14,7 @@ import sys
 import time
 from typing import List, Optional, Tuple
 
+from .protocol import cms50f37
 from .protocol.commands import build_hid_command, build_unlock_negotiate_handshake
 from .protocol.hardware import SERIAL_USB_IDS
 
@@ -196,6 +197,49 @@ def probe_model(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
     return None
 
 
+def probe_cms50f37(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
+    """Asks for the model in protocol B (CMS50F v3.7 family, CMS50_COMPATIBILITY.md §6); None
+    without an answer.
+
+    Run only after `probe_model` got no PO-x00 answer. Detection only, T-105 is on hold: this
+    never downloads from a protocol-B device, only names it so `connect()` can refuse clearly
+    instead of guessing. Seven `80` bytes first complete any request the PO-x00 probe left
+    half-read on a protocol-B device (its requests are 9 bytes), then `A7`, `A2` (hello) and
+    `A8` (model): read-only, exactly what SpO2 Assistant 2.x and OSCAR send first.
+    """
+    backend.write_raw(b"\x80" * 7)
+    while backend.read_report(64):
+        pass
+    for opcode in (cms50f37.HELLO1, cms50f37.HELLO2, cms50f37.MODEL):
+        backend.write_raw(cms50f37.build_command(opcode))
+    data = b""
+    start = time.time()
+    while time.time() - start < timeout:
+        rep = backend.read_report(64)
+        if rep:
+            data += rep
+            frames, _ = cms50f37.split_frames(data)
+            if sum(1 for f in frames if f.code == cms50f37.REPLY_MODEL) >= 2:
+                break
+        else:
+            time.sleep(0.02)
+    frames, _ = cms50f37.split_frames(data)
+    model = cms50f37.model_from_frames(frames)
+    return model if model and model.upper().startswith("CMS50") else None
+
+
+def probe_any(backend) -> Tuple[Optional[str], str]:
+    """(model, protocol): the PO-x00 protocol first, then protocol B, detection only. protocol
+    is "po400" or "cms50f37"; the model is None if neither answered."""
+    model = probe_model(backend)
+    if model is not None:
+        return model, "po400"
+    model = probe_cms50f37(backend)
+    if model is not None:
+        return model, "cms50f37"
+    return None, "po400"
+
+
 class _PosixPort:
     """A raw, non-blocking serial port via termios."""
 
@@ -367,14 +411,21 @@ class SerialBackend:
         self._pending = b""
         self._usb_id: Optional[Tuple[str, str]] = None
         self.model_string: Optional[str] = None  # from the probe
+        self.protocol = "po400"  # or "cms50f37" (protocol B, CMS50_COMPATIBILITY.md §6)
 
     def connect(self) -> str:
-        """Opens the port. Every port is probed first (`probe_model`): without --device, only a
-        candidate that answers like an oximeter is used; a chosen port that does not answer is
-        used anyway, with a warning."""
+        """Opens the port. Every port is probed first (`probe_any`): without --device, only a
+        candidate that answers like a PO-x00 oximeter is used; a chosen port that does not
+        answer is used anyway, with a warning. A port that answers in protocol B (a CMS50F-family
+        device, T-105 is on hold) is refused with a clear message instead of being used: this
+        backend only ever sends protocol-C (PO-x00) commands, and protocol B has no checksum and
+        a disjoint, overlapping-by-coincidence opcode set (its `AA` is the PO-400's
+        `FLASH_CLEAR`), so guessing wrong here is not safe to paper over."""
         if self.dev_path:
             self._open(self.dev_path)
-            self.model_string = probe_model(self)
+            self.model_string, self.protocol = probe_any(self)
+            if self.protocol == "cms50f37":
+                self._refuse_cms50f37(self.dev_path, self.model_string)
             if self.model_string is None:
                 print(f"⚠️ {self.dev_path} did not answer like an oximeter; continuing because you chose it.")
             return self.dev_path
@@ -382,7 +433,7 @@ class SerialBackend:
         candidates = find_serial_candidates()
         if not candidates:
             raise RuntimeError(no_serial_device_message())
-        chosen, answered, skipped = None, [], []
+        chosen, answered, skipped, other_protocol = None, [], [], None
         for port, vid, pid in candidates:
             other = SerialBackend(port)
             try:
@@ -390,11 +441,17 @@ class SerialBackend:
             except Exception as e:
                 skipped.append(f"{port} ({vid}:{pid}): {e}")
                 continue
-            model = probe_model(other)
+            model, proto = probe_any(other)
             if model is None:
                 other.close()
                 print(f"Probing {port} ({vid}:{pid})... not an oximeter, skipped")
                 skipped.append(f"{port} ({vid}:{pid}) did not answer like an oximeter")
+                continue
+            if proto == "cms50f37":
+                other.close()
+                print(f"Probing {port} ({vid}:{pid})... found a {model} (protocol B, not supported), skipped")
+                if other_protocol is None:
+                    other_protocol = (port, model)
                 continue
             answered.append(port)
             if chosen is None:
@@ -402,6 +459,8 @@ class SerialBackend:
             else:
                 other.close()
         if chosen is None:
+            if other_protocol is not None:
+                self._refuse_cms50f37(*other_protocol)
             raise RuntimeError("No oximeter answered on the serial port(s) found: " + "; ".join(skipped))
         other, port, vid, pid, model = chosen
         self._port, other._port = other._port, None
@@ -409,6 +468,14 @@ class SerialBackend:
         if len(answered) > 1:
             print(f"Oximeters answered on {', '.join(answered)}; using {port}. Pick another with --device.")
         return port
+
+    @staticmethod
+    def _refuse_cms50f37(port: str, model: Optional[str]) -> None:
+        raise RuntimeError(
+            f"Found a {model or 'CMS50F-family'} device at {port}, but it speaks protocol B "
+            "(CMS50F v3.7 / CMS50I / CMS50H), not fiedle400's PO-400/PO-250/PO-300 protocol. "
+            "fiedle400 does not support protocol B (see CMS50_COMPATIBILITY.md, T-105)."
+        )
 
     def _open(self, path: str) -> None:
         try:
@@ -432,6 +499,14 @@ class SerialBackend:
         if data:
             self._port.write(data)
         return len(report_bytes)  # what the engine handed in, as a HID write reports
+
+    def write_raw(self, data: bytes) -> int:
+        """Writes `data` exactly as given (protocol B's 9-byte requests end in `80` padding that
+        `write_report`'s `unpad_report` would cut off, since `0x80` is itself a protocol-C opcode)."""
+        if self._port is None:
+            raise RuntimeError("Device is not connected.")
+        self._port.write(bytes(data))
+        return len(data)
 
     def read_report(self, max_bytes: int = REPORT_SIZE) -> Optional[bytes]:
         if self._port is None:

@@ -61,6 +61,35 @@ mode, no file formats). Each claim carries its evidence:
    end as "no oximeter found".
 5. **OSCAR only opens serial ports** (`QSerialPort`, Src `serialoximeter.cpp`), so it cannot
    download a HID device such as psytrap's PO-400 (inferred from the source).
+6. **Two direct PO-300 owner reports contradict each other on protocol.** Neither is checked by
+   anyone on the project (Forum):
+   - forum-schlafapnoe.de, 2017 (a device owner, "Schnarchlappen"): *"Bei mir ist es ja das
+     Contec CMS 50 EW (baugleich Pulox PO-300)"* ("Mine is the Contec CMS 50 EW, structurally
+     identical to the Pulox PO-300"). They read it with **SpO2 Assistant**, which would fit
+     protocol C -- or an undocumented CMS50EW variant that happens to speak it. CMS50EW is a
+     separate, later FCC filing (`2ABOGCMS50EW`) from plain CMS-50E and is not otherwise in
+     this matrix.
+   - apneaboard.com forum, 2023 (a device owner, "Expat31", bought via Amazon): *"Just the
+     Smart device assistant detects the oxymeter, not the SP02 Assistant which is the
+     important one."* A second forum member (Jeff8356) explains Smart Device Assistant "was
+     released with the newer CMS50F oximeters and also works with the older versions" --
+     i.e. protocol B, not C. For this unit, **SpO2 Assistant (protocol C) did not detect the
+     device at all.**
+
+   These cannot both be protocol C. Pulox may have shipped more than one OEM hardware revision
+   under the "PO-300" name over the years (2017 vs. 2023 units) -- not confirmed, and not
+   resolvable without an owner (T-102).
+7. **The commonly-cited Pulox/CMS50 model mapping is not actually stated by its sources.** The
+   Apnea Board wiki's `Contec_file_import` page (Wiki) lists "Pulox PO-200/300/400/500" as its
+   own bullet, parallel to but not mapped onto, its Contec CMS-50 list (which separately includes
+   **CMS-50EA**, a model this matrix does not otherwise track). The luke.lol pinout page, often
+   cited for a PO-200/300/400 = CMS50D+/E/F/I mapping, makes no such explicit claim when read
+   directly -- it covers only the shared USB-serial chip and Mini-USB pinout. **Treat any
+   "PO-300 = CMS50E" (or similar) claim as unconfirmed**, including finding 6's CMS50EW lead.
+8. **"Smart Device Assistant" is a separate, newer program from "SpO2 Assistant"** (Wiki, Forum):
+   version 3.1.0.1, index code `01GS4016`, released for post-v3.7 CMS50F/H/I hardware (protocol
+   B) that OSCAR cannot import directly. Not the same software RE analysed `archive/bruteforce/SpO2.exe`
+   (SpO2 Assistant 3.1.0.4) above; not obtained or analysed by this project.
 
 ## 3. Compatibility matrix
 
@@ -73,8 +102,8 @@ mode, no file formats). Each claim carries its evidence:
 | CMS50I, CMS50IW | PO-400 (Forum: luke.lol; does not fit psytrap's PO-400, which is HID and reports `"50F"`, Cap) | As CMS50F 3.7 (Src; Forum) | unknown | B with PI, code `09` (Src) | Yes (Src; Forum) | Protocol B |
 | CMS50H | unknown | unknown | unknown | B (Src: model-string check) | Yes (Src) | Protocol B |
 | PO-400 (psytrap's) | -- | HID `28E9:028A` (Cap) | SpO2 Assistant 3.1.0.4 (Cap) | C (Cap) | No, HID (finding 5) | Nothing, supported |
-| PO-250 | -- | unknown | SpO2 Assistant (T-098: manual, forum) | C if it works with a current SpO2 Assistant (3.1.0.4 speaks only C, finding 1); B if only with a 2.x version (inferred) | unknown | Nothing beyond 0036 if it uses a scanned USB ID (T-101); otherwise its USB ID |
-| PO-300 | -- | unknown; non-standard cable (T-098) | unknown | unknown: Auto + Manual mode like the PO-400 suggests C (T-061); the luke.lol CMS50E mapping suggests A | unknown | C: nothing beyond 0036; A: protocol A |
+| PO-250 | -- | unknown | SpO2 Assistant (T-098: manual, forum) | unknown and contested: C if it works with a current SpO2 Assistant (3.1.0.4 speaks only C, finding 1) as one forum report suggests (T-098); B if only with Smart Device Assistant, as a 2023 PO-300 owner found for that model (finding 6) | unknown | Nothing beyond 0036 if protocol C with a scanned USB ID (T-101); B support is T-105, on hold |
+| PO-300 | -- | unknown; non-standard cable (T-098) | unknown; conflicting direct reports name both SpO2 Assistant and Smart Device Assistant (finding 6) | unknown and contested: two direct owner reports disagree (finding 6) -- one protocol C (or an unconfirmed CMS50EW variant), one protocol B via Smart Device Assistant. The PO-300=CMS50E mapping some forums cite is itself unconfirmed (finding 7) | unknown | C: nothing beyond 0036; B: on hold (T-105); A: not implemented |
 | PO-200 | CMS50D+ (Forum: luke.lol) | as CMS50D+ (inferred) | SpO2 Review (inferred) | A (inferred) | Yes if it is a CMS50D+ (inferred) | Protocol A |
 
 ## 4. SpO2 Review
@@ -140,7 +169,12 @@ between without writing anything, and sends `A7` `A2` again right before `A6`, a
 - cpaptalk, "CMS 50D+ oximeter on XP": https://www.cpaptalk.com/viewtopic.php?p=669848
 - cpaptalk, "CMS-50F and CMS-50i use with SleepyHead": https://www.cpaptalk.com/viewtopic.php?p=998263
 - cpaptalk, "how does an oximeter (Contec) hook up to Oscar": https://www.cpaptalk.com/viewtopic/t179448/how-does-an-oximeter-Contec-hook-up-to-Oscarmachine.html
+- cpaptalk, "OSCAR doesn't recognize my oxymeter" (PO-250, 2026): https://www.cpaptalk.com/viewtopic.php?t=177946
 - luke.lol, "Drivers for Pulox / Contec CMS50D+, CMS50E, CMS50F and CMS50I": https://luke.lol/blog/tech/drivers-pulox-contec-cms50d-cms50e-cms50f-and-cms50i
+- luke.lol, "Pinout for CMS50D+, CMS50E, CMS50F and CMS50I (Pulox PO-200, PO-300, PO-400)" (no explicit model mapping, finding 7): https://luke.lol/blog/tech/pinout-for-cms50d-cms50e-cms50f-and-cms50i-pulox-po-200-po-300-po-400/
 - Apnea Board wiki, "SpO2 software": https://www.apneaboard.com/wiki/index.php/SpO2_software
+- Apnea Board wiki, "Contec file import" (Smart Device Assistant, CMS-50EA, finding 7): https://www.apneaboard.com/wiki/index.php/Contec_file_import
+- Apnea Board forum, "Pulox PO-300 oxymètre software" (PO-300 owner, 2023, finding 6): https://www.apneaboard.com/forums/Thread-Pulox-PO-300-oxym%C3%A8tre-software
+- forum-schlafapnoe.de, "Fragen zum SpO2 Assistant (Pulox/Contec)" (PO-300/CMS50EW owner, 2017, finding 6): https://forum-schlafapnoe.de/threads/fragen-zum-spo2-assistant-pulox-contec.8989/
 - Software Informer, SpO2 1.2: https://spo2.software.informer.com/download/
 - SleepyHead bug #207, "New Contec CMS" (CMS50F 3.7; the two serial captures): https://sourceforge.net/p/sleepyhead/bugs/207/

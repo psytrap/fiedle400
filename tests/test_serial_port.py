@@ -399,6 +399,32 @@ class ScriptedPort:
         self.closed = True
 
 
+class Cms50f37Port:
+    """A serial port that only answers protocol B's model query (`A8`), silent to the PO-x00
+    probe and to protocol B's hello (`A7`/`A2`) -- as a real CMS50F-family device would be to a
+    PO-x00 unlock/model query, since the two protocols share no opcodes (PROTOCOL_B.md §1)."""
+
+    def __init__(self, model: str = "CMS50F"):
+        self.model = model
+        self.written = []
+        self.closed = False
+        self._out = b""
+
+    def write(self, data: bytes) -> int:
+        self.written.append(bytes(data))
+        if len(data) == 9 and tuple(data[:3]) == (0x7D, 0x81, 0xA8):
+            name = self.model.encode("ascii")[:6].ljust(6, b" ")
+            self._out += bytes([0x02, 0x00, 0x00]) + name  # code 0x02, no bit7 restore needed
+        return len(data)
+
+    def read(self, n: int) -> bytes:
+        out, self._out = self._out[:n], self._out[n:]
+        return out
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class TestProbe(unittest.TestCase):
     """The connect probe (psytrap, 2026-10-29): a port is only used if it answers like an oximeter."""
 
@@ -440,8 +466,10 @@ class TestProbe(unittest.TestCase):
         for p in ("/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2"):
             self.assertTrue(ports[p].closed, p)
         self.assertFalse(ports["/dev/ttyUSB3"].closed)
-        # What a foreign device received: the unlock and the model query, nothing else.
-        self.assertEqual([w[2] for w in ports["/dev/ttyUSB0"].written], [0xA7, 0x81])
+        # What a foreign device received: the PO-x00 unlock and model query, then the
+        # protocol-B probe fallback (flush, hello x2, model query).
+        self.assertEqual([w[2] for w in ports["/dev/ttyUSB0"].written],
+                          [0xA7, 0x81, 0x80, 0xA7, 0xA2, 0xA8])
 
     def test_several_answering_ports_use_the_first_and_say_so(self):
         ports = {"/dev/ttyUSB0": ScriptedPort(MODEL_REPLY), "/dev/ttyACM0": ScriptedPort(MODEL_REPLY)}
@@ -462,6 +490,40 @@ class TestProbe(unittest.TestCase):
         path, b, out = self.connect(ports, [], device="/dev/ttyUSB5")
         self.assertEqual(path, "/dev/ttyUSB5")
         self.assertIn("continuing because you chose it", out)
+
+    def test_explicit_device_speaking_protocol_b_is_refused_not_used(self):
+        ports = {"/dev/ttyUSB0": Cms50f37Port("CMS50F")}
+        path, b, msg = self.connect(ports, [], device="/dev/ttyUSB0")
+        self.assertIsNone(path)
+        self.assertIn("CMS50F", msg)
+        self.assertIn("protocol B", msg)
+        self.assertIn("fiedle400 does not support protocol B", msg)
+        self.assertEqual(b.protocol, "cms50f37")
+
+    def test_autoscan_with_only_a_protocol_b_candidate_is_refused_by_name(self):
+        ports = {"/dev/ttyUSB0": Cms50f37Port("CMS50I")}
+        path, b, msg = self.connect(ports, [("/dev/ttyUSB0", "10C4", "EA60")])
+        self.assertIsNone(path)
+        self.assertIn("CMS50I", msg)
+        self.assertIn("protocol B", msg)
+        self.assertTrue(ports["/dev/ttyUSB0"].closed)
+
+    def test_autoscan_prefers_protocol_c_and_skips_protocol_b_candidate(self):
+        ports = {"/dev/ttyUSB0": Cms50f37Port("CMS50F"), "/dev/ttyUSB1": ScriptedPort(MODEL_REPLY)}
+        path, b, out = self.connect(ports, [("/dev/ttyUSB0", "10C4", "EA60"),
+                                             ("/dev/ttyUSB1", "10C4", "EA60")])
+        self.assertEqual(path, "/dev/ttyUSB1")
+        self.assertEqual(b.protocol, "po400")
+        self.assertIn("found a CMS50F (protocol B, not supported), skipped", out)
+        self.assertTrue(ports["/dev/ttyUSB0"].closed)
+
+    def test_probe_cms50f37_reads_the_model_and_leaves_po400_probe_unaffected(self):
+        port = Cms50f37Port("CMS50H")
+        backend = serial_port.SerialBackend("/dev/ttyUSB0")
+        with mock.patch.object(serial_port, "open_port", lambda path: port):
+            backend._open("/dev/ttyUSB0")
+        self.assertIsNone(serial_port.probe_model(backend))  # a protocol-B device never answers C
+        self.assertEqual(serial_port.probe_cms50f37(backend), "CMS50H")
 
     def test_generic_stm32_hid_id_that_does_not_answer_is_rejected(self):
         dev = PulsoxHidDevice(backend="hid")

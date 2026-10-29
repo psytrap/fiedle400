@@ -8,6 +8,32 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.6 (2026-10-29)
+
+- **T-105** (detection only, hold on the download engine unchanged): the serial probe
+  (`serial_port.py::probe_any`) now falls back to a protocol-B (CMS50F v3.7 / CMS50I / CMS50H)
+  hello + model query (`A7 A2 A8`) when a candidate does not answer like a PO-x00 device.
+  `SerialBackend.connect()` refuses a device that answers in protocol B by name, instead of
+  silently skipping it or (worse) sending it protocol-C commands -- the two protocols share only
+  the `7D 81` sync prefix and the `A7`/`A2` opcodes; protocol B's `AA` is the PO-400's
+  `FLASH_CLEAR`, so guessing wrong is not safe. No download engine: `AE` (erase) has no code path.
+- New `fiedle400/protocol/cms50f37.py`: protocol-B frame building/splitting (`Frame` dataclass,
+  `build_command`, `split_frames`, `model_from_frames`) and opcode constants, detection-only.
+- New `PROTOCOL_B.md`: byte-level reference for protocol B, parallel to `PROTOCOL.md`. Includes a
+  code-level finding from reverse-engineering `SpO2.exe` v3.1.0.1 (bundled in the "Smart Device
+  Assistant" installer, `archive/bruteforce/smart_device_assistant/`, not in git): a second,
+  distinct send-helper function sends exactly protocol B's opcode range, firing `A7 A2 A0 B0 AC
+  B3` in the same order as a 2014 wire capture of a real CMS50F -- the likely explanation for why
+  a real PO-300 owner's unit was only detected by Smart Device Assistant, not SpO2 Assistant
+  (`CMS50_COMPATIBILITY.md` finding 6). One byte-level discrepancy (a `7D 80` vs. the documented
+  `7D 81` prefix) is flagged as open, not asserted as fact.
+- `CMS50_COMPATIBILITY.md`: PO-250/PO-300's protocol softened from "most likely C" to
+  contested/unconfirmed (findings 6-8), based on two directly-fetched, conflicting forum owner
+  reports and a correction to a commonly-cited (but unstated) PO-300=CMS50E model mapping.
+- Tests: `tests/test_serial_port.py` gains a scripted protocol-B fake port and 4 tests covering
+  explicit-device refusal, auto-scan refusal and auto-scan preference for a real protocol-C
+  candidate over a protocol-B one.
+
 ## 0.5.5 (2026-10-29)
 
 - **T-103** (docs): `PROTOCOL.md` §6 gains wire evidence for the CMS50F (`cms50f37`) protocol from
