@@ -67,22 +67,27 @@ class FakeSerialPort:
 
 
 MODEL_REPLY = bytes.fromhex("f135304620202020203c") + bytes(54)  # the PO-400's real "50F" answer
+# "EMU-300" (the serial emulator's placeholder model string, T-104/T-101): its checksum byte,
+# 0x38 ('8'), is alphanumeric, unlike "50F"'s ('<', filtered out) -- it would leak into
+# info.hardware_id if the model slice ever grew back to include the checksum byte.
+EMU300_MODEL_REPLY = bytes.fromhex("f1454d552d3330302038") + bytes(54)
 
 
-def probed_trace() -> Trace:
+def probed_trace(model_reply: bytes = MODEL_REPLY) -> Trace:
     """The PO-400 trace plus one more unlock and `81 01` exchange: the connect probe asks once
     before the commands the trace recorded."""
     t = Trace.from_json(rt.FIXTURE)
     t.add(protocol.Commands.unlock_handshake(), [])
-    t.add(protocol.Commands.build_hid(0x81, [0x01]), [MODEL_REPLY])
+    t.add(protocol.Commands.build_hid(0x81, [0x01]), [model_reply])
     return t
 
 
 class SerialCase(unittest.TestCase):
     chunk = 7
+    model_reply = MODEL_REPLY
 
     def setUp(self):
-        self.fake = FakeOximeter(probed_trace(), strict=True)
+        self.fake = FakeOximeter(probed_trace(self.model_reply), strict=True)
         self.port = FakeSerialPort(self.fake, chunk=self.chunk)
         for p in (
             mock.patch.object(serial_port, "open_port", lambda path: self.port),
@@ -310,6 +315,18 @@ class TestSerialFlows(SerialCase):
         engine = self.connect()
         info = engine.read_device_info()["device_info"]
         self.assertEqual(info.hardware_id, "50F")
+
+
+class TestModelStringChecksumByteIsNotPartOfTheModel(SerialCase):
+    """Found testing against the real serial emulator (T-102): the model slice used to be one
+    byte too wide and included the checksum byte, invisible with "50F" (its checksum filters
+    out as non-alphanumeric) but not with a model string whose checksum happens to be alnum."""
+    model_reply = EMU300_MODEL_REPLY
+
+    def test_model_string_comes_from_the_device(self):
+        engine = self.connect()
+        info = engine.read_device_info()["device_info"]
+        self.assertEqual(info.hardware_id, "EMU-300")
 
 
 class TestSerialFlowsByteByByte(TestSerialFlows):

@@ -595,7 +595,10 @@ class SerialDeviceEngine:
                 info.firmware_version = fw_info.firmware_version
         elif fw_report and fw_report[0] == 0xF1:
             # The real device answers 0x81 with the hardware model descriptor (e.g. "50F"), not a firmware version.
-            model = fw_report[1:10].decode("ascii", errors="ignore").strip()
+            # 8 model bytes only (PROTOCOL.md 0xF1 reply: `F1` + 8 bytes + checksum) -- [1:10] used to
+            # include the checksum byte too, invisible with "50F" (its checksum filters out as non-alnum)
+            # but leaking an extra alnum character for other model strings (found via the serial emulator).
+            model = fw_report[1:9].decode("ascii", errors="ignore").strip()
             info.hardware_id = "".join(c for c in model if c.isalnum() or c in "-_ ").strip() or None
 
         # Step 5: Query 0x8E (Serial Number / User Profile Query)

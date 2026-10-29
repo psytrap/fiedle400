@@ -4,12 +4,12 @@
 //
 // Jumpers to GND (read before every burst of commands, so they can be changed while it runs):
 //   D2 silent   D3 bad checksum   D4 split reports   D5 unpadded reports
-//   D6 PO-300   D7 PO-250   (neither: DEFAULT_MODEL)
+//   D6 PO-300 (also DEFAULT_MODEL, i.e. neither jumper)   D7 PO-250
 // The LED (D13) toggles on every command and stays lit after a destructive one.
 
 #include "emulator.h"
 
-#define DEFAULT_MODEL EMU_PO400
+#define DEFAULT_MODEL EMU_PO300
 #define DEFAULT_FAULTS 0
 // Uncomment to report another model string (at most 8 characters) in the 0xF1 reply.
 // #define MODEL_STRING_OVERRIDE "50F"

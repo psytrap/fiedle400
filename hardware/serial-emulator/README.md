@@ -11,9 +11,13 @@ model (PROTOCOL.md §5), so this is the best guess, not a proof that a real PO-2
 
 | Model (jumper) | 0xF1 model string | Storage it answers for |
 | :--- | :--- | :--- |
-| PO-400 (none) | `50F` (real) | Auto: one 214 s recording; Manual: one 59 s recording |
-| PO-300 (D6 to GND) | `EMU-300` (placeholder; the real one is unknown) | as PO-400 |
+| PO-300 (none, `DEFAULT_MODEL`) | `EMU-300` (placeholder; the real one is unknown) | Auto: one 214 s recording; Manual: one 59 s recording |
 | PO-250 (D7 to GND) | `EMU-250` (placeholder; the real one is unknown) | Manual only: one 59 s recording; the Auto list (`9C`) gets no answer |
+
+PO-400 has no jumper pin of its own -- it was only ever the "neither jumper"
+default. With `DEFAULT_MODEL` now `EMU_PO300`, getting PO-400 behaviour back
+needs a recompile (`DEFAULT_MODEL EMU_PO400`, or `MODEL_STRING_OVERRIDE
+"50F"`), not a jumper.
 
 The real limits (PO-300: up to 99 Auto recordings; PO-250: one Manual recording of up to
 24 h) are not emulated: there is no captured data for them, and an Uno has 2 KB of RAM.
@@ -105,3 +109,18 @@ The test fails when it is stale. A different model string: `MODEL_STRING_OVERRID
   recording: only the probe and the download check checksums.
 - With D2 and `-d`, `sessions` says "No stored recording sessions found" instead of saying the
   device does not answer.
+
+## What it found (2026-10-29, on a genuine Uno)
+
+- Flashed and run against a real Arduino Uno R3 at `/dev/ttyACM1` (`stty -F ... -hupcl` to
+  survive the DTR auto-reset between commands). `info`, `sessions` (214 records, 3m34s) and
+  `download -f csv` (214/214 records, 428 packets, 0 sequence gaps) all correct with
+  `DEFAULT_MODEL` set to `EMU_PO300` (no jumper).
+- **Found a real bug this way, not visible on the PC build**: `info` showed the model as
+  `"EMU-300 8"` -- `fiedle400/engine/device.py`'s `0x81`->`0xF1` handler read 9 bytes
+  (`fw_report[1:10]`) instead of the 8 model bytes (`fw_report[1:9]`), leaking the checksum
+  byte into the displayed model whenever that byte happens to be alphanumeric. Invisible with
+  the real PO-400's `"50F"` (checksum `0x3C` / `'<'`, filtered out by the alnum/`-_ ` cleanup)
+  but not with `"EMU-300"` (checksum `0x38` / `'8'`, alphanumeric). Fixed; regression test
+  `tests/test_serial_port.py::TestModelStringChecksumByteIsNotPartOfTheModel`.
+- `clear` correctly refused on the serial port ("download-only in fiedle400").

@@ -8,6 +8,21 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.4 (2026-10-29)
+
+- **First real-hardware run of the serial emulator** (a genuine Arduino Uno, not just the PC
+  pseudo-terminal build): `info`, `sessions` (214 records) and `download -f csv` (214/214,
+  0 sequence gaps) all correct over USB-serial. `clear` correctly refused.
+- **Bug found this way, fixed**: `engine/device.py`'s `0x81`->`0xF1` handler read 9 bytes of
+  the model descriptor (`fw_report[1:10]`) instead of 8 (`fw_report[1:9]`), leaking the
+  checksum byte into `info`'s displayed model whenever it happens to be alphanumeric --
+  invisible with the real PO-400's `"50F"` (checksum filters out as non-alnum) but not with
+  `"EMU-300"` (checksum `0x38`/`'8'`, alphanumeric). Regression test added.
+- `hardware/serial-emulator`: `DEFAULT_MODEL` (no jumper) changed from `EMU_PO400` to
+  `EMU_PO300` (psytrap's test setup); PO-400 is no longer reachable by jumper (it was only
+  ever the "neither jumper" default) -- needs a recompile (`DEFAULT_MODEL` or
+  `MODEL_STRING_OVERRIDE`) to get back.
+
 ## 0.5.3 (2026-10-29)
 
 - Review of the T-101 serial transport and the T-104 HID changes (still untested on real
