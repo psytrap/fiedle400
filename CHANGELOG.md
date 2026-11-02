@@ -8,6 +8,15 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.8 (2026-11-02)
+
+- **T-049:** `actions/checkout` and `actions/setup-python` bumped to `@v5`/`@v6` in both
+  workflows -- confirmed via the real Actions run annotations (not the step logs) that these
+  two, and only these two, still trigger the Node 20 deprecation warning; both majors declare
+  `using: node24` directly in their `action.yml`. `upload-artifact`/`download-artifact@v4` and
+  `action-gh-release@v2` were not named in the warning, left alone per the ticket's own caution
+  against bumping blind.
+
 ## 0.5.7 (2026-11-02)
 
 - **Minimum Linux: Ubuntu 22.04 LTS** (psytrap). The Linux release binary is now built on
