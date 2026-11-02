@@ -51,7 +51,7 @@ from typing import Callable, List, Optional, Tuple
 from unittest import mock
 
 
-def scrub_env():
+def scrub_environment():
     """Remove the developer's FIEDLE400_*/PO400_* settings for one test.
 
     Use inside a `mock.patch.dict(os.environ, {})` (or `addCleanup` of one) so
@@ -61,7 +61,7 @@ def scrub_env():
     for key in [k for k in os.environ if k.startswith(("FIEDLE400_", "PO400_"))]:
         del os.environ[key]
 
-REPORT_LEN = 64
+REPORT_LENGTH = 64
 
 # Opcodes that might change stored data. The vendor's real deletes are 0x9D with mode 0x7F
 # (handled in command_key; PROTOCOL.md 3.13, T-037) for Auto-mode recordings, and 0xA1 for the
@@ -84,30 +84,30 @@ _KEY_ARGS = {
 
 def command_key(report: bytes) -> Optional[Tuple]:
     """Reduce an outbound report to what the command *means*; None when unknown."""
-    r = bytes(report)
-    if len(r) > 2 and r[0] == 0x7D and r[1] == 0x81:
-        r = r[2:]
-    if not r:
+    data = bytes(report)
+    if len(data) > 2 and data[0] == 0x7D and data[1] == 0x81:
+        data = data[2:]
+    if not data:
         return None
-    op = r[0]
-    if op == 0xA7:
+    opcode = data[0]
+    if opcode == 0xA7:
         # 7D 81 A7 80 ... is the CLI's unlock; A7 00 / A7 01 is the Manual-mode block ack.
-        return ("unlock",) if len(r) < 2 or r[1] == 0x80 else (op, r[1])
-    if op in DESTRUCTIVE_OPCODES or (op == 0x94 and len(r) > 1 and r[1] != 0x14):
-        return ("destructive", op)
-    if op == 0x9D:
+        return ("unlock",) if len(data) < 2 or data[1] == 0x80 else (opcode, data[1])
+    if opcode in DESTRUCTIVE_OPCODES or (opcode == 0x94 and len(data) > 1 and data[1] != 0x14):
+        return ("destructive", opcode)
+    if opcode == 0x9D:
         # Storage: init / ack carry only a mode (the vendor tool sends 8 bytes, the CLI 9);
         # a block read (mode 0x04) is identified by type, user, entry and the two offset bytes.
         # Mode 0x7F deletes recordings (PROTOCOL.md 3.13, T-037).
-        if len(r) < 2:
+        if len(data) < 2:
             return None
-        if r[1] == 0x7F:
-            return ("destructive", op)
-        return (op, r[1]) + (tuple(r[2:7]) if r[1] == 0x04 else ())
-    if op not in _KEY_ARGS:
+        if data[1] == 0x7F:
+            return ("destructive", opcode)
+        return (opcode, data[1]) + (tuple(data[2:7]) if data[1] == 0x04 else ())
+    if opcode not in _KEY_ARGS:
         return None
-    n = _KEY_ARGS[op]
-    return (op,) + tuple(r[1:1 + n])
+    size = _KEY_ARGS[opcode]
+    return (opcode,) + tuple(data[1:1 + size])
 
 
 class Trace:
@@ -118,72 +118,72 @@ class Trace:
         self.groups: List[Tuple[bytes, Optional[Tuple], List[bytes]]] = []  # (raw out, key, [in reports])
 
     # -- building ---------------------------------------------------------
-    def add(self, out: bytes, ins: List[bytes]) -> None:
-        self.groups.append((bytes(out), command_key(out), [bytes(i) for i in ins]))
+    def add(self, output: bytes, replies: List[bytes]) -> None:
+        self.groups.append((bytes(output), command_key(output), [bytes(i) for i in replies]))
 
     @classmethod
     def from_pcap(cls, path: str) -> "Trace":
         import sys
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "capture_tools"))
         from decode_pcap import parse_pcap_file  # noqa: E402
-        t = cls(source=os.path.basename(path))
-        cur: Optional[Tuple[bytes, List[bytes]]] = None
-        for ep, payload in parse_pcap_file(path):
-            if len(payload) != REPORT_LEN:
+        trace = cls(source=os.path.basename(path))
+        current: Optional[Tuple[bytes, List[bytes]]] = None
+        for endpoint, payload in parse_pcap_file(path):
+            if len(payload) != REPORT_LENGTH:
                 continue  # USB setup / descriptor traffic, not HID reports
-            if ep == 0x01:
-                if cur:
-                    t.add(*cur)
-                cur = (payload, [])
-            elif ep == 0x81 and cur is not None:
-                cur[1].append(payload)
-        if cur:
-            t.add(*cur)
-        return t
+            if endpoint == 0x01:
+                if current:
+                    trace.add(*current)
+                current = (payload, [])
+            elif endpoint == 0x81 and current is not None:
+                current[1].append(payload)
+        if current:
+            trace.add(*current)
+        return trace
 
     @classmethod
     def from_json(cls, path: str) -> "Trace":
-        with open(path, "r", encoding="utf-8") as fh:
-            doc = json.load(fh)
-        if doc.get("format") != 1:
-            raise ValueError(f"{path}: unsupported trace format {doc.get('format')!r}")
-        t = cls(source=doc.get("source", os.path.basename(path)))
-        for g in doc["exchanges"]:
-            t.add(bytes.fromhex(g["out"]), [bytes.fromhex(h) for h in g["in"]])
-        return t
+        with open(path, "r", encoding="utf-8") as file:
+            document = json.load(file)
+        if document.get("format") != 1:
+            raise ValueError(f"{path}: unsupported trace format {document.get('format')!r}")
+        trace = cls(source=document.get("source", os.path.basename(path)))
+        for group in document["exchanges"]:
+            trace.add(bytes.fromhex(group["out"]), [bytes.fromhex(hex_text) for hex_text in group["in"]])
+        return trace
 
     def to_json(self, path: str, note: str = "") -> None:
-        doc = {
+        document = {
             "format": 1,
             "source": self.source,
             "note": note,
-            "exchanges": [{"out": o.hex(), "in": [i.hex() for i in ins]} for o, _, ins in self.groups],
+            "exchanges": [{"out": sent.hex(), "in": [i.hex() for i in replies]} for sent, _, replies in self.groups],
         }
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(doc, fh, indent=1)
-            fh.write("\n")
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(document, file, indent=1)
+            file.write("\n")
 
     def with_header_samples(self, raw_samples: int) -> "Trace":
         """A copy whose 0xEC session headers announce ``raw_samples`` samples (to model a
         longer session than the recording holds; the data replies are unchanged)."""
         packed = bytes([raw_samples & 0x7F, (raw_samples >> 7) & 0x7F, (raw_samples >> 14) & 0x7F,
                         (raw_samples >> 21) & 0x7F])
-        t = Trace(source=self.source + f" (header: {raw_samples} raw samples)")
-        for out, _, ins in self.groups:
-            t.add(out, [i[:10] + packed + i[14:] if i[:1] == b"\xec" else i for i in ins])
-        return t
+        trace = Trace(source=self.source + f" (header: {raw_samples} raw samples)")
+        for output, _, replies in self.groups:
+            trace.add(output, [i[:10] + packed + i[14:] if i[:1] == b"\xec" else i for i in replies])
+        return trace
 
     # -- lookup -----------------------------------------------------------
     def responses(self, key: Tuple) -> List[List[bytes]]:
-        return [ins for _, k, ins in self.groups if k == key]
+        return [replies for _, k, replies in self.groups if k == key]
 
     def keys(self) -> List[Tuple]:
-        seen, out = set(), []
+        seen, output = set(), []
         for _, k, _ in self.groups:
             if k is not None and k not in seen:
                 seen.add(k)
-                out.append(k)
-        return out
+                output.append(k)
+        return output
 
 
 class FakeOximeter:
@@ -201,7 +201,7 @@ class FakeOximeter:
         self._seen = collections.Counter()
         self._inbox = collections.deque()
 
-    def handle_out(self, report: bytes) -> None:
+    def handle_output(self, report: bytes) -> None:
         report = bytes(report)
         self.sent.append(report)
         key = command_key(report)
@@ -219,22 +219,22 @@ class FakeOximeter:
             return
         group = groups[min(self._seen[key], len(groups) - 1)]
         self._seen[key] += 1
-        for i, rep in enumerate(group):
+        for i, reply in enumerate(group):
             if self.fault is not None:
-                rep = self.fault(key, i, rep)
-                if rep is None:
+                reply = self.fault(key, i, reply)
+                if reply is None:
                     continue
-            self._inbox.append(rep)
+            self._inbox.append(reply)
 
     def poll(self) -> Optional[bytes]:
         return self._inbox.popleft() if self._inbox else None
 
     def opcodes_sent(self) -> List[int]:
-        out = []
-        for r in self.sent:
-            b = r[2:] if r[:2] == b"\x7d\x81" else r
-            out.append(b[0] if b else -1)
-        return out
+        output = []
+        for report in self.sent:
+            payload = report[2:] if report[:2] == b"\x7d\x81" else report
+            output.append(payload[0] if payload else -1)
+        return output
 
 
 class VirtualClock:
@@ -273,110 +273,110 @@ class HidrawSim:
         self.present = present
         self.open_flags: List[int] = []
         self.opened = 0
-        self._tmp = None
+        self._temporary = None
         self._host = None
-        self._dev = None
+        self._device = None
         self._patches = []
 
     # -- paths ------------------------------------------------------------
     @property
-    def dev_path(self) -> str:
-        return os.path.join(self._tmp, "dev", self.NODE)
+    def device_path(self) -> str:
+        return os.path.join(self._temporary, "dev", self.NODE)
 
     @property
     def sysfs_root(self) -> str:
-        return os.path.join(self._tmp, "sys", "class", "hidraw")
+        return os.path.join(self._temporary, "sys", "class", "hidraw")
 
     def _build_tree(self) -> None:
-        usb = os.path.join(self._tmp, "sys", "devices", "pci0", "usb1", "1-1")
-        hid_dev = os.path.join(usb, "1-1:1.0", "0003:28E9:028A.0001")
-        os.makedirs(hid_dev)
-        with open(os.path.join(hid_dev, "uevent"), "w") as fh:
-            fh.write(UEVENT)
-        with open(os.path.join(usb, "manufacturer"), "w") as fh:
-            fh.write("Contec Medical Systems (simulated)\n")
-        with open(os.path.join(usb, "product"), "w") as fh:
-            fh.write("Pulse Oximeter\n")
-        node_dir = os.path.join(self.sysfs_root, self.NODE)
-        os.makedirs(node_dir)
-        os.symlink(hid_dev, os.path.join(node_dir, "device"))
-        os.makedirs(os.path.join(self._tmp, "dev"))
-        with open(self.dev_path, "w"):
+        usb = os.path.join(self._temporary, "sys", "devices", "pci0", "usb1", "1-1")
+        hid_device = os.path.join(usb, "1-1:1.0", "0003:28E9:028A.0001")
+        os.makedirs(hid_device)
+        with open(os.path.join(hid_device, "uevent"), "w") as file:
+            file.write(UEVENT)
+        with open(os.path.join(usb, "manufacturer"), "w") as file:
+            file.write("Contec Medical Systems (simulated)\n")
+        with open(os.path.join(usb, "product"), "w") as file:
+            file.write("Pulse Oximeter\n")
+        node_directory = os.path.join(self.sysfs_root, self.NODE)
+        os.makedirs(node_directory)
+        os.symlink(hid_device, os.path.join(node_directory, "device"))
+        os.makedirs(os.path.join(self._temporary, "dev"))
+        with open(self.device_path, "w"):
             pass
-        os.chmod(self.dev_path, 0o666)
+        os.chmod(self.device_path, 0o666)
 
     # -- lifecycle --------------------------------------------------------
     def __enter__(self) -> "HidrawSim":
         from fiedle400 import hid_driver
-        self._tmp = tempfile.mkdtemp(prefix="hidrawsim-")
+        self._temporary = tempfile.mkdtemp(prefix="hidrawsim-")
         os.makedirs(self.sysfs_root, exist_ok=True)
         if self.present:
             self._build_tree()
         else:
-            os.makedirs(os.path.join(self._tmp, "dev"))
+            os.makedirs(os.path.join(self._temporary, "dev"))
         # SOCK_SEQPACKET keeps message boundaries and returns EAGAIN when empty,
         # which is what a non-blocking hidraw read does.
-        self._host, self._dev = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        self._host, self._device = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         self._host.setblocking(False)
-        host_fd = self._host.fileno()
+        host_file_descriptor = self._host.fileno()
         real_open, real_read, real_write = os.open, os.read, os.write
-        sim = self
+        simulator = self
 
-        def sim_open(path, flags, *a, **kw):
-            if os.fspath(path) == sim.dev_path:
-                if sim.fake.unplugged:
+        def simulator_open(path, flags, *args, **kwargs):
+            if os.fspath(path) == simulator.device_path:
+                if simulator.fake.unplugged:
                     raise OSError(errno.ENODEV, "No such device", str(path))
-                sim.open_flags.append(flags)
-                sim.opened += 1
-                return host_fd
-            return real_open(path, flags, *a, **kw)
+                simulator.open_flags.append(flags)
+                simulator.opened += 1
+                return host_file_descriptor
+            return real_open(path, flags, *args, **kwargs)
 
-        def sim_write(fd, data):
-            if fd == host_fd:
-                if sim.fake.unplugged:
+        def simulator_write(file_descriptor, data):
+            if file_descriptor == host_file_descriptor:
+                if simulator.fake.unplugged:
                     raise OSError(errno.ENODEV, "No such device")
-                if len(data) != REPORT_LEN:
-                    raise OSError(errno.EINVAL, f"hidraw sim expects {REPORT_LEN}-byte reports, got {len(data)}")
-                sim.fake.handle_out(data)
+                if len(data) != REPORT_LENGTH:
+                    raise OSError(errno.EINVAL, f"hidraw sim expects {REPORT_LENGTH}-byte reports, got {len(data)}")
+                simulator.fake.handle_output(data)
                 while True:
-                    rep = sim.fake.poll()
-                    if rep is None:
+                    report = simulator.fake.poll()
+                    if report is None:
                         break
-                    sim._dev.send(rep)
+                    simulator._device.send(report)
                 return len(data)
-            return real_write(fd, data)
+            return real_write(file_descriptor, data)
 
-        def sim_read(fd, n):
-            if fd == host_fd:
-                if sim.fake.unplugged:
+        def simulator_read(file_descriptor, size):
+            if file_descriptor == host_file_descriptor:
+                if simulator.fake.unplugged:
                     raise OSError(errno.ENODEV, "No such device")
-            return real_read(fd, n)
+            return real_read(file_descriptor, size)
 
         from fiedle400.engine import device as device_module
         self._patches = [
             mock.patch.object(hid_driver, "SYSFS_HIDRAW_ROOT", self.sysfs_root),
-            mock.patch.object(hid_driver, "DEV_ROOT", os.path.join(self._tmp, "dev")),
-            mock.patch.object(os, "open", sim_open),
-            mock.patch.object(os, "write", sim_write),
-            mock.patch.object(os, "read", sim_read),
+            mock.patch.object(hid_driver, "DEVICE_ROOT", os.path.join(self._temporary, "dev")),
+            mock.patch.object(os, "open", simulator_open),
+            mock.patch.object(os, "write", simulator_write),
+            mock.patch.object(os, "read", simulator_read),
             # T-088: FakeOximeter/this socketpair aren't safe for a second thread to read from
             # concurrently -- tell SerialDeviceEngine not to start its background reader thread
             # even when a test drives real CLI code that asks for one.
             mock.patch.object(device_module, "SIMULATED_DEVICE_ACTIVE", True),
         ]
-        for p in self._patches:
-            p.start()
+        for patcher in self._patches:
+            patcher.start()
         return self
 
-    def __exit__(self, *exc) -> None:
-        for p in reversed(self._patches):
-            p.stop()
-        for s in (self._host, self._dev):
+    def __exit__(self, *error) -> None:
+        for patcher in reversed(self._patches):
+            patcher.stop()
+        for endpoint_socket in (self._host, self._device):
             try:
-                s.close()
+                endpoint_socket.close()
             except OSError:
                 pass
-        shutil.rmtree(self._tmp, ignore_errors=True)
+        shutil.rmtree(self._temporary, ignore_errors=True)
 
     # -- events -----------------------------------------------------------
     def unplug(self) -> None:
@@ -384,7 +384,7 @@ class HidrawSim:
         self.fake.unplugged = True
         shutil.rmtree(os.path.join(self.sysfs_root, self.NODE), ignore_errors=True)
         try:
-            os.unlink(self.dev_path)
+            os.unlink(self.device_path)
         except OSError:
             pass
 
@@ -439,12 +439,12 @@ class FakeHidDevice:
         # would.
         if len(payload) == 65 and payload[0] == 0x00:
             payload = payload[1:]
-        self._fake.handle_out(payload)
+        self._fake.handle_output(payload)
         return len(payload)
 
     def read(self, max_bytes: int = 64):
-        rep = self._fake.poll()
-        return bytes(rep) if rep else b""
+        report = self._fake.poll()
+        return bytes(report) if report else b""
 
     def close(self) -> None:
         pass
@@ -477,11 +477,11 @@ def make_fake_hid_module(fake: FakeOximeter, style: str = "cython", present: boo
             "manufacturer_string": "",
         }]
 
-    ns = types.SimpleNamespace(enumerate=_enumerate)
+    module = types.SimpleNamespace(enumerate=_enumerate)
     if style == "ctypes":
-        ns.Device = lambda *a, **kw: FakeHidDevice(fake)
+        module.Device = lambda *args, **kwargs: FakeHidDevice(fake)
     elif style == "cython":
-        ns.device = lambda: FakeHidDevice(fake)
+        module.device = lambda: FakeHidDevice(fake)
     else:
         raise ValueError(f"unknown style: {style!r}")
-    return ns
+    return module

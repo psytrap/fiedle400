@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from hwsim import scrub_env  # noqa: E402
+from hwsim import scrub_environment  # noqa: E402
 from fiedle400 import cli  # noqa: E402
 
 
@@ -20,14 +20,14 @@ class TestRunGuarded(unittest.TestCase):
         def boom(args):
             raise OSError("device unplugged")
 
-        err = io.StringIO()
-        with redirect_stderr(err), mock.patch.dict(os.environ):
-            scrub_env()
-            rc = cli.run_guarded(boom, SimpleNamespace())
-        self.assertEqual(rc, 1)
-        self.assertIn("OSError: device unplugged", err.getvalue())
-        self.assertIn("FIEDLE400_DEBUG=1", err.getvalue())
-        self.assertNotIn("Traceback", err.getvalue())
+        error_output = io.StringIO()
+        with redirect_stderr(error_output), mock.patch.dict(os.environ):
+            scrub_environment()
+            exit_code = cli.run_guarded(boom, SimpleNamespace())
+        self.assertEqual(exit_code, 1)
+        self.assertIn("OSError: device unplugged", error_output.getvalue())
+        self.assertIn("FIEDLE400_DEBUG=1", error_output.getvalue())
+        self.assertNotIn("Traceback", error_output.getvalue())
 
     def test_debug_env_reraises(self):
         def boom(args):
@@ -44,17 +44,17 @@ class TestRunGuarded(unittest.TestCase):
             self.assertEqual(cli.run_guarded(interrupted, SimpleNamespace()), 130)
 
     def test_handler_return_code_passes_through(self):
-        self.assertEqual(cli.run_guarded(lambda a: 0, SimpleNamespace()), 0)
-        self.assertEqual(cli.run_guarded(lambda a: 3, SimpleNamespace()), 3)
+        self.assertEqual(cli.run_guarded(lambda args: 0, SimpleNamespace()), 0)
+        self.assertEqual(cli.run_guarded(lambda args: 3, SimpleNamespace()), 3)
 
     def test_main_routes_subcommand_through_guard(self):
         with mock.patch.object(cli, "command_read_time", side_effect=RuntimeError("no ack")), \
-                redirect_stderr(io.StringIO()) as err, mock.patch.dict(os.environ), \
-                self.assertRaises(SystemExit) as cm:
-            scrub_env()
+                redirect_stderr(io.StringIO()) as error_output, mock.patch.dict(os.environ), \
+                self.assertRaises(SystemExit) as caught:
+            scrub_environment()
             cli.main(["read-time"])
-        self.assertEqual(cm.exception.code, 1)
-        self.assertIn("RuntimeError: no ack", err.getvalue())
+        self.assertEqual(caught.exception.code, 1)
+        self.assertIn("RuntimeError: no ack", error_output.getvalue())
 
 
 class TestWithoutMatplotlib(unittest.TestCase):
@@ -72,8 +72,8 @@ class TestWithoutMatplotlib(unittest.TestCase):
             "    sys.exit(e.code)\n"
         )
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        env = dict(os.environ, PYTHONPATH=root)
-        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env, cwd=root)
+        environment = dict(os.environ, PYTHONPATH=root)
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=environment, cwd=root)
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("--convert", proc.stdout)
 
@@ -93,27 +93,27 @@ class TestDownloadDefaultFormat(unittest.TestCase):
 
     def _download(self, extra):
         import tempfile
-        tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(tmp.cleanup)
+        temporary_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary_directory.cleanup)
         engine = mock.MagicMock()
         engine.download_all_sessions.return_value = list(self.RECORDS)
-        out = io.StringIO()
+        output = io.StringIO()
         with mock.patch.dict(os.environ), mock.patch("fiedle400.cli.PulsoxHidDevice"), \
                 mock.patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=engine), \
                 mock.patch("fiedle400.cli._open_in_viewer") as opener, \
-                redirect_stdout(out), self.assertRaises(SystemExit) as cm:
-            scrub_env()
-            cli.main(["download", "--workdir", tmp.name, *extra])
-        self.assertEqual(cm.exception.code, 0)
+                redirect_stdout(output), self.assertRaises(SystemExit) as caught:
+            scrub_environment()
+            cli.main(["download", "--workdir", temporary_directory.name, *extra])
+        self.assertEqual(caught.exception.code, 0)
         opener.assert_not_called()  # a non-interactive download never opens a browser
-        return tmp.name, sorted(os.listdir(tmp.name))
+        return temporary_directory.name, sorted(os.listdir(temporary_directory.name))
 
     def test_default_is_one_html_file_with_the_records_and_no_spo2(self):
         folder, files = self._download([])
         self.assertEqual(len(files), 1)
         self.assertTrue(files[0].endswith(".html"), files)
-        with open(os.path.join(folder, files[0]), encoding="utf-8") as f:
-            html = f.read()
+        with open(os.path.join(folder, files[0]), encoding="utf-8") as file:
+            html = file.read()
         self.assertIn("2026-10-01T22:00:01", html)
 
     def test_format_flag_still_writes_spo2(self):
@@ -150,7 +150,7 @@ class TestProbeOutAlert(unittest.TestCase):
 
 
 class TestViewerTmpDir(unittest.TestCase):
-    """_viewer_tmp_dir reuses the folder the .spo2 file was saved into,
+    """_viewer_temporary_directory reuses the folder the .spo2 file was saved into,
     sidestepping a sandboxed browser's isolated /tmp and the hidden
     dot-directories a snap's home interface excludes -- both confirmed
     live against a real snap Firefox install to actually deny access."""
@@ -164,11 +164,11 @@ class TestViewerTmpDir(unittest.TestCase):
         # to ntpath/posixpath by the real OS, not by sys.platform).
         rel = os.path.join("home", "testuser", "Documents", "fiedle400")
         saved = os.path.join(rel, "rec.spo2")
-        result = cli._viewer_tmp_dir(saved)
+        result = cli._viewer_temporary_directory(saved)
         self.assertEqual(result, os.path.abspath(rel))
 
     def test_bare_filename_resolves_to_the_current_directory_not_empty(self):
-        result = cli._viewer_tmp_dir("rec.spo2")
+        result = cli._viewer_temporary_directory("rec.spo2")
         self.assertEqual(result, os.getcwd())
 
     def test_same_logic_on_posix_and_windows_path_styles(self):
@@ -182,7 +182,7 @@ class TestViewerTmpDir(unittest.TestCase):
             with mock.patch.object(cli, "os", fake_os):
                 saved = path_module.join("x", "y", "rec.spo2")
                 expected = path_module.abspath(path_module.join("x", "y"))
-                self.assertEqual(cli._viewer_tmp_dir(saved), expected)
+                self.assertEqual(cli._viewer_temporary_directory(saved), expected)
 
 
 class TestOpenInViewer(unittest.TestCase):
@@ -221,7 +221,7 @@ class TestOpenInViewer(unittest.TestCase):
         desktop_entry = "[Desktop Entry]\nExec=firefox %u\n"
         with mock.patch.object(sys, "platform", "linux"), \
                 mock.patch("fiedle400.cli.subprocess.run", return_value=run_result), \
-                mock.patch("os.path.isfile", side_effect=lambda p: p.endswith("firefox_firefox.desktop")), \
+                mock.patch("os.path.isfile", side_effect=lambda path: path.endswith("firefox_firefox.desktop")), \
                 mock.patch("builtins.open", mock.mock_open(read_data=desktop_entry)), \
                 mock.patch("fiedle400.cli.subprocess.Popen") as popen:
             self.assertTrue(cli._open_in_viewer("/tmp/viewer.html"))
@@ -257,7 +257,7 @@ class TestOpenInViewer(unittest.TestCase):
             def __enter__(self):
                 return self
 
-            def __exit__(self, *a):
+            def __exit__(self, *args):
                 return False
 
         class _Winreg:
@@ -336,11 +336,11 @@ class TestOpenInViewer(unittest.TestCase):
 
 class TestHelpShowsProjectPage(unittest.TestCase):
     def test_help_ends_with_the_project_url(self):
-        out = io.StringIO()
-        with redirect_stdout(out), self.assertRaises(SystemExit) as cm:
+        output = io.StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as caught:
             cli.main(["--help"])
-        self.assertEqual(cm.exception.code, 0)
-        self.assertIn("https://github.com/psytrap/fiedle400", out.getvalue())
+        self.assertEqual(caught.exception.code, 0)
+        self.assertIn("https://github.com/psytrap/fiedle400", output.getvalue())
 
 
 if __name__ == "__main__":

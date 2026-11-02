@@ -23,43 +23,43 @@ The decoded algorithm has not yet been checked in the real program (T-035).
 DROP = 4          # Percent Drop For Event (%)
 MIN_TIME = 10     # Minimum Event Duration (s)
 MAX_TIME = 180    # fixed in SpO2 Assistant
-MAX_AVG = 2       # fixed: average fall must stay below this (%/s)
+MAX_AVERAGE = 2       # fixed: average fall must stay below this (%/s)
 OSCILLATION = 1   # fixed: rebound (%) tolerated when joining partial descents
 CRITERIA = 88     # desaturation criteria level for the "below" counts (%)
-LO, HI = 0, 100   # a sample outside this range breaks an event
+LOW, HIGH = 0, 100   # a sample outside this range breaks an event
 INVALID = 127     # probe-out sentinel, used for missing readings
 
 PULSE_DROP = 6        # Pulse change for event (bpm), UI range 2-20
 PULSE_MIN_TIME = 8    # Minimum pulse event duration (s)
-PULSE_HI = 254        # pulse valid range is 0..254; the 255 sentinel breaks an event
+PULSE_HIGH = 254        # pulse valid range is 0..254; the 255 sentinel breaks an event
 PULSE_INVALID = 255
 
 
 def detect_events(spo2, drop=DROP, min_time=MIN_TIME):
     """Return the accepted events as dicts: start, nadir (sample indices),
-    from_pct, to_pct. `spo2` is a list of ints; None counts as probe-out."""
-    return _detect(spo2, drop, min_time, HI, INVALID)
+    from_percent, to_percent. `spo2` is a list of ints; None counts as probe-out."""
+    return _detect(spo2, drop, min_time, HIGH, INVALID)
 
 
 def detect_pulse_events(pulse, drop=PULSE_DROP, min_time=PULSE_MIN_TIME):
     """Pulse-rate events: the same detector on the pulse series (SpO2.exe builds a
     second instance at 0x532b39 with these values), so an event is a *fall* of at
     least `drop` bpm over `min_time`..180 s; a rise is never one. Same dict keys as
-    detect_events (from_pct/to_pct hold bpm). None counts as probe-out."""
-    return _detect(pulse, drop, min_time, PULSE_HI, PULSE_INVALID)
+    detect_events (from_percent/to_percent hold bpm). None counts as probe-out."""
+    return _detect(pulse, drop, min_time, PULSE_HIGH, PULSE_INVALID)
 
 
-def _detect(series, drop, min_time, hi, invalid):
+def _detect(series, drop, min_time, high, invalid):
     """Shared state machine behind detect_events/detect_pulse_events: walk the clamped
     series to find monotonic (or flat) descents, merge near-adjacent partial descents
     into a single candidate (the small-rebound/short-gap join SpO2 Assistant itself
     does), then keep only the candidates `_is_accepted_event` passes."""
-    values = [invalid if v is None else v for v in series]
-    candidates = _find_descent_candidates(values, hi)
-    return _merge_and_accept(candidates, values, drop, min_time, hi)
+    values = [invalid if value is None else value for value in series]
+    candidates = _find_descent_candidates(values, high)
+    return _merge_and_accept(candidates, values, drop, min_time, high)
 
 
-def _find_descent_candidates(values, hi):
+def _find_descent_candidates(values, high):
     """One candidate per maximal run where the series falls or holds flat, as
     [start_index, nadir_index, value_at_start, value_at_nadir]. A probe-out/out-of-range
     sample (outside LO..hi) always breaks the current descent."""
@@ -76,41 +76,41 @@ def _find_descent_candidates(values, hi):
             candidates.append([descent_start, descent_end, values[descent_start], values[descent_end]])
         descent_start = descent_end = 0
 
-    for i, v in enumerate(values):
-        if v > hi or v < LO:
+    for i, value in enumerate(values):
+        if value > high or value < LOW:
             close_descent()
             continue
         if i == 0:
             continue
-        prev = values[i - 1]
-        if v > prev:
+        previous = values[i - 1]
+        if value > previous:
             close_descent()
-        elif v == prev:
+        elif value == previous:
             if descent_start:
                 descent_end = i
         elif descent_start:
             descent_end = i
-        elif LO < prev < hi:
+        elif LOW < previous < high:
             descent_start, descent_end = i - 1, i
     close_descent()
     return candidates
 
 
-def _is_accepted_event(candidate, values, drop, min_time, hi):
+def _is_accepted_event(candidate, values, drop, min_time, high):
     """A candidate counts as an event when it falls far/fast/long enough, and every
     sample across it stayed in range (no probe-out/out-of-range sample inside it)."""
-    start, nadir, from_val, to_val = candidate
-    duration, depth = nadir - start, from_val - to_val
+    start, nadir, from_value, to_value = candidate
+    duration, depth = nadir - start, from_value - to_value
     return bool(
         duration
         and depth >= drop
         and min_time <= duration <= MAX_TIME
-        and depth // duration < MAX_AVG
-        and all(LO <= values[k] <= hi for k in range(start, nadir + 1))
+        and depth // duration < MAX_AVERAGE
+        and all(LOW <= values[k] <= high for k in range(start, nadir + 1))
     )
 
 
-def _merge_and_accept(candidates, values, drop, min_time, hi):
+def _merge_and_accept(candidates, values, drop, min_time, high):
     """Fold a later candidate into the current one when it keeps falling further
     (allowing a small OSCILLATION rebound in between) and starts soon enough after the
     current nadir (within min_time) -- otherwise the current candidate is closed off
@@ -121,47 +121,47 @@ def _merge_and_accept(candidates, values, drop, min_time, hi):
 
     current = candidates[0][:]
     for candidate in candidates[1:]:
-        cur_start, cur_nadir, cur_from, cur_to = current
-        cand_start, cand_nadir, cand_from, cand_to = candidate
+        current_start, current_nadir, current_from, current_to = current
+        candidate_start, candidate_nadir, candidate_from, candidate_to = candidate
         joins_current = (
-            cand_from - cur_to <= OSCILLATION
-            and cand_to < cur_to
-            and cand_from < cur_from
-            and cand_start - cur_nadir <= min_time
+            candidate_from - current_to <= OSCILLATION
+            and candidate_to < current_to
+            and candidate_from < current_from
+            and candidate_start - current_nadir <= min_time
         )
         if joins_current:
-            current[1], current[3] = cand_nadir, cand_to
+            current[1], current[3] = candidate_nadir, candidate_to
         else:
-            if _is_accepted_event(current, values, drop, min_time, hi):
+            if _is_accepted_event(current, values, drop, min_time, high):
                 accepted.append(current)
             current = candidate[:]
-    if _is_accepted_event(current, values, drop, min_time, hi):
+    if _is_accepted_event(current, values, drop, min_time, high):
         accepted.append(current)
 
-    return [dict(start=e[0], nadir=e[1], from_pct=e[2], to_pct=e[3]) for e in accepted]
+    return [dict(start=event[0], nadir=event[1], from_percent=event[2], to_percent=event[3]) for event in accepted]
 
 
-def _valid_indices(series, lo, hi):
+def _valid_indices(series, low, high):
     """Indices of samples in [lo, hi]; None and out-of-range values (probe-out/artifact
     sentinels) are excluded, same rule `summarize`/`summarize_pulse` apply."""
-    return [i for i, v in enumerate(series) if v is not None and lo <= v <= hi]
+    return [i for i, value in enumerate(series) if value is not None and low <= value <= high]
 
 
-def _avg_event_duration(events):
+def _average_event_duration(events):
     """Mean event length in seconds (nadir - start), or None with no events."""
-    return round(sum(e["nadir"] - e["start"] for e in events) / len(events), 1) if events else None
+    return round(sum(event["nadir"] - event["start"] for event in events) / len(events), 1) if events else None
 
 
 def _event_rate_stats(total_samples, valid_count, event_count):
     """The three report values shared by `summarize` and `summarize_pulse`:
-    index_per_hr (events per hour of the whole recording), adjusted_index_per_hr
+    index_per_hour (events per hour of the whole recording), adjusted_index_per_hour
     (events per hour of valid data only, or None with no valid samples), and
-    artifact_pct (share of samples that were invalid/probe-out)."""
+    artifact_percent (share of samples that were invalid/probe-out)."""
     hours = total_samples / 3600.0
     return {
-        "index_per_hr": round(event_count / hours, 2),
-        "adjusted_index_per_hr": round(event_count / (valid_count / 3600.0), 2) if valid_count else None,
-        "artifact_pct": round(100.0 * (total_samples - valid_count) / total_samples, 2),
+        "index_per_hour": round(event_count / hours, 2),
+        "adjusted_index_per_hour": round(event_count / (valid_count / 3600.0), 2) if valid_count else None,
+        "artifact_percent": round(100.0 * (total_samples - valid_count) / total_samples, 2),
     }
 
 
@@ -172,17 +172,17 @@ def summarize(spo2, events, criteria=CRITERIA):
     if not spo2:
         return out
     out.update(_event_rate_stats(len(spo2), len(valid), len(events)))
-    out["avg_low_spo2"] = round(sum(e["to_pct"] for e in events) / len(events), 2) if events else None
-    low = [e for e in events if e["to_pct"] < criteria]
+    out["average_low_spo2"] = round(sum(event["to_percent"] for event in events) / len(events), 2) if events else None
+    low = [event for event in events if event["to_percent"] < criteria]
     out["events_below_criteria"] = len(low)
-    out["avg_low_spo2_below_criteria"] = round(sum(e["to_pct"] for e in low) / len(low), 2) if low else None
+    out["average_low_spo2_below_criteria"] = round(sum(event["to_percent"] for event in low) / len(low), 2) if low else None
     # "Time (min) <criteria" (SPO2_FORMAT.md Sec7.1), same valid samples as the rest of
     # this report -- not a separately-filtered count (T-044).
-    out["time_below_criteria_s"] = sum(1 for i in valid if spo2[i] < criteria)
-    out["avg_event_duration_s"] = _avg_event_duration(events)
+    out["time_below_criteria_seconds"] = sum(1 for i in valid if spo2[i] < criteria)
+    out["average_event_duration_seconds"] = _average_event_duration(events)
     inside = set()
-    for e in events:
-        inside.update(range(e["start"], e["nadir"] + 1))
+    for event in events:
+        inside.update(range(event["start"], event["nadir"] + 1))
     # SpO2.exe 0x54ced1-0x54d059: (sum of valid samples - sum over every event's
     # start..nadir) / (valid count - those samples); not computed when nothing is left.
     basal = [spo2[i] for i in valid if i not in inside]
@@ -199,5 +199,5 @@ def summarize_pulse(pulse, events):
     if not pulse:
         return out
     out.update(_event_rate_stats(len(pulse), valid_count, len(events)))
-    out["avg_event_duration_s"] = _avg_event_duration(events)
+    out["average_event_duration_seconds"] = _average_event_duration(events)
     return out

@@ -15,57 +15,57 @@ class TestCliInteractive(unittest.TestCase):
     """Test suite for interactive CLI workflow and helpers."""
 
     def setUp(self):
-        self.s1 = protocol.SessionInfo(
+        self.first_session = protocol.SessionInfo(
             session_id=1,
             user_id=1,
             record_count=100,
-            duration_sec=100,
+            stored_duration_seconds=100,
             timestamp=datetime(2026, 9, 6, 10, 0, 0),
         )
-        self.s2 = protocol.SessionInfo(
+        self.second_session = protocol.SessionInfo(
             session_id=2,
             user_id=1,
             record_count=200,
-            duration_sec=200,
+            stored_duration_seconds=200,
             timestamp=datetime(2026, 9, 6, 11, 0, 0),
         )
-        self.s3 = protocol.SessionInfo(
+        self.third_session = protocol.SessionInfo(
             session_id=3,
             user_id=1,
             record_count=300,
-            duration_sec=300,
+            stored_duration_seconds=300,
             timestamp=datetime(2026, 9, 6, 12, 0, 0),
         )
         self.s4 = protocol.SessionInfo(
             session_id=4,
             user_id=1,
             record_count=400,
-            duration_sec=400,
+            stored_duration_seconds=400,
             timestamp=datetime(2026, 9, 6, 13, 0, 0),
         )
-        self.sessions = [self.s1, self.s2, self.s3, self.s4]
+        self.sessions = [self.first_session, self.second_session, self.third_session, self.s4]
 
     def test_parse_single_session(self):
-        res = parse_session_selection("2", self.sessions)
-        self.assertEqual(len(res), 1)
-        self.assertEqual(res[0].session_id, 2)
+        result = parse_session_selection("2", self.sessions)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].session_id, 2)
 
     def test_parse_comma_list(self):
-        res = parse_session_selection("1, 3, 4", self.sessions)
-        self.assertEqual([s.session_id for s in res], [1, 3, 4])
+        result = parse_session_selection("1, 3, 4", self.sessions)
+        self.assertEqual([session.session_id for session in result], [1, 3, 4])
 
     def test_parse_range(self):
-        res = parse_session_selection("2-4", self.sessions)
-        self.assertEqual([s.session_id for s in res], [2, 3, 4])
+        result = parse_session_selection("2-4", self.sessions)
+        self.assertEqual([session.session_id for session in result], [2, 3, 4])
 
     def test_parse_range_and_list_combined(self):
-        res = parse_session_selection("1-2, 4", self.sessions)
-        self.assertEqual([s.session_id for s in res], [1, 2, 4])
+        result = parse_session_selection("1-2, 4", self.sessions)
+        self.assertEqual([session.session_id for session in result], [1, 2, 4])
 
     def test_parse_all_keywords(self):
-        for kw in ("a", "A", "all", "ALL"):
-            res = parse_session_selection(kw, self.sessions)
-            self.assertEqual(len(res), 4)
+        for kwargs in ("a", "A", "all", "ALL"):
+            result = parse_session_selection(kwargs, self.sessions)
+            self.assertEqual(len(result), 4)
 
     def test_parse_invalid_inputs(self):
         with self.assertRaises(ValueError):
@@ -81,37 +81,37 @@ class TestCliInteractive(unittest.TestCase):
             parse_session_selection("abc", self.sessions)
 
     def test_generate_iso_filename_single(self):
-        fn = generate_iso_filename([self.s1])
+        filename = generate_iso_filename([self.first_session])
         # s1: 10:00:00 + 100s = 10:01:40 (default ext is spo2)
-        self.assertEqual(fn, "fiedle400_2026-09-06T100000_2026-09-06T100140.spo2")
+        self.assertEqual(filename, "fiedle400_2026-09-06T100000_2026-09-06T100140.spo2")
         # test explicit csv extension
-        fn_csv = generate_iso_filename([self.s1], ext="csv")
-        self.assertEqual(fn_csv, "fiedle400_2026-09-06T100000_2026-09-06T100140.csv")
+        csv_filename = generate_iso_filename([self.first_session], extension="csv")
+        self.assertEqual(csv_filename, "fiedle400_2026-09-06T100000_2026-09-06T100140.csv")
 
     def test_generate_iso_filename_multiple(self):
-        fn = generate_iso_filename([self.s1, self.s3])
+        filename = generate_iso_filename([self.first_session, self.third_session])
         # s1 starts at 10:00:00; s3 ends at 12:00:00 + 300s = 12:05:00
-        self.assertEqual(fn, "fiedle400_2026-09-06T100000_2026-09-06T120500.spo2")
+        self.assertEqual(filename, "fiedle400_2026-09-06T100000_2026-09-06T120500.spo2")
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["q"])
-    def test_wizard_quit(self, mock_input, mock_engine_cls, mock_dev_cls):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_quit(self, mock_input, mock_engine_class, mock_device_class):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(serial_number="50F123", firmware_version="v2.0"),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
         # T-088: the CLI now closes the engine (which itself stops the background reader thread,
         # then closes the device) rather than the device directly.
         mock_engine.close.assert_called()
@@ -119,20 +119,20 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["q"])
-    def test_wizard_does_not_invent_unreported_device_details(self, mock_input, mock_engine_cls, mock_dev_cls):
+    def test_wizard_does_not_invent_unreported_device_details(self, mock_input, mock_engine_class, mock_device_class):
         """The real device reports no firmware version or serial (PROTOCOL.md §3.8): say so, don't print defaults."""
-        mock_dev_cls.return_value.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value.connect.return_value = "/dev/hidraw_test"
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(hardware_id="50F", user_profile="user"),
-            "rtc_time_str": "not reported by the device",
+            "rtc_time_text": "not reported by the device",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
-        with patch("sys.stdout", new_callable=io.StringIO) as out:
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
             self.assertEqual(run_interactive_wizard(MagicMock(device=None, verbose=0)), 0)
-        text = out.getvalue()
+        text = output.getvalue()
         self.assertIn("Firmware Version      : not reported by the device | Serial: not reported by the device", text)
         self.assertIn("Device Descriptor     : 50F", text)
         self.assertNotIn("v2.0", text)
@@ -141,23 +141,23 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1-2", "", "", "n", "y", "n"])
-    def test_wizard_download_and_erase(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_download_and_erase(self, mock_input, mock_engine_class, mock_device_class, mock_export):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(serial_number="50F123", firmware_version="v2.0"),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
 
         # Verified download of session 1 and 2
         self.assertEqual(mock_engine.download_session.call_count, 2)
@@ -173,56 +173,56 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["q"])
-    def test_wizard_header_shows_the_project_page(self, mock_input, mock_engine_cls, mock_dev_cls):
-        mock_engine_cls.return_value.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
-        mock_engine_cls.return_value.list_sessions.return_value = self.sessions
-        with patch("sys.stdout", new_callable=io.StringIO) as out:
+    def test_wizard_header_shows_the_project_page(self, mock_input, mock_engine_class, mock_device_class):
+        mock_engine_class.return_value.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_text": "x"}
+        mock_engine_class.return_value.list_sessions.return_value = self.sessions
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
             run_interactive_wizard(MagicMock(device=None, verbose=0))
-        self.assertIn("https://github.com/psytrap/fiedle400", out.getvalue())
+        self.assertIn("https://github.com/psytrap/fiedle400", output.getvalue())
 
-    def _run_html_wizard(self, open_answer, opener_result=True, fmt_answer=""):
+    def _run_html_wizard(self, open_answer, opener_result=True, format_answer=""):
         """Runs the wizard's default (html) path with a stubbed opener; returns (output, opener, export mock)."""
         mock_engine = MagicMock()
-        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
+        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_text": "x"}
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        answers = iter(["1", fmt_answer, "", open_answer, "n", "n"])
+        answers = iter(["1", format_answer, "", open_answer, "n", "n"])
         prompts = []
 
         def fake_input(prompt=""):
             prompts.append(prompt)
             return next(answers)
 
-        buf = io.StringIO()
+        buffer = io.StringIO()
         with patch("fiedle400.cli.PulsoxHidDevice"), \
                 patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=mock_engine), \
                 patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.html") as export, \
                 patch("fiedle400.cli._open_in_viewer", return_value=opener_result) as opener, \
-                patch("builtins.input", side_effect=fake_input), redirect_stdout(buf):
-            ret = run_interactive_wizard(MagicMock(device=None, verbose=0))
-        self.assertEqual(ret, 0)
-        return buf.getvalue() + "".join(prompts), opener, export
+                patch("builtins.input", side_effect=fake_input), redirect_stdout(buffer):
+            exit_code = run_interactive_wizard(MagicMock(device=None, verbose=0))
+        self.assertEqual(exit_code, 0)
+        return buffer.getvalue() + "".join(prompts), opener, export
 
     def test_wizard_default_format_saves_html_and_does_not_open_it(self):
-        out, opener, export = self._run_html_wizard("")
+        output, opener, export = self._run_html_wizard("")
         export.assert_called_once()
         self.assertEqual(export.call_args[0][2], "html")
         self.assertTrue(export.call_args[0][1].endswith(".html"))
-        self.assertIn("Open it in your browser now? [y/N]", out)
+        self.assertIn("Open it in your browser now? [y/N]", output)
         opener.assert_not_called()
 
     def test_wizard_opens_the_saved_html_when_accepted(self):
-        out, opener, export = self._run_html_wizard("y", fmt_answer="1")
+        output, opener, export = self._run_html_wizard("y", format_answer="1")
         opener.assert_called_once_with("/tmp/test.html")
 
     def test_wizard_names_the_html_when_no_browser_can_be_opened(self):
-        out, opener, export = self._run_html_wizard("y", opener_result=False)
-        self.assertIn("Could not open a browser; the page is at: /tmp/test.html", out)
+        output, opener, export = self._run_html_wizard("y", opener_result=False)
+        self.assertIn("Could not open a browser; the page is at: /tmp/test.html", output)
 
     def _run_spo2_viewer_wizard(self, viewer_answer, opener_result=True):
         """Runs the wizard's spo2 path with a stubbed viewer opener; returns (printed output, opener mock)."""
         mock_engine = MagicMock()
-        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_str": "x"}
+        mock_engine.read_device_info.return_value = {"device_info": protocol.DeviceInfo(), "rtc_time_text": "x"}
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
         answers = iter(["1", "2", "", viewer_answer, "n", "n"])
@@ -232,77 +232,77 @@ class TestCliInteractive(unittest.TestCase):
             prompts.append(prompt)
             return next(answers)
 
-        buf = io.StringIO()
+        buffer = io.StringIO()
         with patch("fiedle400.cli.PulsoxHidDevice"), \
                 patch("fiedle400.cli.serial_engine.SerialDeviceEngine", return_value=mock_engine), \
                 patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2"), \
                 patch("fiedle400.cli.time.sleep"), \
                 patch("fiedle400.cli._open_in_viewer", return_value=opener_result) as opener, \
-                patch("builtins.input", side_effect=fake_input), redirect_stdout(buf):
-            ret = run_interactive_wizard(MagicMock(device=None, verbose=0))
-        self.assertEqual(ret, 0)
-        return buf.getvalue() + "".join(prompts), opener
+                patch("builtins.input", side_effect=fake_input), redirect_stdout(buffer):
+            exit_code = run_interactive_wizard(MagicMock(device=None, verbose=0))
+        self.assertEqual(exit_code, 0)
+        return buffer.getvalue() + "".join(prompts), opener
 
     def test_wizard_does_not_open_the_spo2_viewer_by_default(self):
         # Pressing Enter at "Open it in the HTML viewer now? [y/N]" declines (default no).
-        out, opener = self._run_spo2_viewer_wizard("")
-        self.assertIn("Open it in the HTML viewer now?", out)
+        output, opener = self._run_spo2_viewer_wizard("")
+        self.assertIn("Open it in the HTML viewer now?", output)
         opener.assert_not_called()
 
     def test_wizard_opens_the_spo2_viewer_when_accepted(self):
-        out, opener = self._run_spo2_viewer_wizard("y")
+        output, opener = self._run_spo2_viewer_wizard("y")
         opener.assert_called_once()
         opened_path = opener.call_args[0][0]
         self.assertTrue(opened_path.endswith(".html"))
         self.assertFalse(os.path.exists(opened_path))  # cleaned up after opening
 
     def test_wizard_names_the_saved_file_when_no_viewer_can_be_opened(self):
-        out, opener = self._run_spo2_viewer_wizard("y", opener_result=False)
+        output, opener = self._run_spo2_viewer_wizard("y", opener_result=False)
         opener.assert_called_once()
-        self.assertIn("Could not open a viewer; the data is still at: /tmp/test.spo2", out)
+        self.assertIn("Could not open a viewer; the data is still at: /tmp/test.spo2", output)
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["c", "y", "n"])
-    def test_wizard_clear_from_menu(self, mock_input, mock_engine_cls, mock_dev_cls):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_clear_from_menu(self, mock_input, mock_engine_class, mock_device_class):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
         mock_engine.clear_memory.assert_called_with(0, debug=0)
 
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["", "", "", "", "n", "n", "n"])
-    def test_wizard_default_enter_downloads_all(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_default_enter_downloads_all(self, mock_input, mock_engine_class, mock_device_class, mock_export):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(serial_number="50F123", firmware_version="v2.0"),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
 
         # Verified that ALL 4 sessions were downloaded when Enter was pressed on action prompt
         self.assertEqual(mock_engine.download_session.call_count, len(self.sessions))
@@ -315,44 +315,44 @@ class TestCliInteractive(unittest.TestCase):
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["w", "n", "q"])
-    def test_wizard_cancel(self, mock_input, mock_engine_cls, mock_dev_cls):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_cancel(self, mock_input, mock_engine_class, mock_device_class):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
         mock_engine.download_session.assert_not_called()
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["\x1b[A\x1b[Bq"])
-    def test_wizard_quit_with_ansi_escape_keys(self, mock_input, mock_engine_cls, mock_dev_cls):
+    def test_wizard_quit_with_ansi_escape_keys(self, mock_input, mock_engine_class, mock_device_class):
         """Verifies that arrow keys (^[[A^[[B) preceding 'q' do not trigger 'Invalid session number'."""
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
         mock_engine.download_session.assert_not_called()
 
     @patch("builtins.input", return_value="  \x1b[A\x1b[Bq  ")
@@ -362,157 +362,157 @@ class TestCliInteractive(unittest.TestCase):
         self.assertEqual(cleaned, "q")
 
     def test_parse_session_selection_with_ansi(self):
-        res = parse_session_selection("\x1b[A1\x1b[B", self.sessions)
-        self.assertEqual([s.session_id for s in res], [1])
+        result = parse_session_selection("\x1b[A1\x1b[B", self.sessions)
+        self.assertEqual([session.session_id for session in result], [1])
 
-        res_range = parse_session_selection("\x1b[C1-2\x1b[D", self.sessions)
-        self.assertEqual([s.session_id for s in res_range], [1, 2])
+        range_result = parse_session_selection("\x1b[C1-2\x1b[D", self.sessions)
+        self.assertEqual([session.session_id for session in range_result], [1, 2])
 
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["x", "q"])
-    def test_wizard_unknown_action(self, mock_input, mock_engine_cls, mock_dev_cls):
+    def test_wizard_unknown_action(self, mock_input, mock_engine_class, mock_device_class):
         """Verifies that an unknown action like 'x' outputs 'Unknown action' and does not crash."""
         import io
         from contextlib import redirect_stdout
 
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
-        buf = io.StringIO()
+        buffer = io.StringIO()
         args = MagicMock(device=None, verbose=0)
-        with redirect_stdout(buf):
-            ret = run_interactive_wizard(args)
+        with redirect_stdout(buffer):
+            exit_code = run_interactive_wizard(args)
 
-        self.assertEqual(ret, 0)
-        out = buf.getvalue()
-        self.assertIn("Unknown action: 'x'", out)
-        self.assertNotIn("Invalid session number: 'x'", out)
+        self.assertEqual(exit_code, 0)
+        output = buffer.getvalue()
+        self.assertIn("Unknown action: 'x'", output)
+        self.assertNotIn("Invalid session number: 'x'", output)
 
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test.spo2")
     @patch("os.path.exists", side_effect=[True, False, False, False])
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "", "y", "n", "n", "n"])
-    def test_wizard_overwrite_confirmed(self, mock_input, mock_engine_cls, mock_dev_cls, mock_exists, mock_export):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_overwrite_confirmed(self, mock_input, mock_engine_class, mock_device_class, mock_exists, mock_export):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         args = MagicMock(device=None, verbose=0)
-        ret = run_interactive_wizard(args)
-        self.assertEqual(ret, 0)
+        exit_code = run_interactive_wizard(args)
+        self.assertEqual(exit_code, 0)
         mock_export.assert_called_once()
 
     @patch("fiedle400.cli._export_records_to_file")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "", "n", "q", "q"])
-    def test_wizard_overwrite_cancelled(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_overwrite_cancelled(self, mock_input, mock_engine_class, mock_device_class, mock_export):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
-        def fake_exists(p):
-            return p.endswith(".html") and "_1" not in p
+        def fake_exists(path):
+            return path.endswith(".html") and "_1" not in path
 
         with patch("os.path.exists", side_effect=fake_exists):
             args = MagicMock(device=None, verbose=0)
-            ret = run_interactive_wizard(args)
+            exit_code = run_interactive_wizard(args)
 
-        self.assertEqual(ret, 0)
+        self.assertEqual(exit_code, 0)
         mock_export.assert_not_called()
 
     @patch("fiedle400.cli._export_records_to_file", return_value="/tmp/test_1.html")
     @patch("fiedle400.cli.PulsoxHidDevice")
     @patch("fiedle400.cli.serial_engine.SerialDeviceEngine")
     @patch("builtins.input", side_effect=["1", "", "", "n", "", "n", "n", "n"])
-    def test_wizard_overwrite_accepts_suggested_suffix(self, mock_input, mock_engine_cls, mock_dev_cls, mock_export):
-        mock_dev = MagicMock()
-        mock_dev.connect.return_value = "/dev/hidraw_test"
-        mock_dev_cls.return_value = mock_dev
+    def test_wizard_overwrite_accepts_suggested_suffix(self, mock_input, mock_engine_class, mock_device_class, mock_export):
+        mock_device = MagicMock()
+        mock_device.connect.return_value = "/dev/hidraw_test"
+        mock_device_class.return_value = mock_device
 
         mock_engine = MagicMock()
         mock_engine.read_device_info.return_value = {
             "device_info": protocol.DeviceInfo(),
-            "rtc_time_str": "2026-09-06 12:00:00",
+            "rtc_time_text": "2026-09-06 12:00:00",
         }
         mock_engine.list_sessions.return_value = self.sessions
         mock_engine.download_session.return_value = [{"spo2": 98, "heart_rate": 65}]
-        mock_engine_cls.return_value = mock_engine
+        mock_engine_class.return_value = mock_engine
 
         # Mock os.path.exists so that initial file exists, but suffixed _1 does not
         orig_exists = os.path.exists
-        def fake_exists(p):
-            if "_1.html" in p:
+        def fake_exists(path):
+            if "_1.html" in path:
                 return False
-            if p.endswith(".html"):
+            if path.endswith(".html"):
                 return True
-            return orig_exists(p)
+            return orig_exists(path)
 
         with patch("os.path.exists", side_effect=fake_exists):
             args = MagicMock(device=None, verbose=0)
-            ret = run_interactive_wizard(args)
+            exit_code = run_interactive_wizard(args)
 
-        self.assertEqual(ret, 0)
+        self.assertEqual(exit_code, 0)
         mock_export.assert_called_once()
-        saved_fn = mock_export.call_args[0][1]
-        self.assertTrue(saved_fn.endswith("_1.html"))
+        saved_filename = mock_export.call_args[0][1]
+        self.assertTrue(saved_filename.endswith("_1.html"))
 
     def test_get_next_available_filename(self):
         import tempfile
         from fiedle400.cli import get_next_available_filename
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            f0 = os.path.join(tmpdir, "rec.spo2")
+            first_file = os.path.join(tmpdir, "rec.spo2")
             # When file does not exist, returns original
-            self.assertEqual(get_next_available_filename(f0), f0)
+            self.assertEqual(get_next_available_filename(first_file), first_file)
 
             # Create rec.spo2 -> should return rec_1.spo2
-            with open(f0, "w") as f:
-                f.write("0")
-            self.assertEqual(get_next_available_filename(f0), os.path.join(tmpdir, "rec_1.spo2"))
+            with open(first_file, "w") as file:
+                file.write("0")
+            self.assertEqual(get_next_available_filename(first_file), os.path.join(tmpdir, "rec_1.spo2"))
 
             # Create rec_1.spo2 -> should return rec_2.spo2
-            f1 = os.path.join(tmpdir, "rec_1.spo2")
-            with open(f1, "w") as f:
-                f.write("1")
-            self.assertEqual(get_next_available_filename(f0), os.path.join(tmpdir, "rec_2.spo2"))
+            second_file = os.path.join(tmpdir, "rec_1.spo2")
+            with open(second_file, "w") as file:
+                file.write("1")
+            self.assertEqual(get_next_available_filename(first_file), os.path.join(tmpdir, "rec_2.spo2"))
 
             # Also starting from rec_1.spo2 directly should increment to rec_2.spo2
-            self.assertEqual(get_next_available_filename(f1), os.path.join(tmpdir, "rec_2.spo2"))
+            self.assertEqual(get_next_available_filename(second_file), os.path.join(tmpdir, "rec_2.spo2"))
 
             # Create rec_2.spo2 -> should return rec_3.spo2
-            f2 = os.path.join(tmpdir, "rec_2.spo2")
-            with open(f2, "w") as f:
-                f.write("2")
-            self.assertEqual(get_next_available_filename(f0), os.path.join(tmpdir, "rec_3.spo2"))
+            third_file = os.path.join(tmpdir, "rec_2.spo2")
+            with open(third_file, "w") as file:
+                file.write("2")
+            self.assertEqual(get_next_available_filename(first_file), os.path.join(tmpdir, "rec_3.spo2"))
 
 
 if __name__ == "__main__":

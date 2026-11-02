@@ -5,7 +5,7 @@ from enum import IntEnum
 from typing import List, Optional
 
 from .models import Framing, Opcode
-from .checksums import calc_checksum_7bit
+from .checksums import calculate_checksum_7bit
 
 
 class StorageSubcommand(IntEnum):
@@ -21,17 +21,17 @@ SUBCOMMAND_STORAGE_READ_BLOCK = StorageSubcommand.READ_BLOCK
 SUBCOMMAND_STORAGE_FINALIZE = StorageSubcommand.FINALIZE
 
 
-def build_hid_command(cmd_code: int, args: Optional[List[int]] = None) -> bytes:
+def build_hid_command(command_code: int, args: Optional[List[int]] = None) -> bytes:
     """Builds a 64-byte HID output report formatted for Contec/GigaDevice HID controllers.
     
-    Format: 0x7D, 0x81, cmd_code, [args...], padded to 64 bytes with 0x80.
+    Format: 0x7D, 0x81, command_code, [args...], padded to 64 bytes with 0x80.
     """
-    payload = [Framing.HEADER_BYTE_0, Framing.HEADER_BYTE_1, cmd_code & 0xFF]
+    payload = [Framing.HEADER_BYTE_0, Framing.HEADER_BYTE_1, command_code & 0xFF]
     if args:
-        payload.extend([a & 0xFF for a in args])
+        payload.extend([argument & 0xFF for argument in args])
     
-    padding_len = Framing.REPORT_LENGTH - len(payload)
-    return bytes(payload + [Framing.PADDING_BYTE] * padding_len)
+    padding_length = Framing.REPORT_LENGTH - len(payload)
+    return bytes(payload + [Framing.PADDING_BYTE] * padding_length)
 
 
 def build_unlock_negotiate_handshake() -> bytes:
@@ -43,30 +43,30 @@ def build_unlock_negotiate_handshake() -> bytes:
     sub_unlock = [Framing.HEADER_BYTE_0, Framing.HEADER_BYTE_1, Opcode.UNLOCK_HANDSHAKE] + [Framing.PADDING_BYTE] * 6
     sub_negotiate = [Framing.HEADER_BYTE_0, Framing.HEADER_BYTE_1, Opcode.STORAGE_NEGOTIATION]
     payload = sub_unlock + sub_negotiate
-    padding_len = Framing.REPORT_LENGTH - len(payload)
-    return bytes(payload + [Framing.PADDING_BYTE] * padding_len)
+    padding_length = Framing.REPORT_LENGTH - len(payload)
+    return bytes(payload + [Framing.PADDING_BYTE] * padding_length)
 
 
-def build_session_data_command(sub_cmd: int, block_id: int, sess_id: int) -> bytes:
+def build_session_data_command(sub_command: int, block_id: int, session_id: int) -> bytes:
     """Builds a 64-byte 0x9D HID storage command report matching exact PCAP / usbmon 9-byte framing.
 
     Header Framing (9 Bytes):
-        [0x9D, sub_cmd, block_id, user_id, sess_id, 0x00, 0x00, 0x00, checksum]
+        [0x9D, sub_command, block_id, user_id, session_id, 0x00, 0x00, 0x00, checksum]
     """
-    if sub_cmd == SUBCOMMAND_STORAGE_INIT:
-        b = [0x9D, 0x02, 0x7F, 0x7F, 0x7F, 0x00, 0x00, 0x00, 0x1C]
-    elif sub_cmd == SUBCOMMAND_STORAGE_FINALIZE:
-        b = [0x9D, 0x7F, 0x7F, 0x7F, 0x7F, 0x00, 0x00, 0x00, 0x19]
+    if sub_command == SUBCOMMAND_STORAGE_INIT:
+        command = [0x9D, 0x02, 0x7F, 0x7F, 0x7F, 0x00, 0x00, 0x00, 0x1C]
+    elif sub_command == SUBCOMMAND_STORAGE_FINALIZE:
+        command = [0x9D, 0x7F, 0x7F, 0x7F, 0x7F, 0x00, 0x00, 0x00, 0x19]
     else:
-        base = [0x9D, sub_cmd & 0xFF, block_id & 0xFF, 0x01, sess_id & 0xFF, 0x00, 0x00, 0x00]
-        chk = (sum(base[1:7]) + 0x1D) & 0xFF
-        b = base + [chk]
+        base = [0x9D, sub_command & 0xFF, block_id & 0xFF, 0x01, session_id & 0xFF, 0x00, 0x00, 0x00]
+        checksum = (sum(base[1:7]) + 0x1D) & 0xFF
+        command = base + [checksum]
     
-    b.extend([0x00] * (64 - len(b)))
-    return bytes(b)
+    command.extend([0x00] * (64 - len(command)))
+    return bytes(command)
 
 
-def build_session_page_command(data_type: int, session_id: int, page_idx: int = 0, user_id: int = 1) -> bytes:
+def build_session_page_command(data_type: int, session_id: int, page_index: int = 0, user_id: int = 1) -> bytes:
     """Builds a 64-byte 0x9D HID storage command report requesting flash subframes.
 
     Header Framing (9 Bytes):
@@ -75,13 +75,13 @@ def build_session_page_command(data_type: int, session_id: int, page_idx: int = 
     Checksum Formula:
         sum(header[0:8]) % 128
     """
-    sub_low = page_idx & 0x7F
-    sub_high = (page_idx >> 7) & 0x7F
+    sub_low = page_index & 0x7F
+    sub_high = (page_index >> 7) & 0x7F
     base = [0x9D, 0x04, data_type & 0xFF, user_id & 0xFF, session_id & 0xFF, sub_low, sub_high, 0x00]
-    chk = calc_checksum_7bit(base)
-    b = base + [chk]
-    b.extend([0x00] * (64 - len(b)))
-    return bytes(b)
+    checksum = calculate_checksum_7bit(base)
+    command = base + [checksum]
+    command.extend([0x00] * (64 - len(command)))
+    return bytes(command)
 
 
 def build_session_index_query_command() -> bytes:
@@ -135,18 +135,18 @@ def build_delete_all_command() -> bytes:
     Erases every Auto-mode recording; confirmed by the vendor captures. Byte for byte as the
     vendor sends it (8 bytes, checksum at byte 7).
     """
-    b = [0x9D, 0x7F, 0x7F, 0x7F, 0x7F, 0x00, 0x00]
-    b.append(calc_checksum_7bit(b))
-    return bytes(b + [0x00] * (64 - len(b)))
+    command = [0x9D, 0x7F, 0x7F, 0x7F, 0x7F, 0x00, 0x00]
+    command.append(calculate_checksum_7bit(command))
+    return bytes(command + [0x00] * (64 - len(command)))
 
 
 def build_delete_entry_command(user_id: int, entry: int, series: int = 2) -> bytes:
     """DESTRUCTIVE: `9D 7F [series] [user] [entry] 00 00 [chk]`, SpO2 Assistant's "Delete" of one
     data series (2 = pulse, 1 = SpO2) of one recording (PROTOCOL.md 3.13). Decoded from SpO2.exe;
     never captured on the wire."""
-    b = [0x9D, 0x7F, series & 0x7F, user_id & 0x7F, entry & 0x7F, 0x00, 0x00]
-    b.append(calc_checksum_7bit(b))
-    return bytes(b + [0x00] * (64 - len(b)))
+    command = [0x9D, 0x7F, series & 0x7F, user_id & 0x7F, entry & 0x7F, 0x00, 0x00]
+    command.append(calculate_checksum_7bit(command))
+    return bytes(command + [0x00] * (64 - len(command)))
 
 
 def build_storage_finalize_command() -> bytes:
@@ -164,46 +164,46 @@ def build_download_session_command(session_id: int) -> bytes:
     return build_hid_command(0xA6, [session_id & 0xFF, 0x00])
 
 
-def build_set_time_command(dt: Optional[datetime] = None) -> bytes:
+def build_set_time_command(date_time: Optional[datetime] = None) -> bytes:
     """Builds a 64-byte 0x83 HID report to set the device Real-Time Clock (RTC)."""
-    if dt is None:
-        dt = datetime.now()
-    yy = dt.year % 100
-    mm = dt.month
-    dd = dt.day
-    hh = dt.hour
-    mi = dt.minute
-    ss = dt.second
-    buf = [0x83, yy, mm, dd, hh, mi, ss]
-    checksum = (0x133 - sum(buf)) & 0xFF
-    payload = buf + [checksum, 0x01, 0x34]
-    padding_len = 64 - len(payload)
-    return bytes(payload + [0x00] * padding_len)
+    if date_time is None:
+        date_time = datetime.now()
+    year = date_time.year % 100
+    month = date_time.month
+    day = date_time.day
+    hour = date_time.hour
+    minute = date_time.minute
+    second = date_time.second
+    buffer = [0x83, year, month, day, hour, minute, second]
+    checksum = (0x133 - sum(buffer)) & 0xFF
+    payload = buffer + [checksum, 0x01, 0x34]
+    padding_length = 64 - len(payload)
+    return bytes(payload + [0x00] * padding_length)
 
 
 def build_read_time_command() -> bytes:
     """Builds a 64-byte 0x82 HID report to read the active device Real-Time Clock (RTC)."""
-    buf = [0x82, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]
-    checksum = sum(buf) & 0xFF
-    buf.append(checksum)
-    padding_len = 64 - len(buf)
-    return bytes(buf + [0x00] * padding_len)
+    buffer = [0x82, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]
+    checksum = sum(buffer) & 0xFF
+    buffer.append(checksum)
+    padding_length = 64 - len(buffer)
+    return bytes(buffer + [0x00] * padding_length)
 
 
 class Commands:
     """Stateless Factory for constructing 64-byte USB HID Outbound Command Reports."""
     
     @staticmethod
-    def build_hid(cmd_code: int, args: Optional[List[int]] = None) -> bytes:
-        return build_hid_command(cmd_code, args)
+    def build_hid(command_code: int, args: Optional[List[int]] = None) -> bytes:
+        return build_hid_command(command_code, args)
 
     @staticmethod
     def unlock_handshake() -> bytes:
         return build_unlock_negotiate_handshake()
 
     @staticmethod
-    def session_data(sub_cmd: int, block_id: int, sess_id: int) -> bytes:
-        return build_session_data_command(sub_cmd, block_id, sess_id)
+    def session_data(sub_command: int, block_id: int, session_id: int) -> bytes:
+        return build_session_data_command(sub_command, block_id, session_id)
 
     @staticmethod
     def query_sessions() -> bytes:
@@ -230,8 +230,8 @@ class Commands:
         return build_storage_block_command(block_id, session_id)
 
     @staticmethod
-    def session_page(data_type: int, session_id: int, page_idx: int = 0, user_id: int = 1) -> bytes:
-        return build_session_page_command(data_type, session_id, page_idx, user_id)
+    def session_page(data_type: int, session_id: int, page_index: int = 0, user_id: int = 1) -> bytes:
+        return build_session_page_command(data_type, session_id, page_index, user_id)
 
     @staticmethod
     def segment_ack() -> bytes:
@@ -262,8 +262,8 @@ class Commands:
         return build_read_time_command()
 
     @staticmethod
-    def set_time(dt: Optional[datetime] = None) -> bytes:
-        return build_set_time_command(dt)
+    def set_time(date_time: Optional[datetime] = None) -> bytes:
+        return build_set_time_command(date_time)
 
     @staticmethod
     def select_session(session_id: int) -> bytes:

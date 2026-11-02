@@ -61,7 +61,7 @@ def _ascii_fallback_error_handler(error):
     if not isinstance(error, UnicodeEncodeError):
         raise error
     bad = error.object[error.start:error.end]
-    return ("".join(_ASCII_FALLBACKS.get(ch, "?") for ch in bad), error.end)
+    return ("".join(_ASCII_FALLBACKS.get(char, "?") for char in bad), error.end)
 
 
 def _configure_output_encoding() -> None:
@@ -96,7 +96,7 @@ def tool_version_line() -> str:
     return f"{__version__} ({build}, {platform.system()} {platform.release()}, {platform.machine()})"
 
 
-_LINUX_DESKTOP_DIRS = (
+_LINUX_DESKTOP_DIRECTORIES = (
     os.path.expanduser("~/.local/share/applications"),
     "/usr/share/applications",
     "/var/lib/snapd/desktop/applications",
@@ -133,21 +133,21 @@ def _resolve_linux_browser_argv(path: str):
     if not desktop_file:
         return None
 
-    for directory in _LINUX_DESKTOP_DIRS:
+    for directory in _LINUX_DESKTOP_DIRECTORIES:
         full_path = os.path.join(directory, desktop_file)
         if not os.path.isfile(full_path):
             continue
         try:
-            with open(full_path, encoding="utf-8") as f:
-                for line in f:
+            with open(full_path, encoding="utf-8") as entry_file:
+                for line in entry_file:
                     if not line.startswith("Exec="):
                         continue
                     # Desktop-entry field codes (%u, %f, %U, %F, ...) are
                     # exactly two characters starting with '%'; drop them,
                     # keeping any other fixed arguments the entry specifies.
                     parts = [
-                        p for p in line[len("Exec="):].strip().split()
-                        if not (len(p) == 2 and p[0] == "%")
+                        token for token in line[len("Exec="):].strip().split()
+                        if not (len(token) == 2 and token[0] == "%")
                     ]
                     if parts:
                         return parts + [path]
@@ -198,8 +198,8 @@ def _resolve_windows_browser_argv(path: str):
         return None
     # posix=False preserves backslashes (needed for Windows paths) but leaves the
     # quote characters themselves in each token, so strip a matching pair by hand.
-    parts = [p[1:-1] if len(p) >= 2 and p[0] == p[-1] == '"' else p for p in parts]
-    return [path if p == "%1" else p for p in parts]
+    parts = [part[1:-1] if len(part) >= 2 and part[0] == part[-1] == '"' else part for part in parts]
+    return [path if part == "%1" else part for part in parts]
 
 
 def _open_in_viewer(path: str) -> bool:
@@ -242,7 +242,7 @@ def _open_in_viewer(path: str) -> bool:
         return False
 
 
-def _viewer_tmp_dir(saved_path: str) -> str:
+def _viewer_temporary_directory(saved_path: str) -> str:
     """Where the HTML viewer's disposable temp file gets written: the same
     folder as `saved_path`, the .spo2 file just saved there.
 
@@ -287,24 +287,24 @@ def _open_spo2_viewer(records: list, saved_path: str) -> None:
     generated temp file afterward (T-005) -- the browser is given a moment
     to read the file before it's removed; `saved_path` is the already-saved
     .spo2 file this falls back to pointing at if opening the viewer fails.
-    See _viewer_tmp_dir for why the file goes where it does.
+    See _viewer_temporary_directory for why the file goes where it does.
     """
     from fiedle400 import spo2_viewer
     html = spo2_viewer.build_viewer_html(records)
-    viewer_dir = _viewer_tmp_dir(saved_path)
-    os.makedirs(viewer_dir, exist_ok=True)
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".html", dir=viewer_dir)
-    os.close(tmp_fd)
+    viewer_directory = _viewer_temporary_directory(saved_path)
+    os.makedirs(viewer_directory, exist_ok=True)
+    temporary_file_descriptor, temporary_path = tempfile.mkstemp(suffix=".html", dir=viewer_directory)
+    os.close(temporary_file_descriptor)
     try:
-        with open(tmp_path, "w", encoding="utf-8") as f:
-            f.write(html)
-        if _open_in_viewer(tmp_path):
+        with open(temporary_path, "w", encoding="utf-8") as html_file:
+            html_file.write(html)
+        if _open_in_viewer(temporary_path):
             time.sleep(2)  # let the browser read the file before it's removed
         else:
             print(f"   Could not open a viewer; the data is still at: {saved_path}")
     finally:
         try:
-            os.remove(tmp_path)
+            os.remove(temporary_path)
         except OSError:
             pass
 
@@ -313,14 +313,14 @@ def clean_input(prompt: str = "") -> str:
     """Wrapper around built-in input() that strips ANSI escape sequences and non-printable control chars."""
     raw = input(prompt)
     cleaned = ANSI_ESCAPE_RE.sub("", raw)
-    cleaned = "".join(ch for ch in cleaned if ch.isprintable() or ch in " \t")
+    cleaned = "".join(char for char in cleaned if char.isprintable() or char in " \t")
     return cleaned.strip()
 
 
 def command_config(args) -> int:
     """Handler for 'config': show or change stored settings."""
     if args.workdir:
-        chosen = config.ensure_usable_dir(args.workdir)
+        chosen = config.ensure_usable_directory(args.workdir)
         if not chosen:
             print(f"❌ Cannot create or write to: {args.workdir}")
             return 1
@@ -358,22 +358,22 @@ def command_view(args) -> int:
         workdir = config.get_workdir()
         if workdir and os.path.abspath(workdir) != search[0]:
             search.append(workdir)
-        filepath = next(filter(None, (recording.find_latest_session_file(d) for d in search)), None)
+        filepath = next(filter(None, (recording.find_latest_session_file(directory) for directory in search)), None)
         if not filepath:
             print(f"❌ No recording (.spo2, .csv, .json) found in: {', '.join(search)}")
             return 1
     try:
         _, records = recording.load_session_file(filepath)
-    except (OSError, ValueError) as e:
-        print(f"❌ Cannot read {filepath}: {e}")
+    except (OSError, ValueError) as error:
+        print(f"❌ Cannot read {filepath}: {error}")
         return 1
     if args.convert:
         html_path = os.path.abspath(args.output or os.path.splitext(filepath)[0] + ".html")
         try:
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(spo2_viewer.build_viewer_html(records))
-        except OSError as e:
-            print(f"❌ Cannot write {html_path}: {e}")
+            with open(html_path, "w", encoding="utf-8") as html_file:
+                html_file.write(spo2_viewer.build_viewer_html(records))
+        except OSError as error:
+            print(f"❌ Cannot write {html_path}: {error}")
             return 1
         print(f"✅ Viewer page for {len(records):,} records of {filepath}: {html_path}")
         return 0
@@ -385,13 +385,13 @@ def command_view(args) -> int:
 def command_detect(args) -> int:
     """Handler for 'detect' subcommand to run live Serial Packet Detector & Decoder."""
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
-    except Exception as e:
-        print(f"Error connecting: {e}")
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     print("==================================================")
     print(f"  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE  (fiedle400 v{__version__})")
     print("==================================================")
@@ -402,11 +402,11 @@ def command_detect(args) -> int:
     try:
         while True:
             events = engine.read_packets()
-            for ev in events:
+            for event in events:
                 count += 1
-                spo2_str = f"{ev.spo2}%" if ev.spo2 else "N/A"
-                hr_str = f"{ev.heart_rate} bpm" if ev.heart_rate else "N/A"
-                print(f"[{count:04d}] Type={ev.packet_type:<15} | SpO2={spo2_str:<6} | HR={hr_str:<8} | Status={ev.status_str}")
+                spo2_text = f"{event.spo2}%" if event.spo2 else "N/A"
+                heart_rate_text = f"{event.heart_rate} bpm" if event.heart_rate else "N/A"
+                print(f"[{count:04d}] Type={event.packet_type:<15} | SpO2={spo2_text:<6} | HR={heart_rate_text:<8} | Status={event.status_text}")
             time.sleep(0.01)
     except KeyboardInterrupt:
         print("\nPacket detector stopped by user.")
@@ -428,7 +428,7 @@ def _probe_out_alert(records: List[dict]) -> Optional[str]:
     on real hardware (T1's table entry) and this alert is specifically about
     the previously-unverified sentinel path.
     """
-    hits = sum(1 for r in records if r.get("flags") == "probe-out")
+    hits = sum(1 for record in records if record.get("flags") == "probe-out")
     if not hits:
         return None
     return (
@@ -448,12 +448,12 @@ def _probe_out_alert(records: List[dict]) -> Optional[str]:
 def _export_records_to_file(
     records: List[dict],
     output_filename: Optional[str] = None,
-    fmt: str = "spo2",
-    output_dir: Optional[str] = None,
+    format: str = "spo2",
+    output_directory: Optional[str] = None,
 ) -> str:
     """Helper to save extracted records as HTML viewer page, .SpO2, CSV, or JSON."""
     return export.export_records(
-        records, output_filename=output_filename, fmt=fmt, output_dir=output_dir
+        records, output_filename=output_filename, format=format, output_directory=output_directory
     )
 
 
@@ -465,29 +465,29 @@ def command_download(args):
     # Validate an explicit --workdir / FIEDLE400_WORKDIR before touching the device,
     # so a typo fails in a second rather than after a long download.
     try:
-        override_dir = None if args.output else config.explicit_workdir(getattr(args, "workdir", None))
-    except config.WorkdirError as e:
-        print(f"❌ {e}")
+        override_directory = None if args.output else config.explicit_workdir(getattr(args, "workdir", None))
+    except config.WorkdirError as error:
+        print(f"❌ {error}")
         return 1
 
     dump_path = None
     if getattr(args, "dump", None) is not None:
         if args.dump == "auto":
-            ts_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            dump_path = f"fiedle400_download_{ts_str}.dump"
+            timestamp_text = datetime.now().strftime("%Y%m%d_%H%M%S")
+            dump_path = f"fiedle400_download_{timestamp_text}.dump"
         else:
             dump_path = args.dump
     
     print("Connecting to Pulsox PO-400 to extract recording data...")
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
         print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     total_records = []
     try:
         total_records = engine.download_all_sessions(
@@ -509,9 +509,9 @@ def command_download(args):
         return 1
     # Precedence: -o, then --workdir, then FIEDLE400_WORKDIR, then the stored
     # setting (prompting once on a first interactive run), then the cwd.
-    target_dir = None if args.output else (override_dir or config.resolve_workdir())
+    target_directory = None if args.output else (override_directory or config.resolve_workdir())
     saved_path = _export_records_to_file(
-        total_records, args.output, args.format.lower(), output_dir=target_dir
+        total_records, args.output, args.format.lower(), output_directory=target_directory
     )
     print(f"✅ Saved all session recordings to: {saved_path}")
     alert = _probe_out_alert(total_records)
@@ -529,14 +529,14 @@ def command_sessions(args):
     """Handler for 'sessions' subcommand to query session index table using SerialDeviceEngine."""
     print("Connecting to Pulsox PO-400 to query recorded session index...")
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
         print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     try:
         sessions = engine.list_sessions(debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
@@ -556,10 +556,10 @@ def command_sessions(args):
     else:
         print(f"{'Session ID':<12} | {'User':<6} | {'Records':<10} | {'Duration':<12} | {'Timestamp':<20}")
         print("-" * 73)
-        for s in sessions:
-            ts_str = s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "N/A"
-            mode = "  (Manual mode)" if s.manual else ""
-            print(f"{s.session_id:<12} | {s.user_id:<6} | {s.record_count:<10} | {s.duration_str:<12} | {ts_str:<20}{mode}")
+        for session in sessions:
+            timestamp_text = session.timestamp.strftime("%Y-%m-%d %H:%M:%S") if session.timestamp else "N/A"
+            mode = "  (Manual mode)" if session.manual else ""
+            print(f"{session.session_id:<12} | {session.user_id:<6} | {session.record_count:<10} | {session.duration_text:<12} | {timestamp_text:<20}{mode}")
         print(f"\nTotal sessions found: {len(sessions)}")
 
     return 0
@@ -567,39 +567,39 @@ def command_sessions(args):
 
 def command_clear(args):
     """Handler for 'clear' subcommand to delete stored recording sessions."""
-    sess_id = args.session
-    target_str = f"Session #{sess_id}" if sess_id > 0 else "ALL stored recording sessions"
+    session_id = args.session
+    target_text = f"Session #{session_id}" if session_id > 0 else "ALL stored recording sessions"
     
     if not args.yes:
-        confirm = clean_input(f"⚠️ Are you sure you want to permanently DELETE {target_str} from device memory? [y/N]: ")
+        confirm = clean_input(f"⚠️ Are you sure you want to permanently DELETE {target_text} from device memory? [y/N]: ")
         if confirm.lower() not in ["y", "yes"]:
             print("Operation cancelled.")
             return 0
 
-    print(f"Connecting to Pulsox PO-400 to delete {target_str}...")
+    print(f"Connecting to Pulsox PO-400 to delete {target_text}...")
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
         print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    if not _erase_supported(dev):
+    if not _erase_supported(device):
         print(f"⚠️ {ERASE_REFUSED}")
-        dev.close()
+        device.close()
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     try:
-        ok = engine.clear_memory(session_id=sess_id, debug=getattr(args, "verbose", 0))
+        ok = engine.clear_memory(session_id=session_id, debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
         print("\nOperation interrupted by user.")
         return 1
     finally:
         engine.close()
 
-    _report_erase(ok, target_str)
+    _report_erase(ok, target_text)
     if not ok and engine.single_erase_unsupported is True:
         print("   The device did not accept erasing a single recording (T-074). "
               "'fiedle400 clear' without -s erases all of them.")
@@ -609,12 +609,12 @@ def command_clear(args):
 ERASE_USB_ID = ("28E9", "028A")  # the PO-400, the only device erase was ever tested on
 
 
-def _erase_supported(dev) -> bool:
+def _erase_supported(device) -> bool:
     """Erase is only sent to the PO-400's USB ID (T-101: other models are download-only)."""
-    if getattr(dev, "backend_name", None) == "serial":
+    if getattr(device, "backend_name", None) == "serial":
         return False
     try:
-        meta = dev.get_descriptor_info()
+        meta = device.get_descriptor_info()
         vid, pid = meta.get("vid_hex"), meta.get("pid_hex")
     except Exception:
         return True  # a test double without descriptors: behave as before
@@ -627,17 +627,17 @@ ERASE_REFUSED = ("Erase is only enabled for the PO-400 (USB 28E9:028A). This dev
                  "download-only in fiedle400; erase its recordings on the device itself.")
 
 
-def _model_lines(dev, model_string) -> List[str]:
+def _model_lines(device, model_string) -> List[str]:
     """What T-104 shows about the connected device: model, transport, and a request for
     the `info` output when the model is not one fiedle400 was tested with."""
     try:
-        meta = dev.get_descriptor_info()
+        meta = device.get_descriptor_info()
     except Exception:
         meta = {}
     vid, pid = meta.get("vid_hex"), meta.get("pid_hex")
     vid = vid if isinstance(vid, str) and vid else "?"
     pid = pid if isinstance(pid, str) and pid else "?"
-    transport = "USB serial" if getattr(dev, "backend_name", None) == "serial" else "USB HID"
+    transport = "USB serial" if getattr(device, "backend_name", None) == "serial" else "USB HID"
     lines = [f"{protocol.describe_model(model_string)}  ({transport}, {vid}:{pid})"]
     if not protocol.is_known_model(model_string):
         lines.append("This model has not been tested with fiedle400 yet. Downloading should work but is "
@@ -661,14 +661,14 @@ def command_read_time(args):
     """
     print("Connecting to Pulsox PO-400 to read its clock...")
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
         print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     try:
         reply = engine.read_rtc_time(debug=getattr(args, "verbose", 0))
 
@@ -690,27 +690,27 @@ def command_set_time(args):
     """Handler for 'set-time' subcommand to set device RTC timestamp using SerialDeviceEngine."""
     if hasattr(args, "timestamp") and args.timestamp:
         try:
-            target_dt = datetime.fromisoformat(args.timestamp.replace(" ", "T"))
+            target_date_time = datetime.fromisoformat(args.timestamp.replace(" ", "T"))
         except ValueError:
             print(f"❌ Error: Invalid timestamp format '{args.timestamp}'. Expected 'YYYY-MM-DD HH:MM:SS'.")
             return 1
     else:
-        target_dt = datetime.now()
+        target_date_time = datetime.now()
 
-    ts_str = target_dt.strftime("%Y-%m-%d %H:%M:%S")
+    timestamp_text = target_date_time.strftime("%Y-%m-%d %H:%M:%S")
     print("Connecting to Pulsox PO-400 to set Real-Time Clock (RTC)...")
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
         print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     try:
-        print(f"Sending Set-RTC command (0x83) for timestamp: {ts_str}...")
-        engine.set_rtc_time(target_dt, debug=getattr(args, "verbose", 0))
+        print(f"Sending Set-RTC command (0x83) for timestamp: {timestamp_text}...")
+        engine.set_rtc_time(target_date_time, debug=getattr(args, "verbose", 0))
         print("Received device ACK: Real-Time Clock synchronized!")
 
     except KeyboardInterrupt:
@@ -718,25 +718,25 @@ def command_set_time(args):
     finally:
         engine.close()
 
-    print(f"✅ Successfully set PO-400 device clock to: {ts_str}")
-    print(f"   Command format: python3 -m fiedle400.cli set-time \"{ts_str}\"")
+    print(f"✅ Successfully set PO-400 device clock to: {timestamp_text}")
+    print(f"   Command format: python3 -m fiedle400.cli set-time \"{timestamp_text}\"")
     return 0
 
 
-def _run_backend_checks(backend: str, dev_path_arg: Optional[str]) -> list:
+def _run_backend_checks(backend: str, device_path_arg: Optional[str]) -> list:
     """Runs the selftest check set against one backend. Returns a (label, ok, detail) list."""
     checks = []  # (label, ok, detail)
 
-    def check(label, fn):
+    def check(label, probe):
         # A falsy/None result is treated as a failure, not just an exception:
         # a backend that silently gets a bare ACK instead of real data (seen on
         # this Linux machine's libusb-backed 'hid' install -- RELEASE_PLAN.md
         # notes) raises nothing, so "no exception" alone would wrongly show a
         # green check for data that never actually arrived.
         try:
-            detail = fn()
-        except Exception as e:
-            checks.append((label, False, str(e)))
+            detail = probe()
+        except Exception as error:
+            checks.append((label, False, str(error)))
             return None
         if not detail:
             checks.append((label, False, "no data returned (device gave no usable reply)"))
@@ -750,21 +750,21 @@ def _run_backend_checks(backend: str, dev_path_arg: Optional[str]) -> list:
             devices = find_pulsox_hid_devices()
             if not devices:
                 raise RuntimeError("no device found via sysfs")
-            dev_path, _, is_readable = devices[0]
+            device_path, _, is_readable = devices[0]
             if not is_readable:
                 raise RuntimeError(
-                    f"{dev_path} found but not readable/writable -- missing udev rule? "
+                    f"{device_path} found but not readable/writable -- missing udev rule? "
                     f"Run: sudo fiedle400_setup-udev.sh"
                 )
-            return dev_path
+            return device_path
         check("Device detected (sysfs)", _detect)
 
-    dev = PulsoxHidDevice(dev_path=dev_path_arg, backend=backend)
-    node_path = check("Connect", lambda: dev.connect())
+    device = PulsoxHidDevice(device_path=device_path_arg, backend=backend)
+    node_path = check("Connect", lambda: device.connect())
     if node_path is None:
         return checks
 
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     try:
         check("Handshake + device info", lambda: engine.read_device_info(debug=0)["device_info"].hardware_id)
         check("Clock query answered", lambda: (engine.read_rtc_time(debug=0) or b"").hex(" "))
@@ -797,16 +797,16 @@ def command_selftest(args) -> int:
     from fiedle400.hid_driver import available_backends
 
     explicit_backend = getattr(args, "backend", None)
-    dev_path_arg = getattr(args, "device", None)
+    device_path_arg = getattr(args, "device", None)
     backends = [explicit_backend] if explicit_backend else available_backends()
 
     print(f"Running selftest on backend '{backends[0]}'...\n")
-    primary_checks = _run_backend_checks(backends[0], dev_path_arg)
+    primary_checks = _run_backend_checks(backends[0], device_path_arg)
     primary_ok = _print_selftest_results(primary_checks)
 
     for backend in backends[1:]:
         print(f"\nAlso probing backend '{backend}' (informational -- does not affect the result above):\n")
-        _print_selftest_results(_run_backend_checks(backend, dev_path_arg))
+        _print_selftest_results(_run_backend_checks(backend, device_path_arg))
 
     return 0 if primary_ok else 1
 
@@ -826,20 +826,20 @@ def command_info(args):
     """Handler for 'info' subcommand to read hardware and firmware information."""
     print("Connecting to Pulsox PO-400 to read device information...")
     try:
-        dev = PulsoxHidDevice(dev_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
-        node_path = dev.connect()
+        device = PulsoxHidDevice(device_path=getattr(args, "device", None), backend=getattr(args, "backend", None))
+        node_path = device.connect()
         print(f"Connected to {node_path}!")
-    except Exception as e:
-        print(f"Error connecting: {e}")
+    except Exception as error:
+        print(f"Error connecting: {error}")
         return 1
 
-    meta = dev.get_descriptor_info()
-    engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+    meta = device.get_descriptor_info()
+    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
     try:
-        res = engine.read_device_info(debug=getattr(args, "verbose", 0))
-        info = res["device_info"]
-        active_user_id = res["active_user_id"]
-        rtc_time_str = res["rtc_time_str"]
+        result = engine.read_device_info(debug=getattr(args, "verbose", 0))
+        info = result["device_info"]
+        active_user_id = result["active_user_id"]
+        rtc_time_text = result["rtc_time_text"]
     except KeyboardInterrupt:
         print("\nOperation interrupted by user.")
         return 1
@@ -847,7 +847,7 @@ def command_info(args):
         engine.close()
 
     backend_label = {"hidraw": "Linux hidraw (native)", "serial": "USB serial (115200 baud)"}.get(
-        dev.backend_name, "hid (cross-platform)")
+        device.backend_name, "hid (cross-platform)")
 
     readable, writable = True, True
     if node_path.startswith("/dev/"):
@@ -859,18 +859,18 @@ def command_info(args):
     decoded_model, model_source = protocol.decode_usb_vid_pid(vid_hex, pid_hex)
 
     not_reported = "not reported by the device"
-    fw_str = (info.firmware_version if info else None) or not_reported
-    sn_str = (info.serial_number if info else None) or not_reported
-    up_str = (info.user_profile if info else None) or not_reported
-    geom_str = (info.flash_geometry if info else None) or not_reported
-    model_str = (info.hardware_id if info else None) or not_reported
+    firmware_text = (info.firmware_version if info else None) or not_reported
+    serial_text = (info.serial_number if info else None) or not_reported
+    profile_text = (info.user_profile if info else None) or not_reported
+    geometry_text = (info.flash_geometry if info else None) or not_reported
+    model_text = (info.hardware_id if info else None) or not_reported
 
     print("\n==================================================")
     print("  PULOX OXIMETER DEVICE & HARDWARE INFORMATION")
     print("==================================================")
     print(f"  fiedle400 Tool Version     : {tool_version_line()}")
     print(f"  Device Path / Node     : {node_path}")
-    model_lines = _model_lines(dev, info.hardware_id if info else None)
+    model_lines = _model_lines(device, info.hardware_id if info else None)
     print(f"  Detected Model         : {model_lines[0]}")
     print(f"  Active Backend         : {backend_label}")
     print(f"  Hardware Model         : {decoded_model}")
@@ -886,13 +886,13 @@ def command_info(args):
         print(f"  USB Bus / Topology     : {meta['bus_path']}")
     print(f"  Descriptor Data Source : {meta.get('metadata_source', 'N/A')}")
     print(f"  Read/Write Access      : Readable={readable}, Writable={writable}")
-    print(f"  Device Model Descriptor: {model_str}")
-    print(f"  Firmware Version       : {fw_str}")
-    print(f"  Serial Number          : {sn_str}")
-    print(f"  User Profile String    : {up_str}")
+    print(f"  Device Model Descriptor: {model_text}")
+    print(f"  Firmware Version       : {firmware_text}")
+    print(f"  Serial Number          : {serial_text}")
+    print(f"  User Profile String    : {profile_text}")
     print(f"  Active Session User ID : User #{active_user_id}")
-    print(f"  Device Clock           : {rtc_time_str}")
-    print(f"  Storage Memory Geometry: {geom_str}")
+    print(f"  Device Clock           : {rtc_time_text}")
+    print(f"  Storage Memory Geometry: {geometry_text}")
     print("==================================================\n")
     for line in model_lines[1:]:
         print(f"⚠️ {line}\n")
@@ -900,7 +900,7 @@ def command_info(args):
     return 0
 
 
-def parse_session_selection(selection_str: str, available_sessions: List[protocol.SessionInfo]) -> List[protocol.SessionInfo]:
+def parse_session_selection(selection_text: str, available_sessions: List[protocol.SessionInfo]) -> List[protocol.SessionInfo]:
     """Parses user input into an ordered, deduplicated list of SessionInfo objects.
     
     Supports:
@@ -910,8 +910,8 @@ def parse_session_selection(selection_str: str, available_sessions: List[protoco
       - '1-3': inclusive range of session IDs
       - combinations: '1-3, 5, 7-8'
     """
-    raw = ANSI_ESCAPE_RE.sub("", selection_str)
-    raw = "".join(ch for ch in raw if ch.isprintable() or ch in " \t").strip().lower()
+    raw = ANSI_ESCAPE_RE.sub("", selection_text)
+    raw = "".join(char for char in raw if char.isprintable() or char in " \t").strip().lower()
     if not raw:
         raise ValueError("No session selected.")
 
@@ -920,89 +920,89 @@ def parse_session_selection(selection_str: str, available_sessions: List[protoco
             raise ValueError("No sessions available to download.")
         return list(available_sessions)
 
-    sess_map = {s.session_id: s for s in available_sessions}
+    session_map = {session.session_id: session for session in available_sessions}
     selected_ids = []
 
-    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    parts = [item.strip() for item in raw.split(",") if item.strip()]
     for part in parts:
         if "-" in part:
-            bounds = [b.strip() for b in part.split("-", 1)]
+            bounds = [bound.strip() for bound in part.split("-", 1)]
             if not bounds[0].isdigit() or not bounds[1].isdigit():
                 raise ValueError(f"Invalid range syntax: '{part}'")
             start_id, end_id = int(bounds[0]), int(bounds[1])
             if start_id > end_id:
                 raise ValueError(f"Range start cannot exceed range end: '{part}'")
-            for sid in range(start_id, end_id + 1):
-                if sid not in sess_map:
-                    raise ValueError(f"Session #{sid} does not exist.")
-                if sid not in selected_ids:
-                    selected_ids.append(sid)
+            for session_id in range(start_id, end_id + 1):
+                if session_id not in session_map:
+                    raise ValueError(f"Session #{session_id} does not exist.")
+                if session_id not in selected_ids:
+                    selected_ids.append(session_id)
         else:
             if not part.isdigit():
                 raise ValueError(f"Invalid session number or syntax: '{part}'")
-            sid = int(part)
-            if sid not in sess_map:
-                raise ValueError(f"Session #{sid} does not exist.")
-            if sid not in selected_ids:
-                selected_ids.append(sid)
+            session_id = int(part)
+            if session_id not in session_map:
+                raise ValueError(f"Session #{session_id} does not exist.")
+            if session_id not in selected_ids:
+                selected_ids.append(session_id)
 
     if not selected_ids:
         raise ValueError("No valid sessions selected.")
 
-    return [sess_map[sid] for sid in selected_ids]
+    return [session_map[session_id] for session_id in selected_ids]
 
 
-def generate_iso_filename(selected_sessions: List[protocol.SessionInfo], ext: str = "spo2") -> str:
+def generate_iso_filename(selected_sessions: List[protocol.SessionInfo], extension: str = "spo2") -> str:
     """Generates a uniform filename with ISO start and end datetimes.
     
     Format: fiedle400_{start_iso}_{end_iso}.{ext}
     e.g.: fiedle400_2026-09-06T100516_2026-09-06T105028.spo2
     """
     now = datetime.now()
-    valid_starts = [s.timestamp for s in selected_sessions if s.timestamp]
-    start_dt = min(valid_starts) if valid_starts else now
+    valid_starts = [session.timestamp for session in selected_sessions if session.timestamp]
+    start_date_time = min(valid_starts) if valid_starts else now
 
     valid_ends = [
-        (s.timestamp + timedelta(seconds=s.duration_seconds))
-        for s in selected_sessions if s.timestamp
+        (session.timestamp + timedelta(seconds=session.duration_seconds))
+        for session in selected_sessions if session.timestamp
     ]
     if valid_ends:
-        end_dt = max(valid_ends)
+        end_date_time = max(valid_ends)
     else:
-        total_sec = sum(s.duration_seconds for s in selected_sessions)
-        end_dt = start_dt + timedelta(seconds=max(total_sec, 60))
+        total_seconds = sum(session.duration_seconds for session in selected_sessions)
+        end_date_time = start_date_time + timedelta(seconds=max(total_seconds, 60))
 
-    start_iso = start_dt.strftime("%Y-%m-%dT%H%M%S")
-    end_iso = end_dt.strftime("%Y-%m-%dT%H%M%S")
-    clean_ext = ext.lower().lstrip(".")
-    return f"fiedle400_{start_iso}_{end_iso}.{clean_ext}"
+    start_iso = start_date_time.strftime("%Y-%m-%dT%H%M%S")
+    end_iso = end_date_time.strftime("%Y-%m-%dT%H%M%S")
+    clean_extension = extension.lower().lstrip(".")
+    return f"fiedle400_{start_iso}_{end_iso}.{clean_extension}"
 
 
 def get_next_available_filename(filepath: str, max_attempts: int = 10000) -> str:
     """Generate next available filename by appending a counter suffix (_1, _2, etc.) that does not yet exist on disk."""
     if not os.path.exists(filepath):
         return filepath
-    base, ext = os.path.splitext(filepath)
-    m = re.search(r"^(.*)_(\d+)$", base)
-    if m:
-        prefix = m.group(1)
-        idx = int(m.group(2)) + 1
+    base, extension = os.path.splitext(filepath)
+    match = re.search(r"^(.*)_(\d+)$", base)
+    if match:
+        prefix = match.group(1)
+        index = int(match.group(2)) + 1
     else:
         prefix = base
-        idx = 1
+        index = 1
 
     for _ in range(max_attempts):
-        candidate = f"{prefix}_{idx}{ext}"
+        candidate = f"{prefix}_{index}{extension}"
         if not os.path.exists(candidate):
             return candidate
-        idx += 1
+        index += 1
 
-    return f"{prefix}_{idx}{ext}"
+    return f"{prefix}_{index}{extension}"
 
 
 def run_interactive_wizard(args) -> int:
     """Interactive text-based wizard prompt when fiedle400 is run without subcommands."""
-    dev_path = getattr(args, "device", None)
+    device_path = getattr(args, "device", None)
     backend = getattr(args, "backend", None)
     verbose_level = getattr(args, "verbose", 0)
 
@@ -1015,45 +1015,45 @@ def run_interactive_wizard(args) -> int:
 
         print("\nConnecting to device...")
         try:
-            dev = PulsoxHidDevice(dev_path=dev_path, backend=backend)
-            node_path = dev.connect()
+            device = PulsoxHidDevice(device_path=device_path, backend=backend)
+            node_path = device.connect()
             print(f"[✓] Connected to {node_path}")
-        except Exception as e:
-            print(f"[✗] Error connecting to device: {e}")
+        except Exception as error:
+            print(f"[✗] Error connecting to device: {error}")
             return 1
 
-        engine = serial_engine.SerialDeviceEngine(dev, background_reader=True)
+        engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
         try:
             # 1. Progressive hardware handshake & active user
-            dev.write_report(Commands.unlock_handshake())
+            device.write_report(Commands.unlock_handshake())
             time.sleep(0.15)
             # T-088: goes through the engine (not a raw dev.read_report) -- once the background
             # reader thread is running, it's the fd's only reader; anything else touching
             # dev.read_report() directly here would race with it.
-            neg_res = engine.read_raw_report()
-            active_user_id = Parsers.parse_user_id(neg_res) if neg_res else 1
+            negotiate_reply = engine.read_raw_report()
+            active_user_id = Parsers.parse_user_id(negotiate_reply) if negotiate_reply else 1
             print(f"[✓] Hardware Handshake    : ACK (User #{active_user_id})")
 
             # 2. Progressive device info (model, firmware, serial)
-            dev_res = engine.read_device_info(debug=verbose_level)
-            info = dev_res.get("device_info", protocol.DeviceInfo())
-            rtc_str = dev_res.get("rtc_time_str", "N/A")
+            device_info_result = engine.read_device_info(debug=verbose_level)
+            info = device_info_result.get("device_info", protocol.DeviceInfo())
+            rtc_text = device_info_result.get("rtc_time_text", "N/A")
 
             not_reported = "not reported by the device"
-            model_str = info.hardware_id or not_reported
-            fw_str = info.firmware_version or not_reported
-            sn_str = info.serial_number or not_reported
-            up_str = info.user_profile or not_reported
+            model_text = info.hardware_id or not_reported
+            firmware_text = info.firmware_version or not_reported
+            serial_text = info.serial_number or not_reported
+            profile_text = info.user_profile or not_reported
 
-            model_lines = _model_lines(dev, info.hardware_id)
-            can_erase = _erase_supported(dev)
+            model_lines = _model_lines(device, info.hardware_id)
+            can_erase = _erase_supported(device)
             print(f"[✓] Detected Model        : {model_lines[0]}")
             for line in model_lines[1:]:
                 print(f"[!] {line}")
-            print(f"[✓] Device Descriptor     : {model_str}")
-            print(f"[✓] Firmware Version      : {fw_str} | Serial: {sn_str}")
-            print(f"[✓] Device Clock (RTC)    : {rtc_str}")
-            print(f"[✓] User Profile String   : {up_str}")
+            print(f"[✓] Device Descriptor     : {model_text}")
+            print(f"[✓] Firmware Version      : {firmware_text} | Serial: {serial_text}")
+            print(f"[✓] Device Clock (RTC)    : {rtc_text}")
+            print(f"[✓] User Profile String   : {profile_text}")
 
             # 3. Progressive flash session discovery
             print("\nScanning flash memory for recorded sessions...")
@@ -1066,10 +1066,10 @@ def run_interactive_wizard(args) -> int:
                 print("  [C]   Clear / format device flash memory")
                 print("  [Q]   Quit")
                 print("------------------------------------------------------------")
-                act = clean_input("Select action [c, q]: ").lower()
-                if act in ("c", "clear") and not can_erase:
+                action = clean_input("Select action [c, q]: ").lower()
+                if action in ("c", "clear") and not can_erase:
                     print(f"[!] {ERASE_REFUSED}")
-                elif act in ("c", "clear"):
+                elif action in ("c", "clear"):
                     confirm = clean_input("⚠️ Are you sure you want to format device flash memory? [y/N]: ").lower()
                     if confirm in ("y", "yes"):
                         _report_erase(engine.clear_memory(0, debug=verbose_level))
@@ -1077,10 +1077,10 @@ def run_interactive_wizard(args) -> int:
                 return 0
 
             print(f"Found {len(sessions)} recorded session(s):")
-            for s in sessions:
-                ts_str = s.timestamp.strftime("%Y-%m-%d %H:%M:%S") if s.timestamp else "N/A"
-                mode = "  (Manual mode)" if s.manual else ""
-                print(f"  [{s.session_id}] {ts_str}  |  Duration: {s.duration_str} ({s.record_count:,} records){mode}")
+            for session in sessions:
+                timestamp_text = session.timestamp.strftime("%Y-%m-%d %H:%M:%S") if session.timestamp else "N/A"
+                mode = "  (Manual mode)" if session.manual else ""
+                print(f"  [{session.session_id}] {timestamp_text}  |  Duration: {session.duration_text} ({session.record_count:,} records){mode}")
 
             print("\n------------------------------------------------------------")
             print("Actions:")
@@ -1110,8 +1110,8 @@ def run_interactive_wizard(args) -> int:
                 confirm = clean_input("⚠️ Are you sure you want to permanently DELETE ALL recordings from device memory? [y/N]: ").lower()
                 if confirm in ("y", "yes"):
                     _report_erase(engine.clear_memory(0, debug=verbose_level))
-                ret = clean_input("\nReturn to main menu? [y/N]: ").lower()
-                if ret in ("y", "yes"):
+                return_answer = clean_input("\nReturn to main menu? [y/N]: ").lower()
+                if return_answer in ("y", "yes"):
                     continue
                 print("Goodbye!")
                 return 0
@@ -1121,8 +1121,8 @@ def run_interactive_wizard(args) -> int:
             else:
                 try:
                     selected_sessions = parse_session_selection(choice, sessions)
-                except ValueError as ve:
-                    print(f"[!] {ve}")
+                except ValueError as value_error:
+                    print(f"[!] {value_error}")
                     continue
 
             print("\nOutput format:")
@@ -1130,57 +1130,57 @@ def run_interactive_wizard(args) -> int:
             print("  [2]   spo2 -- for SpO2 Assistant and OSCAR")
             print("  [3]   csv")
             print("  [4]   json")
-            _fmt_map = {"": "html", "1": "html", "html": "html",
+            _format_map = {"": "html", "1": "html", "html": "html",
                         "2": "spo2", "spo2": "spo2",
                         "3": "csv", "csv": "csv",
                         "4": "json", "json": "json"}
-            fmt_input = clean_input("Select format [1-4; default: 1]: ").strip().lower()
-            fmt_choice = _fmt_map.get(fmt_input)
-            while fmt_choice is None:
-                fmt_input = clean_input(f"[!] Unknown format '{fmt_input}'. Enter 1, 2, 3 or 4: ").strip().lower()
-                fmt_choice = _fmt_map.get(fmt_input)
+            format_input = clean_input("Select format [1-4; default: 1]: ").strip().lower()
+            format_choice = _format_map.get(format_input)
+            while format_choice is None:
+                format_input = clean_input(f"[!] Unknown format '{format_input}'. Enter 1, 2, 3 or 4: ").strip().lower()
+                format_choice = _format_map.get(format_input)
 
-            default_fn = generate_iso_filename(selected_sessions, ext=fmt_choice)
-            fn_input = clean_input(f"\nSave as [default: {default_fn}]: ")
-            out_fn = fn_input if fn_input else default_fn
+            default_filename = generate_iso_filename(selected_sessions, extension=format_choice)
+            filename_input = clean_input(f"\nSave as [default: {default_filename}]: ")
+            out_filename = filename_input if filename_input else default_filename
 
             # Overwrite protection if target file already exists
             file_confirmed = True
-            while os.path.exists(out_fn):
-                ow = clean_input(f"⚠️ File '{out_fn}' already exists. Overwrite? [y/N]: ").lower()
-                if ow in ("y", "yes"):
+            while os.path.exists(out_filename):
+                overwrite_answer = clean_input(f"⚠️ File '{out_filename}' already exists. Overwrite? [y/N]: ").lower()
+                if overwrite_answer in ("y", "yes"):
                     break
-                suggested_fn = get_next_available_filename(out_fn)
-                alt_fn = clean_input(f"Save as [default: {suggested_fn}; 'q' to cancel]: ")
-                if alt_fn.lower() in ("q", "quit", "cancel"):
+                suggested_filename = get_next_available_filename(out_filename)
+                alternative_filename = clean_input(f"Save as [default: {suggested_filename}; 'q' to cancel]: ")
+                if alternative_filename.lower() in ("q", "quit", "cancel"):
                     print("Download cancelled.")
                     file_confirmed = False
                     break
-                out_fn = suggested_fn if not alt_fn else alt_fn
+                out_filename = suggested_filename if not alternative_filename else alternative_filename
 
             if not file_confirmed:
                 continue
 
             engine.download_warnings = []
             all_records = []
-            for idx, s in enumerate(selected_sessions, 1):
-                print(f"\nDownloading Session #{s.session_id} ({idx}/{len(selected_sessions)})...")
-                recs = engine.download_session(s, debug=verbose_level)
-                all_records.extend(recs)
+            for index, session in enumerate(selected_sessions, 1):
+                print(f"\nDownloading Session #{session.session_id} ({index}/{len(selected_sessions)})...")
+                records = engine.download_session(session, debug=verbose_level)
+                all_records.extend(records)
 
-            saved_path = _export_records_to_file(all_records, out_fn, fmt_choice)
+            saved_path = _export_records_to_file(all_records, out_filename, format_choice)
             if engine.download_warnings:
                 print(f"\n⚠️  Saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: "
                       f"{saved_path} -- but {len(engine.download_warnings)} warning(s) were raised during "
                       f"download (see above); some data may be missing.")
             else:
                 print(f"\n✅ Successfully saved {len(all_records):,} records across {len(selected_sessions)} session(s) to: {saved_path}")
-            if fmt_choice == "html":
+            if format_choice == "html":
                 # T-012: the page is the saved file; opening it now is optional (default no).
                 if clean_input("Open it in your browser now? [y/N]: ").lower() in ("y", "yes"):
                     if not _open_in_viewer(saved_path):
                         print(f"   Could not open a browser; the page is at: {saved_path}")
-            elif fmt_choice == "spo2":
+            elif format_choice == "spo2":
                 if clean_input("Open it in the HTML viewer now? [y/N]: ").lower() in ("y", "yes"):
                     _open_spo2_viewer(all_records, saved_path)
 
@@ -1195,8 +1195,8 @@ def run_interactive_wizard(args) -> int:
                     print("Flash recordings preserved.")
 
             # Offer return to menu with default = NO
-            ret_input = clean_input("\nReturn to main menu? [y/N]: ").lower()
-            if ret_input in ("y", "yes"):
+            result_input = clean_input("\nReturn to main menu? [y/N]: ").lower()
+            if result_input in ("y", "yes"):
                 continue
             else:
                 print("Goodbye!")
@@ -1231,23 +1231,23 @@ def main(argv: Optional[List[str]] = None):
     parser_info.set_defaults(func=command_info)
 
     # Subcommand: sessions
-    parser_sess = subparsers.add_parser("sessions", help="List all stored recording sessions on device.")
-    parser_sess.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
-    parser_sess.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
-    parser_sess.set_defaults(func=command_sessions)
+    parser_sessions = subparsers.add_parser("sessions", help="List all stored recording sessions on device.")
+    parser_sessions.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser_sessions.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
+    parser_sessions.set_defaults(func=command_sessions)
 
     # Subcommand: download
-    parser_dl = subparsers.add_parser("download", help="Download recorded sessions from device memory (defaults to ALL sessions).")
-    parser_dl.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
-    parser_dl.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
-    parser_dl.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
-    parser_dl.add_argument("-o", "--output", help="Output file path (default: fiedle400_all_sessions_<timestamp>.html in the configured working directory). Its extension (.html, .spo2, .csv, .json) picks the format.")
-    parser_dl.add_argument("--workdir", help="Directory for this download only (overrides FIEDLE400_WORKDIR and the stored setting; not saved). Ignored with -o.")
-    parser_dl.add_argument("-f", "--format", choices=list(export.EXPORT_FORMATS), default="html", help="Output format: 'html' (default: the viewer page with the data inside), 'spo2' (SpO2 Assistant / OSCAR), 'csv', or 'json'.")
-    parser_dl.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
-    parser_dl.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
-    parser_dl.add_argument("-v", "--verbose", "--debug", dest="verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
-    parser_dl.set_defaults(func=command_download)
+    parser_download = subparsers.add_parser("download", help="Download recorded sessions from device memory (defaults to ALL sessions).")
+    parser_download.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser_download.add_argument("-s", "--session", type=int, default=0, help="Specific session ID to download (default: 0 = download ALL sessions).")
+    parser_download.add_argument("-a", "--all", action="store_true", help="Download ALL stored recording sessions (default).")
+    parser_download.add_argument("-o", "--output", help="Output file path (default: fiedle400_all_sessions_<timestamp>.html in the configured working directory). Its extension (.html, .spo2, .csv, .json) picks the format.")
+    parser_download.add_argument("--workdir", help="Directory for this download only (overrides FIEDLE400_WORKDIR and the stored setting; not saved). Ignored with -o.")
+    parser_download.add_argument("-f", "--format", choices=list(export.EXPORT_FORMATS), default="html", help="Output format: 'html' (default: the viewer page with the data inside), 'spo2' (SpO2 Assistant / OSCAR), 'csv', or 'json'.")
+    parser_download.add_argument("-t", "--timeout", type=int, default=0, help="Override maximum read duration per session in seconds (default: 0 = full session duration).")
+    parser_download.add_argument("--dump", nargs="?", const="auto", help="Save diagnostic raw HID frame dump file (optional custom filename).")
+    parser_download.add_argument("-v", "--verbose", "--debug", dest="verbose", action="count", default=0, help="Verbosity level (-v for packet logging, -vv for raw HID frames + packets).")
+    parser_download.set_defaults(func=command_download)
 
     # Subcommand: clear
     parser_clear = subparsers.add_parser("clear", help="Clear/delete stored recording sessions from device flash memory.")
@@ -1257,20 +1257,20 @@ def main(argv: Optional[List[str]] = None):
     parser_clear.set_defaults(func=command_clear)
 
     # Subcommand: read-time
-    parser_rt = subparsers.add_parser("read-time", help="Read active device Real-Time Clock (RTC) timestamp.")
-    parser_rt.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
-    parser_rt.set_defaults(func=command_read_time)
+    parser_read_time = subparsers.add_parser("read-time", help="Read active device Real-Time Clock (RTC) timestamp.")
+    parser_read_time.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser_read_time.set_defaults(func=command_read_time)
 
     # Subcommand: set-time
-    parser_st = subparsers.add_parser("set-time", help="Set device Real-Time Clock (RTC) to specified timestamp or current system time.")
-    parser_st.add_argument("timestamp", nargs="?", help="Optional timestamp string 'YYYY-MM-DD HH:MM:SS' (defaults to current system time).")
-    parser_st.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
-    parser_st.set_defaults(func=command_set_time)
+    parser_set_time = subparsers.add_parser("set-time", help="Set device Real-Time Clock (RTC) to specified timestamp or current system time.")
+    parser_set_time.add_argument("timestamp", nargs="?", help="Optional timestamp string 'YYYY-MM-DD HH:MM:SS' (defaults to current system time).")
+    parser_set_time.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser_set_time.set_defaults(func=command_set_time)
 
     # Subcommand: detect
-    parser_det = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")
-    parser_det.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
-    parser_det.set_defaults(func=command_detect)
+    parser_detect = subparsers.add_parser("detect", help="Run live Serial Packet Detector & Decoder on incoming USB HID stream.")
+    parser_detect.add_argument("-d", "--device", help="Specific device path or /dev/hidraw node path (optional).")
+    parser_detect.set_defaults(func=command_detect)
 
     # Subcommand: selftest
     parser_selftest = subparsers.add_parser("selftest", help="Read-only hardware check: detection, connect, handshake, RTC, sessions. No FIEDLE400_LIVE needed -- running this command is the explicit signal. Checks every backend this platform supports unless -b picks one.")
@@ -1278,9 +1278,9 @@ def main(argv: Optional[List[str]] = None):
     parser_selftest.set_defaults(func=command_selftest)
 
     # Subcommand: config
-    parser_cfg = subparsers.add_parser("config", help="Show or change stored settings (e.g. where recordings are saved).")
-    parser_cfg.add_argument("--workdir", help="Set the directory new recordings are saved in.")
-    parser_cfg.set_defaults(func=command_config)
+    parser_config = subparsers.add_parser("config", help="Show or change stored settings (e.g. where recordings are saved).")
+    parser_config.add_argument("--workdir", help="Set the directory new recordings are saved in.")
+    parser_config.set_defaults(func=command_config)
 
     # Subcommand: view
     parser_view = subparsers.add_parser("view", help="Open the HTML viewer for a recording on disk (.spo2, .csv, or .json).")
@@ -1289,8 +1289,8 @@ def main(argv: Optional[List[str]] = None):
     parser_view.add_argument("-o", "--output", help="With --convert: where to write the page (default: <recording>.html next to the recording).")
     parser_view.set_defaults(func=command_view)
 
-    for p in [parser_info, parser_sess, parser_dl, parser_clear, parser_rt, parser_st, parser_det, parser_selftest]:
-        p.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid", "serial"], default=argparse.SUPPRESS, help="Driver backend: 'hidraw' (default on Linux), 'hid' (default on Windows / Linux testing) or 'serial' (USB-serial models; picked automatically when no HID device is found).")
+    for subparser in [parser_info, parser_sessions, parser_download, parser_clear, parser_read_time, parser_set_time, parser_detect, parser_selftest]:
+        subparser.add_argument("-b", "--backend", "--driver", dest="backend", choices=["hidraw", "hid", "serial"], default=argparse.SUPPRESS, help="Driver backend: 'hidraw' (default on Linux), 'hid' (default on Windows / Linux testing) or 'serial' (USB-serial models; picked automatically when no HID device is found).")
 
     args = parser.parse_args(argv)
     handler = args.func if args.command else run_interactive_wizard
@@ -1310,10 +1310,10 @@ def run_guarded(handler, args) -> int:
     except KeyboardInterrupt:
         print("\nAborted.", file=sys.stderr)
         return 130
-    except Exception as e:
+    except Exception as error:
         if config.getenv("FIEDLE400_DEBUG"):
             raise
-        print(f"❌ fiedle400 {__version__}: unexpected error: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"❌ fiedle400 {__version__}: unexpected error: {type(error).__name__}: {error}", file=sys.stderr)
         print("   Re-run with FIEDLE400_DEBUG=1 for the full traceback.", file=sys.stderr)
         return 1
 

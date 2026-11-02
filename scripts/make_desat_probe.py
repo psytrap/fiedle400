@@ -97,7 +97,7 @@ def main(argv):
     for c in cases:
         got = [e for e in events if c["start_s"] - 1 <= e["start"] < c["end_s"]]
         c["predicted"] = "event" if got else "none"
-        c["events"] = [dict(start_s=e["start"], nadir_s=e["nadir"], from_pct=e["from_pct"], to_pct=e["to_pct"]) for e in got]
+        c["events"] = [dict(start_s=e["start"], nadir_s=e["nadir"], from_percent=e["from_percent"], to_percent=e["to_percent"]) for e in got]
         assert c["predicted"] == c["expect"], c
     valid = [v for v in s if 1 <= v <= 100]
     summary = dict(
@@ -107,7 +107,7 @@ def main(argv):
         index_per_hr=round(len(events) / (len(s) / 3600), 2),
         adjusted_index_per_hr=round(len(events) / (len(valid) / 3600), 2),
         basal_spo2_mean=round(sum(valid) / len(valid), 2),
-        avg_low_spo2=round(sum(e["to_pct"] for e in events) / len(events), 2),
+        avg_low_spo2=round(sum(e["to_percent"] for e in events) / len(events), 2),
         min_spo2=min(valid),
         time_below_88_s=sum(1 for v in valid if v < 88),
         artifact_samples=len(s) - len(valid),

@@ -29,40 +29,40 @@ def reply(key):
     return manual.frames(group)
 
 
-def sent_by_vendor(op):
-    return [o for o, _, _ in trace().groups if o[0] == op]
+def sent_by_vendor(opcode):
+    return [offset for offset, _, _ in trace().groups if offset[0] == opcode]
 
 
 class TestFrames(unittest.TestCase):
     def test_header_is_the_recording_of_2026_10_15_with_59_samples(self):
         (frame,) = reply((0xA0, 0))
-        h = manual.parse_header(frame)
-        self.assertEqual(h.start.isoformat(), "2026-10-15T19:34:16")
-        self.assertEqual((h.samples, h.kind), (59, 0))
+        header = manual.parse_header(frame)
+        self.assertEqual(header.start.isoformat(), "2026-10-15T19:34:16")
+        self.assertEqual((header.samples, header.kind), (59, 0))
 
     def test_header_with_a_wrong_checksum_is_ignored(self):
         (frame,) = reply((0xA0, 0))
         self.assertIsNone(manual.parse_header(frame[:13] + bytes([(frame[13] + 1) & 0x7F])))
 
     def test_one_report_holds_three_subframes_numbered_0_to_2(self):
-        for key, op in (((0xA3, 0, 0, 0), manual.SPO2_DATA), ((0xA2, 0, 0, 0), manual.PULSE_DATA)):
+        for key, opcode in (((0xA3, 0, 0, 0), manual.SPO2_DATA), ((0xA2, 0, 0, 0), manual.PULSE_DATA)):
             frames = reply(key)
-            self.assertEqual([(f[0], manual.subframe_seq(f)) for f in frames], [(op, 0), (op, 1), (op, 2)])
+            self.assertEqual([(frame[0], manual.subframe_sequence(frame)) for frame in frames], [(opcode, 0), (opcode, 1), (opcode, 2)])
 
     def test_spo2_decodes_like_spo2_exe_27_values_per_subframe(self):
-        s = [manual.decode_subframe(f) for f in reply((0xA3, 0, 0, 0))]
-        self.assertEqual(s[0], [0x7F] * 27)                      # no finger
-        self.assertEqual(s[1], [96] * 5 + [97] * 9 + [0x7F] * 13)  # ends on the 0xF nibble
-        self.assertEqual(s[2], [0x7F] * 27)
+        spo2_values = [manual.decode_subframe(frame) for frame in reply((0xA3, 0, 0, 0))]
+        self.assertEqual(spo2_values[0], [0x7F] * 27)                      # no finger
+        self.assertEqual(spo2_values[1], [96] * 5 + [97] * 9 + [0x7F] * 13)  # ends on the 0xF nibble
+        self.assertEqual(spo2_values[2], [0x7F] * 27)
 
     def test_pulse_decodes_like_spo2_exe(self):
-        p = [manual.decode_subframe(f) for f in reply((0xA2, 0, 0, 0))]
-        self.assertEqual(p[1][:15], [57, 63, 69] + [71] * 11 + [0xFF])
+        pulse_values = [manual.decode_subframe(frame) for frame in reply((0xA2, 0, 0, 0))]
+        self.assertEqual(pulse_values[1][:15], [57, 63, 69] + [71] * 11 + [0xFF])
         # A pulse of 0x7F (127) is in range, so the no-finger subframes decode to noise (127, 134,
         # then 0xFF + 7 wrapping to 6): records() takes pulse only where SpO2 is valid.
-        self.assertEqual(p[0][:4], [127, 134, 0xFF, 6])
-        self.assertEqual(manual.records(*[sum(x, []) for x in (
-            [manual.decode_subframe(f) for f in reply((0xA3, 0, 0, 0))], p)], 59)[:2], [(None, None)] * 2)
+        self.assertEqual(pulse_values[0][:4], [127, 134, 0xFF, 6])
+        self.assertEqual(manual.records(*[sum(values, []) for values in (
+            [manual.decode_subframe(frame) for frame in reply((0xA3, 0, 0, 0))], pulse_values)], 59)[:2], [(None, None)] * 2)
 
     def test_the_commands_are_byte_for_byte_what_spo2_assistant_sends(self):
         self.assertEqual(manual.header_query(), sent_by_vendor(0xA0)[0])
@@ -81,15 +81,15 @@ class ManualFlow(base.FlowCase):
         return FakeOximeter(trace(), strict=True)
 
     def keys_sent(self):
-        return [command_key(r) for r in self.fake.sent]
+        return [command_key(report) for report in self.fake.sent]
 
 
 class TestManualSessions(ManualFlow):
     def test_lists_the_manual_recording_when_the_auto_list_is_empty(self):
-        (s,) = self.engine.list_sessions()
-        self.assertTrue(s.manual)
-        self.assertEqual((s.session_id, s.record_count, s.duration_str), (1, 59, "59s"))
-        self.assertEqual(s.timestamp.isoformat(), "2026-10-15T19:34:16")
+        (spo2_values,) = self.engine.list_sessions()
+        self.assertTrue(spo2_values.manual)
+        self.assertEqual((spo2_values.session_id, spo2_values.record_count, spo2_values.duration_text), (1, 59, "59s"))
+        self.assertEqual(spo2_values.timestamp.isoformat(), "2026-10-15T19:34:16")
         self.assertEqual(self.keys_sent(), [("unlock",), (0x9C, 0x80), (0x9C, 1), (0xA0, 0)])
 
 
@@ -105,30 +105,30 @@ class TestManualDownload(ManualFlow):
         self.assertEqual(len(records), 59)
         self.assertEqual(records[0]["timestamp"], "2026-10-15T19:34:16")
         self.assertEqual(records[-1]["timestamp"], "2026-10-15T19:35:14")
-        valid = [i for i, r in enumerate(records) if r["spo2"] is not None]
+        valid = [i for i, record in enumerate(records) if record["spo2"] is not None]
         self.assertEqual(valid, list(range(27, 41)))
         self.assertEqual([records[i]["spo2"] for i in valid], [96] * 5 + [97] * 9)
         self.assertEqual([records[i]["heart_rate"] for i in valid], [57, 63, 69] + [71] * 11)
-        self.assertTrue(all(r["flags"] == "probe-out" and r["heart_rate"] is None
-                            for i, r in enumerate(records) if i not in valid))
+        self.assertTrue(all(record["flags"] == "probe-out" and record["heart_rate"] is None
+                            for i, record in enumerate(records) if i not in valid))
 
 
 class TestManualDownloadResumes(ManualFlow):
     def make_fake(self):
         dropped = []
 
-        def lose_first_spo2_reply(key, i, rep):
+        def lose_first_spo2_reply(key, i, report):
             if key == (0xA3, 0, 0, 0) and not dropped:
-                dropped.append(rep)
+                dropped.append(report)
                 return None
-            return rep
+            return report
         return FakeOximeter(trace(), fault=lose_first_spo2_reply)
 
     def test_a_lost_reply_is_asked_for_again_from_the_missing_subframe(self):
         records = self.download()
         keys = self.keys_sent()
         self.assertEqual(keys[5:8], [(0xA3, 0, 0, 0), (0xA3, 0x7F, 0, 0), (0xA3, 0, 0, 0)])
-        self.assertEqual(sum(r["spo2"] is not None for r in records), 14)
+        self.assertEqual(sum(record["spo2"] is not None for record in records), 14)
 
 
 class TestAutoDevicesAreNotAskedForManualHeaders(base.FlowCase):

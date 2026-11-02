@@ -28,9 +28,9 @@ class TestLiveGate(unittest.TestCase):
     def test_opted_in_without_device_fails_loudly(self):
         with mock.patch.object(live, "is_device_connected", return_value=False), \
                 mock.patch.object(live, "acquire_device_lock", return_value=None):
-            with self.assertRaises(AssertionError) as cm:
+            with self.assertRaises(AssertionError) as caught:
                 live.TestLiveDevice.setUpClass()
-        self.assertIn("FIEDLE400_LIVE=1", str(cm.exception))
+        self.assertIn("FIEDLE400_LIVE=1", str(caught.exception))
 
 
 class TestPlatformGating(unittest.TestCase):
@@ -44,19 +44,19 @@ class TestPlatformGating(unittest.TestCase):
         return module
 
     def test_linux_runs_all_hardware_tests(self):
-        m = self._reload_as("linux")
+        module = self._reload_as("linux")
         for name in ("test_01_device_detection", "test_02_hidraw_backend_connection_and_descriptors"):
-            self.assertFalse(getattr(getattr(m.TestLiveDevice, name), "__unittest_skip__", False), name)
+            self.assertFalse(getattr(getattr(module.TestLiveDevice, name), "__unittest_skip__", False), name)
 
     def test_windows_skips_linux_only_tests_with_reason(self):
-        m = self._reload_as("win32")
+        module = self._reload_as("win32")
         for name in ("test_01_device_detection", "test_02_hidraw_backend_connection_and_descriptors"):
-            fn = getattr(m.TestLiveDevice, name)
-            self.assertTrue(getattr(fn, "__unittest_skip__", False), name)
-            self.assertIn("win32", fn.__unittest_skip_why__)
+            method = getattr(module.TestLiveDevice, name)
+            self.assertTrue(getattr(method, "__unittest_skip__", False), name)
+            self.assertIn("win32", method.__unittest_skip_why__)
         for name in ("test_01b_hid_enumeration", "test_03_hid_backend_connection_and_descriptors",
                      "test_04_handshake_and_device_info", "test_05_rtc_clock_read", "test_06_list_stored_sessions"):
-            self.assertFalse(getattr(getattr(m.TestLiveDevice, name), "__unittest_skip__", False), name)
+            self.assertFalse(getattr(getattr(module.TestLiveDevice, name), "__unittest_skip__", False), name)
 
     def test_reattach_wait_is_noop_off_linux(self):
         with mock.patch("sys.platform", "win32"), \
@@ -77,9 +77,9 @@ class TestPlatformGating(unittest.TestCase):
 
     def test_missing_hid_fails_off_linux(self):
         with mock.patch.object(live, "IS_LINUX", False), mock.patch.dict(sys.modules, {"hid": None}):
-            with self.assertRaises(AssertionError) as cm:
+            with self.assertRaises(AssertionError) as caught:
                 live.import_hid_or_skip(self._fake_test())
-        self.assertIn("pip install hidapi", str(cm.exception))
+        self.assertIn("pip install hidapi", str(caught.exception))
 
     def test_missing_hid_skips_on_linux(self):
         with mock.patch.object(live, "IS_LINUX", True), mock.patch.dict(sys.modules, {"hid": None}):
@@ -90,11 +90,11 @@ class TestPlatformGating(unittest.TestCase):
 @unittest.skipIf(live.fcntl is None, "fcntl not available on this platform")
 class TestDeviceLock(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.path = os.path.join(self.tmp.name, "live.lock")
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.temporary_directory.name, "live.lock")
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.temporary_directory.cleanup()
 
     def test_second_process_waits_then_times_out(self):
         held = live.acquire_device_lock(self.path, timeout=1)
@@ -108,8 +108,8 @@ class TestDeviceLock(unittest.TestCase):
                     sys.exit(3)
                 sys.exit(0)
             """)
-            rc = subprocess.run([sys.executable, "-c", script]).returncode
-            self.assertEqual(rc, 3)
+            exit_code = subprocess.run([sys.executable, "-c", script]).returncode
+            self.assertEqual(exit_code, 3)
         finally:
             held.close()
 

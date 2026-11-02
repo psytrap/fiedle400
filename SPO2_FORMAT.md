@@ -128,7 +128,7 @@ T-022), so it never draws a fall across the pause.
        block-pairing logic (`flush_block_buffers`) derives `is_probe_out` from whichever of the
        SpO2/pulse event pair is present, checking only that one event's own status -- so a record
        whose SpO2 channel decodes "ok" while its pulse channel decodes `None` with no prior
-       `last_block_hr` to fall back on (e.g. the very first record of a session) reaches
+       `last_block_heart_rate` to fall back on (e.g. the very first record of a session) reaches
        `export.py` as `spo2=<value>, heart_rate=None`, a genuinely mixed record, not merely one
        `export.py` could theoretically be handed.
      - **`0x00` is not a recognized sentinel in OSCAR's reader at all.** It is passed through
@@ -153,11 +153,11 @@ from typing import List, Optional, Tuple
 
 HEADER_SIZE = 1084
 
-def build_spo2_file(start_dt: datetime, samples: List[Tuple[Optional[int], Optional[int]]]) -> bytes:
+def build_spo2_file(start_date_time: datetime, samples: List[Tuple[Optional[int], Optional[int]]]) -> bytes:
     """Build a complete binary .SpO2 file.
     
     Args:
-        start_dt: Recording start timestamp.
+        start_date_time: Recording start timestamp.
         samples: List of (spo2, heart_rate) tuples, 1 per second.
                  None indicates invalid / probe-out.
     Returns:
@@ -175,12 +175,12 @@ def build_spo2_file(start_dt: datetime, samples: List[Tuple[Optional[int], Optio
         "<7I",
         hdr,
         0x0420,
-        start_dt.year,
-        start_dt.month,
-        start_dt.day,
-        start_dt.hour,
-        start_dt.minute,
-        start_dt.second,
+        start_date_time.year,
+        start_date_time.month,
+        start_date_time.day,
+        start_date_time.hour,
+        start_date_time.minute,
+        start_date_time.second,
         len(samples),
     )
     payload = bytearray(len(samples) * 2)
@@ -206,7 +206,7 @@ def read_spo2_file(data: bytes) -> Tuple[datetime, List[dict]]:
         raise ValueError(f"Invalid magic: 0x{magic:08x} (expected 0x00000358)")
     
     y, m, d, H, M, S, count = struct.unpack_from("<7I", data, 0x0420)
-    start_dt = datetime(y, m, d, H, M, S)
+    start_date_time = datetime(y, m, d, H, M, S)
     payload = data[HEADER_SIZE:]
     
     records = []
@@ -220,7 +220,7 @@ def read_spo2_file(data: bytes) -> Tuple[datetime, List[dict]]:
             "heart_rate": h_val if is_valid else None,
             "valid": is_valid,
         })
-    return start_dt, records
+    return start_date_time, records
 ```
 
 ---
@@ -248,7 +248,7 @@ predicted numbers; `SPO2_ASSISTANT_CHECKS.md` is the procedure for that check.
 | Adjusted Index (1/hr) | Total Event divided by the "effective" time length instead of the total. | [M] §5.4.7.3 |
 | Artifact (%) | Share of non-effective data: "that zero value area and excluding data area" (zero/invalid samples plus user-excluded ranges, see [M] §5.4.2 Exclude data). | [M] §5.4.7.3 |
 | Avg. Low SpO2 (%) | "the average value of 'Minimum SpO2' for all SpO2 events" (mean of event nadirs). | [M] §5.4.7.3 |
-| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). `desaturation.py`'s `summarize`/the viewer's `summarizeEvents` compute it as `time_below_criteria_s`, over the same 1..100 valid samples as `artifact_pct` and the other values here -- not a separately-filtered count (T-032 found it wasn't, fixed in T-044). | [M] §5.4.7.3, [X] |
+| Time (min) <88% | Time below the desaturation criteria level; "88 is a desaturation criteria level (set in analysis parameter dialog box)". Default 88 % confirmed in code: a global at `0x6263cc` initialised to 88 in `.data`, read via `0x56027a`, written only by the Analysis Para dialog (`0x4fc007`, setter `0x56026b`), so it is not loaded from `config.ini`/`SpO2.ini` (*inferred* from no other writer). `desaturation.py`'s `summarize`/the viewer's `summarizeEvents` compute it as `time_below_criteria_seconds`, over the same 1..100 valid samples as `artifact_percent` and the other values here -- not a separately-filtered count (T-032 found it wasn't, fixed in T-044). | [M] §5.4.7.3, [X] |
 
 ### 7.2 Desaturation event algorithm
 

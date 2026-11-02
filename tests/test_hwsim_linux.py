@@ -22,7 +22,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from hwsim import scrub_env, FakeOximeter, HidrawSim, Trace, VirtualClock, command_key  # noqa: E402
+from hwsim import scrub_environment, FakeOximeter, HidrawSim, Trace, VirtualClock, command_key  # noqa: E402
 
 from fiedle400 import cli, export, hid_driver  # noqa: E402
 from fiedle400.engine import SerialDeviceEngine, SerialPacketDetector, SerialByteStreamBuffer  # noqa: E402
@@ -54,23 +54,23 @@ def trace() -> Trace:
     return _TRACE
 
 
-def fresh_fake(**kw) -> FakeOximeter:
-    return FakeOximeter(trace(), **kw)
+def fresh_fake(**kwargs) -> FakeOximeter:
+    return FakeOximeter(trace(), **kwargs)
 
 
 def collapse(hexes):
     """Drop consecutive repeats (retries) from a list of command hex strings."""
-    out = []
-    for h in hexes:
-        if not out or out[-1] != h:
-            out.append(h)
-    return out
+    output = []
+    for hex_text in hexes:
+        if not output or output[-1] != hex_text:
+            output.append(hex_text)
+    return output
 
 
 def match_prefix(report: bytes, prefixes):
-    for p in prefixes:
-        if report.hex().startswith(p):
-            return p
+    for prefix in prefixes:
+        if report.hex().startswith(prefix):
+            return prefix
     return report[:10].hex()
 
 
@@ -79,19 +79,19 @@ KNOWN = [UNLOCK, RESET_INDEX, QUERY_SESSIONS, STORAGE_INIT, SPO2_PAGE0, PULSE_PA
 
 
 def sent_names(fake):
-    return collapse([match_prefix(r, KNOWN) for r in fake.sent])
+    return collapse([match_prefix(report, KNOWN) for report in fake.sent])
 
 
 def run_cli(argv):
     """Run cli.main, returning (exit code, stdout, stderr)."""
-    out, err = io.StringIO(), io.StringIO()
-    with mock.patch.dict(os.environ), contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        scrub_env()
+    output, error_output = io.StringIO(), io.StringIO()
+    with mock.patch.dict(os.environ), contextlib.redirect_stdout(output), contextlib.redirect_stderr(error_output):
+        scrub_environment()
         try:
-            rc = cli.main(argv)
-        except SystemExit as e:
-            rc = e.code
-    return rc, out.getvalue(), err.getvalue()
+            exit_code = cli.main(argv)
+        except SystemExit as event:
+            exit_code = event.code
+    return exit_code, output.getvalue(), error_output.getvalue()
 
 
 # --------------------------------------------------------------------------
@@ -106,18 +106,18 @@ class TestCommandKey(unittest.TestCase):
                          command_key(Commands.storage_init()))             # CLI: 9 bytes
 
     def test_block_reads_are_distinguished_by_type_and_page(self):
-        keys = {command_key(Commands.session_page(t, 1, p)) for t in (1, 2) for p in (0, 1)}
+        keys = {command_key(Commands.session_page(data_type, 1, page)) for data_type in (1, 2) for page in (0, 1)}
         self.assertEqual(len(keys), 4)
 
     def test_destructive_opcodes_are_recognised(self):
-        for op in (0xAA, 0xAB, 0xAC, 0x91, 0x92, 0x93, 0x95, 0x96):
-            self.assertEqual(command_key(Commands.build_hid(op, [0x80, 0x80])), ("destructive", op), hex(op))
+        for opcode in (0xAA, 0xAB, 0xAC, 0x91, 0x92, 0x93, 0x95, 0x96):
+            self.assertEqual(command_key(Commands.build_hid(opcode, [0x80, 0x80])), ("destructive", opcode), hex(opcode))
         self.assertEqual(command_key(bytes.fromhex("9406")), ("destructive", 0x94))
 
     def test_read_only_queries_are_not_destructive(self):
-        for rep in (Commands.read_time(), Commands.query_sessions(), Commands.reset_session_index(),
+        for report in (Commands.read_time(), Commands.query_sessions(), Commands.reset_session_index(),
                     Commands.segment_ack(), bytes.fromhex("9414")):
-            key = command_key(rep)
+            key = command_key(report)
             self.assertIsNotNone(key)
             self.assertNotEqual(key[0], "destructive")
 
@@ -128,61 +128,61 @@ class TestCommandKey(unittest.TestCase):
 class TestFakeOximeter(unittest.TestCase):
     def test_replays_recorded_device_bytes(self):
         fake = fresh_fake()
-        fake.handle_out(Commands.unlock_handshake())
+        fake.handle_output(Commands.unlock_handshake())
         self.assertEqual(fake.poll()[:2], bytes([0xF0, 0x70]))
-        fake.handle_out(Commands.query_sessions())
-        hdr = fake.poll()
-        self.assertEqual(hdr[:2], bytes([0xEC, 0x40]))
-        self.assertEqual(hdr[4:10], bytes([26, 9, 6, 10, 0, 46]))  # 2026-09-06 10:00:46
+        fake.handle_output(Commands.query_sessions())
+        header = fake.poll()
+        self.assertEqual(header[:2], bytes([0xEC, 0x40]))
+        self.assertEqual(header[4:10], bytes([26, 9, 6, 10, 0, 46]))  # 2026-09-06 10:00:46
 
     def test_unknown_commands_are_logged_and_never_answered(self):
         fake = fresh_fake()
-        fake.handle_out(Commands.build_hid(0xAD))
+        fake.handle_output(Commands.build_hid(0xAD))
         self.assertIsNone(fake.poll())
         self.assertEqual(len(fake.unmatched), 1)
 
     def test_destructive_commands_are_recorded_and_refused(self):
-        t = Trace()
-        t.add(Commands.build_hid(0xAA, [0x80, 0x80]), [bytes([0xF0, 0x70]) + bytes(62)])  # even if "recorded"
-        fake = FakeOximeter(t)
-        fake.handle_out(Commands.build_hid(0xAA, [0x80, 0x80]))
+        trace = Trace()
+        trace.add(Commands.build_hid(0xAA, [0x80, 0x80]), [bytes([0xF0, 0x70]) + bytes(62)])  # even if "recorded"
+        fake = FakeOximeter(trace)
+        fake.handle_output(Commands.build_hid(0xAA, [0x80, 0x80]))
         self.assertIsNone(fake.poll())
         self.assertEqual(len(fake.destructive), 1)
 
     def test_strict_fake_does_not_repeat_the_last_recording(self):
-        t = Trace()
-        q = Commands.query_sessions()
-        t.add(q, [b"\xec" + bytes([1]) + bytes(62)])
-        fake = FakeOximeter(t, strict=True)
-        fake.handle_out(q)
+        trace = Trace()
+        query = Commands.query_sessions()
+        trace.add(query, [b"\xec" + bytes([1]) + bytes(62)])
+        fake = FakeOximeter(trace, strict=True)
+        fake.handle_output(query)
         self.assertEqual(fake.poll()[1], 1)
-        fake.handle_out(q)
+        fake.handle_output(query)
         self.assertIsNone(fake.poll())
         self.assertEqual(len(fake.unmatched), 1)
 
     def test_nth_repeat_gets_nth_recording_and_the_last_repeats(self):
-        t = Trace()
-        q = Commands.query_sessions()
-        t.add(q, [b"\xec" + bytes([1]) + bytes(62)])
-        t.add(q, [b"\xec" + bytes([2]) + bytes(62)])
-        fake = FakeOximeter(t)
+        trace = Trace()
+        query = Commands.query_sessions()
+        trace.add(query, [b"\xec" + bytes([1]) + bytes(62)])
+        trace.add(query, [b"\xec" + bytes([2]) + bytes(62)])
+        fake = FakeOximeter(trace)
         got = []
         for _ in range(3):
-            fake.handle_out(q)
+            fake.handle_output(query)
             got.append(fake.poll()[1])
         self.assertEqual(got, [1, 2, 2])
 
     def test_fault_hook_can_drop_and_replace_reports(self):
-        fake = fresh_fake(fault=lambda key, i, rep: None if i == 0 else rep)
-        fake.handle_out(Commands.build_hid(0x82))   # read time: one report, dropped
+        fake = fresh_fake(fault=lambda key, i, report: None if i == 0 else report)
+        fake.handle_output(Commands.build_hid(0x82))   # read time: one report, dropped
         self.assertIsNone(fake.poll())
 
     def test_sent_log_keeps_every_report_unmodified(self):
         fake = fresh_fake()
-        cmds = [Commands.unlock_handshake(), Commands.read_time(), Commands.build_hid(0xAD)]
-        for c in cmds:
-            fake.handle_out(c)
-        self.assertEqual(fake.sent, cmds)
+        commands = [Commands.unlock_handshake(), Commands.read_time(), Commands.build_hid(0xAD)]
+        for command in commands:
+            fake.handle_output(command)
+        self.assertEqual(fake.sent, commands)
 
 
 class TestPcapTrace(unittest.TestCase):
@@ -200,16 +200,16 @@ class TestPcapTrace(unittest.TestCase):
             stream = b"".join(trace().responses(key)[0])
             frames = [stream[i:i + 30] for i in range(0, len(stream) - 29, 30) if stream[i] == 0xED]
             self.assertEqual(len(frames), 6)
-            for f in frames:
-                self.assertEqual(sum(f[:29]) & 0x7F, f[29])
+            for frame in frames:
+                self.assertEqual(sum(frame[:29]) & 0x7F, frame[29])
 
     def test_json_round_trip(self):
-        with tempfile.TemporaryDirectory() as d:
-            p = os.path.join(d, "t.json")
-            trace().to_json(p)
-            again = Trace.from_json(p)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "t.json")
+            trace().to_json(path)
+            again = Trace.from_json(path)
         self.assertEqual(again.keys(), trace().keys())
-        self.assertEqual([g[2] for g in again.groups], [g[2] for g in trace().groups])
+        self.assertEqual([group[2] for group in again.groups], [recorded_group[2] for recorded_group in trace().groups])
 
 
 # --------------------------------------------------------------------------
@@ -219,9 +219,9 @@ class TestPcapTrace(unittest.TestCase):
 class TestHidrawDiscovery(unittest.TestCase):
     def test_sysfs_scan_finds_the_simulated_node(self):
         with HidrawSim(fresh_fake()):
-            devs = find_pulsox_hid_devices()
-        self.assertEqual(len(devs), 1)
-        path, uevent, readable = devs[0]
+            devices = find_pulsox_hid_devices()
+        self.assertEqual(len(devices), 1)
+        path, uevent, readable = devices[0]
         self.assertTrue(path.endswith("hidraw7"))
         self.assertIn("28E9", uevent.upper())
         self.assertTrue(readable)
@@ -229,37 +229,37 @@ class TestHidrawDiscovery(unittest.TestCase):
     def test_no_device_found_when_nothing_is_plugged_in(self):
         with HidrawSim(fresh_fake(), present=False):
             self.assertEqual(find_pulsox_hid_devices(), [])
-            with self.assertRaises(RuntimeError) as cm:
+            with self.assertRaises(RuntimeError) as caught:
                 PulsoxHidDevice(backend="hidraw").connect()
-        self.assertIn("No Pulsox PO-400 device found", str(cm.exception))
+        self.assertIn("No Pulsox PO-400 device found", str(caught.exception))
 
     def test_other_hid_devices_are_ignored(self):
-        with HidrawSim(fresh_fake()) as sim:
-            other = os.path.join(sim.sysfs_root, "hidraw3", "device")
+        with HidrawSim(fresh_fake()) as simulator:
+            other = os.path.join(simulator.sysfs_root, "hidraw3", "device")
             os.makedirs(other)
-            with open(os.path.join(other, "uevent"), "w") as fh:
-                fh.write("HID_ID=0003:0000046D:0000C52B\nHID_NAME=Some Mouse\n")
-            devs = find_pulsox_hid_devices()
-        self.assertEqual([os.path.basename(d[0]) for d in devs], ["hidraw7"])
+            with open(os.path.join(other, "uevent"), "w") as file:
+                file.write("HID_ID=0003:0000046D:0000C52B\nHID_NAME=Some Mouse\n")
+            devices = find_pulsox_hid_devices()
+        self.assertEqual([os.path.basename(device[0]) for device in devices], ["hidraw7"])
 
     def test_unreadable_node_gives_a_permission_hint(self):
         with HidrawSim(fresh_fake()):
             with mock.patch.object(hid_driver.os, "access", return_value=False):
-                with self.assertRaises(PermissionError) as cm:
+                with self.assertRaises(PermissionError) as caught:
                     PulsoxHidDevice(backend="hidraw").connect()
-        self.assertIn("udev", str(cm.exception))
+        self.assertIn("udev", str(caught.exception))
 
     def test_connect_opens_the_node_read_write_and_non_blocking(self):
-        with HidrawSim(fresh_fake()) as sim:
-            dev = PulsoxHidDevice(backend="hidraw")
-            path = dev.connect()
-            self.assertEqual(path, sim.dev_path)
-            self.assertEqual(len(sim.open_flags), 1)
-            flags = sim.open_flags[0]
+        with HidrawSim(fresh_fake()) as simulator:
+            device = PulsoxHidDevice(backend="hidraw")
+            path = device.connect()
+            self.assertEqual(path, simulator.device_path)
+            self.assertEqual(len(simulator.open_flags), 1)
+            flags = simulator.open_flags[0]
             self.assertTrue(flags & os.O_RDWR)
             self.assertTrue(flags & os.O_NONBLOCK, "a blocking read would hang the engine's polling loops")
-            meta = dev.get_descriptor_info()
-            dev.close()
+            meta = device.get_descriptor_info()
+            device.close()
         self.assertEqual((meta["vid_hex"], meta["pid_hex"]), ("28E9", "028A"))
         self.assertIn("Contec", meta["manufacturer"])
         self.assertEqual(meta["product"], "Pulse Oximeter")
@@ -269,9 +269,9 @@ class TestHidrawDiscovery(unittest.TestCase):
 class TestHidrawBackendIO(unittest.TestCase):
     def setUp(self):
         self.fake = fresh_fake()
-        self.sim = HidrawSim(self.fake)
-        self.sim.__enter__()
-        self.addCleanup(self.sim.__exit__, None, None, None)
+        self.simulator = HidrawSim(self.fake)
+        self.simulator.__enter__()
+        self.addCleanup(self.simulator.__exit__, None, None, None)
         self.backend = LinuxHidrawBackend()
         self.backend.connect()
         self.addCleanup(self.backend.close)
@@ -289,18 +289,18 @@ class TestHidrawBackendIO(unittest.TestCase):
         self.assertIsNone(self.backend.read_report(64))
 
     def test_write_reports_exactly_the_bytes_the_host_sent(self):
-        cmd = Commands.session_page(1, 1, 0)
-        self.assertEqual(self.backend.write_report(cmd), 64)
-        self.assertEqual(self.fake.sent, [cmd])
+        command = Commands.session_page(1, 1, 0)
+        self.assertEqual(self.backend.write_report(command), 64)
+        self.assertEqual(self.fake.sent, [command])
 
     def test_unplug_surfaces_as_enodev_not_as_an_empty_read(self):
-        self.sim.unplug()
-        with self.assertRaises(OSError) as cm:
+        self.simulator.unplug()
+        with self.assertRaises(OSError) as caught:
             self.backend.read_report(64)
-        self.assertEqual(cm.exception.errno, errno.ENODEV)
-        with self.assertRaises(OSError) as cm:
+        self.assertEqual(caught.exception.errno, errno.ENODEV)
+        with self.assertRaises(OSError) as caught:
             self.backend.write_report(Commands.read_time())
-        self.assertEqual(cm.exception.errno, errno.ENODEV)
+        self.assertEqual(caught.exception.errno, errno.ENODEV)
 
     def test_closed_backend_refuses_io(self):
         self.backend.close()
@@ -320,33 +320,33 @@ class FlowCase(unittest.TestCase):
     def setUp(self):
         self.fake = self.make_fake()
         self.clock = VirtualClock()
-        self.sim = HidrawSim(self.fake)
-        self.sim.__enter__()
-        self.addCleanup(self.sim.__exit__, None, None, None)
+        self.simulator = HidrawSim(self.fake)
+        self.simulator.__enter__()
+        self.addCleanup(self.simulator.__exit__, None, None, None)
         clock_patch = self.clock.patch()
         clock_patch.start()
         self.addCleanup(clock_patch.stop)
-        self.dev = PulsoxHidDevice(backend="hidraw")
-        self.dev.connect()
-        self.addCleanup(self.dev.close)
-        self.engine = SerialDeviceEngine(self.dev)
+        self.device = PulsoxHidDevice(backend="hidraw")
+        self.device.connect()
+        self.addCleanup(self.device.close)
+        self.engine = SerialDeviceEngine(self.device)
 
     def unmatched_keys(self):
-        return {command_key(r) for r in self.fake.unmatched}
+        return {command_key(report) for report in self.fake.unmatched}
 
     def download(self):
-        sess = self.engine.list_sessions()[0]
+        session = self.engine.list_sessions()[0]
         with contextlib.redirect_stdout(io.StringIO()):
-            return self.engine.download_session(sess)
+            return self.engine.download_session(session)
 
 
 class TestSessionsFlow(FlowCase):
     def test_lists_the_recorded_session(self):
         sessions = self.engine.list_sessions()
         self.assertEqual(len(sessions), 1)
-        s = sessions[0]
-        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 243, 243))
-        self.assertEqual(s.timestamp.isoformat(), "2026-09-06T10:00:46")
+        session = sessions[0]
+        self.assertEqual((session.session_id, session.user_id, session.record_count, session.raw_samples), (1, 1, 243, 243))
+        self.assertEqual(session.timestamp.isoformat(), "2026-09-06T10:00:46")
 
     def test_sends_unlock_reset_then_query(self):
         self.engine.list_sessions()
@@ -359,9 +359,9 @@ class TestSessionsFlow(FlowCase):
     def test_header_count_is_seconds_so_duration_is_four_minutes(self):
         """T-075 (reverses T3): the header says 243 samples, one per second = 4m 03s. The next
         recording in every capture starts 13-18 s after start + count seconds."""
-        s = self.engine.list_sessions()[0]
-        self.assertEqual(s.duration_seconds, 243)
-        self.assertEqual(s.duration_str, "4m 03s")
+        session = self.engine.list_sessions()[0]
+        self.assertEqual(session.duration_seconds, 243)
+        self.assertEqual(session.duration_text, "4m 03s")
 
 
 class TestDownloadFlow(FlowCase):
@@ -377,7 +377,7 @@ class TestDownloadFlow(FlowCase):
 
     def test_page_requests_are_the_exact_documented_bytes(self):
         self.download()
-        by_prefix = {p: [r for r in self.fake.sent if r.hex().startswith(p)] for p in (SPO2_PAGE0, PULSE_PAGE0)}
+        by_prefix = {page_prefix: [report for report in self.fake.sent if report.hex().startswith(page_prefix)] for page_prefix in (SPO2_PAGE0, PULSE_PAGE0)}
         for prefix, found in by_prefix.items():
             self.assertEqual(len(found), 1, prefix)
             self.assertEqual(len(found[0]), 64)
@@ -387,7 +387,7 @@ class TestDownloadFlow(FlowCase):
         window (offset 243 = after 243 records), which the recording does not contain."""
         self.fake.trace = trace().with_header_samples(400)
         records = self.download()
-        retries = [r for r in self.fake.sent if r.hex().startswith(Commands.session_page(1, 1, 243, 1)[:9].hex())]
+        retries = [report for report in self.fake.sent if report.hex().startswith(Commands.session_page(1, 1, 243, 1)[:9].hex())]
         self.assertEqual(len(retries), 3, "one request plus two retries")
         self.assertTrue(records)
 
@@ -404,13 +404,13 @@ class TestDownloadFlow(FlowCase):
     def test_decoded_values_match_an_independent_decompression_of_the_same_frames(self):
         records = self.download()
         series = {}
-        for dtype in (1, 2):
-            stream = b"".join(trace().responses((0x9D, 0x04, dtype, 1, 1, 0, 0))[0])
+        for data_type in (1, 2):
+            stream = b"".join(trace().responses((0x9D, 0x04, data_type, 1, 1, 0, 0))[0])
             frames = [stream[i:i + 30] for i in range(0, len(stream) - 29, 30)]
-            series[dtype] = decode_ed_subframes(frames, is_spo2=(dtype == 1))
+            series[data_type] = decode_ed_subframes(frames, is_spo2=(data_type == 1))
         self.assertEqual(len(series[1]), 243)   # one value per second, as the header says
-        self.assertEqual([r["spo2"] for r in records], series[1])
-        self.assertEqual([r["heart_rate"] for r in records], series[2])
+        self.assertEqual([record["spo2"] for record in records], series[1])
+        self.assertEqual([record["heart_rate"] for record in records], series[2])
 
     def test_timestamps_follow_the_session_start_at_one_per_second(self):
         records = self.download()
@@ -421,26 +421,26 @@ class TestDownloadFlow(FlowCase):
         """T1 (fixed): the last frame of a page has a non-zero MSB mask in byte 7, which the detector used
         to read as status flags ("searching,low-perfusion"), so the engine stored those samples as None."""
         records = self.download()
-        self.assertEqual([r for r in records if r["spo2"] is None], [])
+        self.assertEqual([record for record in records if record["spo2"] is None], [])
 
     def test_export_writes_every_record(self):
         records = self.download()
-        with tempfile.TemporaryDirectory() as d:
-            csv_path = export.export_records(records, output_filename=os.path.join(d, "r.csv"))
-            with open(csv_path, newline="") as fh:
-                self.assertEqual(len(list(csv.DictReader(fh))), 243)
-            spo2_path = export.export_records(records, output_filename=os.path.join(d, "r.spo2"))
-            with open(spo2_path, "rb") as fh:
-                blob = fh.read()
+        with tempfile.TemporaryDirectory() as directory:
+            csv_path = export.export_records(records, output_filename=os.path.join(directory, "r.csv"))
+            with open(csv_path, newline="") as file:
+                self.assertEqual(len(list(csv.DictReader(file))), 243)
+            spo2_path = export.export_records(records, output_filename=os.path.join(directory, "r.spo2"))
+            with open(spo2_path, "rb") as file:
+                blob = file.read()
         self.assertEqual(struct.unpack_from("<I", blob, 0x0438)[0], 243)
         self.assertEqual(len(blob), export.SPO2_HEADER_SIZE + 243 * 2)
 
 
 class TestInfoFlow(FlowCase):
     def test_reads_clock_and_user_from_recorded_replies(self):
-        res = self.engine.read_device_info()
-        self.assertEqual(res["rtc_time_str"], "not reported by the device")
-        self.assertEqual(res["device_info"].user_profile, "user")
+        result = self.engine.read_device_info()
+        self.assertEqual(result["rtc_time_text"], "not reported by the device")
+        self.assertEqual(result["device_info"].user_profile, "user")
 
     def test_unrecorded_queries_are_the_only_unanswered_ones(self):
         self.engine.read_device_info()
@@ -453,76 +453,76 @@ class TestFaults(unittest.TestCase):
 
     def run_download(self, fault=None, unplug_after=None, extra=()):
         fake = fresh_fake(fault=fault)
-        with tempfile.TemporaryDirectory() as d, HidrawSim(fake) as sim, VirtualClock().patch():
+        with tempfile.TemporaryDirectory() as directory, HidrawSim(fake) as simulator, VirtualClock().patch():
             if unplug_after is not None:
-                orig = fake.handle_out
+                orig = fake.handle_output
 
                 def hooked(report):
                     orig(report)
                     if len(fake.sent) == unplug_after:
-                        sim.unplug()
-                fake.handle_out = hooked
-            out_path = os.path.join(d, "out.csv")
-            rc, out, err = run_cli(["download", "--backend", "hidraw", "-o", out_path, *extra])
-            written = os.path.exists(out_path)
+                        simulator.unplug()
+                fake.handle_output = hooked
+            output_path = os.path.join(directory, "out.csv")
+            exit_code, output, error_output = run_cli(["download", "--backend", "hidraw", "-o", output_path, *extra])
+            written = os.path.exists(output_path)
             rows = None
             if written:
-                with open(out_path, newline="") as fh:
-                    rows = len(list(csv.DictReader(fh)))
-        return rc, out, err, written, rows, fake
+                with open(output_path, newline="") as file:
+                    rows = len(list(csv.DictReader(file)))
+        return exit_code, output, error_output, written, rows, fake
 
     def test_normal_download_through_the_cli(self):
-        rc, out, err, written, rows, fake = self.run_download()
-        self.assertEqual(rc, 0)
+        exit_code, output, error_output, written, rows, fake = self.run_download()
+        self.assertEqual(exit_code, 0)
         self.assertTrue(written)
         self.assertEqual(rows, 243)
 
     def test_timeout_flag_caps_the_download(self):
         """-t/--timeout used to be ignored for real sessions (record_count won over duration)."""
-        rc, out, err, written, rows, fake = self.run_download(extra=("-t", "30"))
-        self.assertEqual(rc, 0)
+        exit_code, output, error_output, written, rows, fake = self.run_download(extra=("-t", "30"))
+        self.assertEqual(exit_code, 0)
         self.assertEqual(rows, 30)
 
     def test_unplugged_mid_download_fails_with_one_clear_line_and_writes_nothing(self):
-        rc, out, err, written, rows, fake = self.run_download(unplug_after=7)
-        self.assertEqual(rc, 1)
+        exit_code, output, error_output, written, rows, fake = self.run_download(unplug_after=7)
+        self.assertEqual(exit_code, 1)
         self.assertFalse(written)
-        self.assertIn("No such device", out + err)
-        self.assertNotIn("Traceback", out + err)
+        self.assertIn("No such device", output + error_output)
+        self.assertNotIn("Traceback", output + error_output)
 
     def test_unplugged_before_connecting_reports_no_device(self):
         fake = fresh_fake()
-        with HidrawSim(fake, present=False), tempfile.TemporaryDirectory() as d:
-            rc, out, err = run_cli(["download", "--backend", "hidraw", "-o", os.path.join(d, "o.csv")])
-        self.assertEqual(rc, 1)
-        self.assertIn("No Pulsox PO-400 device found", out + err)
+        with HidrawSim(fake, present=False), tempfile.TemporaryDirectory() as directory:
+            exit_code, output, error_output = run_cli(["download", "--backend", "hidraw", "-o", os.path.join(directory, "o.csv")])
+        self.assertEqual(exit_code, 1)
+        self.assertIn("No Pulsox PO-400 device found", output + error_output)
 
     def test_dropped_page_frame_gives_fewer_records_without_crashing(self):
-        def drop_last_report_of_pages(key, i, rep):
-            return None if (key[:2] == (0x9D, 0x04) and i == 2) else rep
-        rc, out, err, written, rows, fake = self.run_download(fault=drop_last_report_of_pages)
-        self.assertEqual(rc, 0)
+        def drop_last_report_of_pages(key, i, report):
+            return None if (key[:2] == (0x9D, 0x04) and i == 2) else report
+        exit_code, output, error_output, written, rows, fake = self.run_download(fault=drop_last_report_of_pages)
+        self.assertEqual(exit_code, 0)
         self.assertLess(rows, 243)
 
     def test_device_that_never_answers_is_not_reported_as_a_successful_download(self):
         """T2 (fixed): with every reply dropped, `download` used to invent "Session #1 / 60 records",
         find nothing, save an empty file and exit 0. A dead or ignoring device is an error."""
-        rc, out, err, written, rows, fake = self.run_download(fault=lambda key, i, rep: None)
-        self.assertEqual(rc, 1)
+        exit_code, output, error_output, written, rows, fake = self.run_download(fault=lambda key, i, report: None)
+        self.assertEqual(exit_code, 1)
         self.assertFalse(written)
-        self.assertIn("No recording data was received", out + err)
+        self.assertIn("No recording data was received", output + error_output)
 
     def test_info_does_not_print_made_up_values_when_the_device_is_silent(self):
         """T4 (fixed): `info` used to fall back to hard-coded firmware "v2.0", serial "50F", user and
         geometry when the device did not answer, so they looked like device readings."""
-        fake = fresh_fake(fault=lambda key, i, rep: None)
+        fake = fresh_fake(fault=lambda key, i, report: None)
         with HidrawSim(fake), VirtualClock().patch():
-            rc, out, err = run_cli(["info", "--backend", "hidraw"])
-        self.assertNotIn("v2.0", out)
-        self.assertNotIn("50F", out)
-        self.assertNotIn("Sub-chunk", out)
+            exit_code, output, error_output = run_cli(["info", "--backend", "hidraw"])
+        self.assertNotIn("v2.0", output)
+        self.assertNotIn("50F", output)
+        self.assertNotIn("Sub-chunk", output)
         for label in ("Firmware Version", "Serial Number", "User Profile String", "Storage Memory Geometry"):
-            self.assertRegex(out, rf"{label}\s*: not reported by the device")
+            self.assertRegex(output, rf"{label}\s*: not reported by the device")
 
     def test_frame_with_a_bad_checksum_is_rejected(self):
         """T5 (fixed): the detector never verified the 7-bit checksum that every real frame carries."""
@@ -530,23 +530,23 @@ class TestFaults(unittest.TestCase):
         frame = bytearray(stream[30:60])
         frame[10] ^= 0x01                       # flip a data bit, leave the checksum stale
         self.assertNotEqual(sum(frame[:29]) & 0x7F, frame[29])
-        buf = SerialByteStreamBuffer()
-        buf.write(bytes(frame))
-        events = SerialPacketDetector.detect_and_decode_stream(buf)
-        self.assertEqual([e for e in events if e.packet_type == "STORED_BLOCK"], [])
-        self.assertEqual([e.packet_type for e in events], ["CORRUPT_FRAME"])
+        buffer = SerialByteStreamBuffer()
+        buffer.write(bytes(frame))
+        events = SerialPacketDetector.detect_and_decode_stream(buffer)
+        self.assertEqual([event for event in events if event.packet_type == "STORED_BLOCK"], [])
+        self.assertEqual([event.packet_type for event in events], ["CORRUPT_FRAME"])
 
     def test_download_with_a_corrupted_frame_warns_and_still_finishes(self):
-        def corrupt(key, i, rep):
+        def corrupt(key, i, report):
             if key[:2] == (0x9D, 0x04) and key[2] == 1 and i == 0:
-                b = bytearray(rep)
-                b[40] ^= 0x01                   # inside the second frame's data
-                return bytes(b)
-            return rep
-        rc, out, err, written, rows, fake = self.run_download(fault=corrupt)
-        self.assertEqual(rc, 0)
-        self.assertIn("1 stored frame(s) failed their checksum", out)
-        self.assertIn("Download it again", out)
+                data = bytearray(report)
+                data[40] ^= 0x01                   # inside the second frame's data
+                return bytes(data)
+            return report
+        exit_code, output, error_output, written, rows, fake = self.run_download(fault=corrupt)
+        self.assertEqual(exit_code, 0)
+        self.assertIn("1 stored frame(s) failed their checksum", output)
+        self.assertIn("Download it again", output)
 
 
 # --------------------------------------------------------------------------
@@ -560,37 +560,37 @@ class TestRecorder(unittest.TestCase):
         import record_exchange
         fake = fresh_fake()
         with HidrawSim(fake), VirtualClock().patch(), contextlib.redirect_stdout(io.StringIO()):
-            dev = PulsoxHidDevice(backend="hidraw")
-            dev.connect()
-            recorded = record_exchange.record(dev, download=True)
-            dev.close()
+            device = PulsoxHidDevice(backend="hidraw")
+            device.connect()
+            recorded = record_exchange.record(device, download=True)
+            device.close()
         self.assertEqual(fake.destructive, [])
         self.assertGreater(len(recorded.groups), 5)
 
-        with tempfile.TemporaryDirectory() as d:
-            p = os.path.join(d, "rec.trace.json")
-            recorded.to_json(p)
-            replay = Trace.from_json(p)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "rec.trace.json")
+            recorded.to_json(path)
+            replay = Trace.from_json(path)
 
         fake2 = FakeOximeter(replay)
         with HidrawSim(fake2), VirtualClock().patch(), contextlib.redirect_stdout(io.StringIO()):
-            dev = PulsoxHidDevice(backend="hidraw")
-            dev.connect()
-            engine = SerialDeviceEngine(dev)
+            device = PulsoxHidDevice(backend="hidraw")
+            device.connect()
+            engine = SerialDeviceEngine(device)
             again = engine.download_session(engine.list_sessions()[0])
-            dev.close()
+            device.close()
         self.assertEqual(len(again), 243)
 
     def test_recorder_refuses_destructive_commands(self):
         import record_exchange
         fake = fresh_fake()
         with HidrawSim(fake):
-            dev = PulsoxHidDevice(backend="hidraw")
-            dev.connect()
-            rec = record_exchange.RecordingDevice(dev)
+            device = PulsoxHidDevice(backend="hidraw")
+            device.connect()
+            record = record_exchange.RecordingDevice(device)
             with self.assertRaises(record_exchange.RefusedCommand):
-                rec.write_report(Commands.build_hid(0xAA, [0x80, 0x80]))
-            dev.close()
+                record.write_report(Commands.build_hid(0xAA, [0x80, 0x80]))
+            device.close()
         self.assertEqual(fake.sent, [], "a refused command must never reach the device")
 
 

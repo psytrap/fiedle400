@@ -51,8 +51,8 @@ class RefusedCommand(RuntimeError):
 class RecordingDevice:
     """Wraps a connected device: logs traffic per command and refuses destructive writes."""
 
-    def __init__(self, dev):
-        self._dev = dev
+    def __init__(self, device):
+        self._device = device
         self.exchanges: List[list] = []  # [out_report, [in_reports]]
 
     def write_report(self, data: bytes) -> int:
@@ -60,114 +60,114 @@ class RecordingDevice:
         if key is not None and key[0] == "destructive":
             raise RefusedCommand(f"refusing to send a destructive command: {bytes(data)[:12].hex()}")
         self.exchanges.append([bytes(data), []])
-        return self._dev.write_report(data)
+        return self._device.write_report(data)
 
     def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
-        rep = self._dev.read_report(max_bytes)
-        if rep and self.exchanges:
-            self.exchanges[-1][1].append(bytes(rep))
-        return rep
+        report = self._device.read_report(max_bytes)
+        if report and self.exchanges:
+            self.exchanges[-1][1].append(bytes(report))
+        return report
 
     def __getattr__(self, name):  # connect/close/backend_name/...; AttributeError for 'responses' keeps the engine in real-device mode
-        return getattr(self._dev, name)
+        return getattr(self._device, name)
 
     def to_trace(self, source: str) -> Trace:
-        t = Trace(source=source)
-        for out, ins in self.exchanges:
-            t.add(out, ins)
-        return t
+        trace = Trace(source=source)
+        for output, replies in self.exchanges:
+            trace.add(output, replies)
+        return trace
 
 
-def _drain(rec, first_timeout: float = 0.35, quiet: float = 0.25, clock=time) -> int:
+def _drain(record, first_timeout: float = 0.35, quiet: float = 0.25, clock=time) -> int:
     """Read until the device has answered and then gone quiet; return the number of reports."""
     start = last = clock.time()
-    n = 0
+    count = 0
     while True:
         now = clock.time()
-        if n == 0 and now - start > first_timeout:
+        if count == 0 and now - start > first_timeout:
             return 0
-        if n and now - last > quiet:
-            return n
-        if rec.read_report(64):
-            n += 1
+        if count and now - last > quiet:
+            return count
+        if record.read_report(64):
+            count += 1
             last = clock.time()
         else:
             clock.sleep(0.005)
 
 
-def probe_firmware(rec, clock=time) -> None:
+def probe_firmware(record, clock=time) -> None:
     """The documented firmware query (80 00). Read-only."""
-    while rec.read_report(64):
+    while record.read_report(64):
         pass
-    rec.write_report(Commands.build_hid(0x80, [0x00]))
-    _drain(rec, clock=clock)
+    record.write_report(Commands.build_hid(0x80, [0x00]))
+    _drain(record, clock=clock)
 
 
-def probe_offsets(rec, session_id: int, user_id: int, offsets: List[int], clock=time) -> None:
+def probe_offsets(record, session_id: int, user_id: int, offsets: List[int], clock=time) -> None:
     """SpO2 reads at the given sample offsets, as the download does for pages 0, 1, 2 (read-only)."""
-    while rec.read_report(64):
+    while record.read_report(64):
         pass
-    rec.write_report(Commands.unlock_handshake())
+    record.write_report(Commands.unlock_handshake())
     clock.sleep(0.05)
-    rec.write_report(Commands.storage_init())
+    record.write_report(Commands.storage_init())
     clock.sleep(0.05)
-    while rec.read_report(64):
+    while record.read_report(64):
         pass
-    for off in offsets:
-        rec.write_report(Commands.session_page(1, session_id, off, user_id))
+    for offset in offsets:
+        record.write_report(Commands.session_page(1, session_id, offset, user_id))
         clock.sleep(0.05)
-        _drain(rec, clock=clock)
-    rec.write_report(Commands.segment_ack())   # the same non-destructive ack the download ends with
+        _drain(record, clock=clock)
+    record.write_report(Commands.segment_ack())   # the same non-destructive ack the download ends with
     clock.sleep(0.05)
-    _drain(rec, clock=clock)
+    _drain(record, clock=clock)
 
 
 def parse_offsets(text: str) -> List[int]:
-    out = [int(x) for x in text.split(",") if x.strip()]
-    if not out or any(not 0 <= o < 1 << 14 for o in out):
+    output = [int(part) for part in text.split(",") if part.strip()]
+    if not output or any(not 0 <= offset < 1 << 14 for offset in output):
         raise ValueError("offsets are comma separated integers in 0..16383")
-    return out
+    return output
 
 
-def record(dev, download: bool = True, session: int = 0, offsets: Optional[List[int]] = None,
+def record(device, download: bool = True, session: int = 0, offsets: Optional[List[int]] = None,
            firmware: bool = False, clock=time) -> Trace:
     """Run the read-only flows on a connected device and return what was exchanged."""
-    rec = RecordingDevice(dev)
-    engine = SerialDeviceEngine(rec)
+    recorder = RecordingDevice(device)
+    engine = SerialDeviceEngine(recorder)
     engine.read_device_info()
     sessions = engine.list_sessions()
     if download:
-        for s in sessions:
-            if session and s.session_id != session:
+        for stored_session in sessions:
+            if session and stored_session.session_id != session:
                 continue
-            engine.download_session(s)
+            engine.download_session(stored_session)
     if firmware:
-        probe_firmware(rec, clock=clock)
+        probe_firmware(recorder, clock=clock)
     if offsets and sessions:
-        target = next((s for s in sessions if s.session_id == session), sessions[0])
-        probe_offsets(rec, target.session_id, target.user_id, offsets, clock=clock)
-    return rec.to_trace(source=f"record_exchange.py on {getattr(dev, 'backend_name', '?')} backend")
+        target = next((stored_session for stored_session in sessions if stored_session.session_id == session), sessions[0])
+        probe_offsets(recorder, target.session_id, target.user_id, offsets, clock=clock)
+    return recorder.to_trace(source=f"record_exchange.py on {getattr(device, 'backend_name', '?')} backend")
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("-o", "--output", required=True, help="Trace file to write (JSON).")
-    ap.add_argument("--backend", choices=["hidraw", "hid"], help="HID backend (default: platform default).")
-    ap.add_argument("-d", "--device", help="Device node path (optional).")
-    ap.add_argument("--no-download", action="store_true", help="Record info and sessions only (no measurements).")
-    ap.add_argument("--session", type=int, default=0, help="Download only this session id (default: all).")
-    ap.add_argument("--probe-offsets", metavar="N,N,...", help="Also request SpO2 reads at these sample offsets (read-only).")
-    ap.add_argument("--probe-firmware", action="store_true", help="Also send the documented firmware query 80 00 (read-only).")
-    args = ap.parse_args(argv)
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    parser.add_argument("-o", "--output", required=True, help="Trace file to write (JSON).")
+    parser.add_argument("--backend", choices=["hidraw", "hid"], help="HID backend (default: platform default).")
+    parser.add_argument("-d", "--device", help="Device node path (optional).")
+    parser.add_argument("--no-download", action="store_true", help="Record info and sessions only (no measurements).")
+    parser.add_argument("--session", type=int, default=0, help="Download only this session id (default: all).")
+    parser.add_argument("--probe-offsets", metavar="N,N,...", help="Also request SpO2 reads at these sample offsets (read-only).")
+    parser.add_argument("--probe-firmware", action="store_true", help="Also send the documented firmware query 80 00 (read-only).")
+    args = parser.parse_args(argv)
     offsets = parse_offsets(args.probe_offsets) if args.probe_offsets else None
 
-    dev = PulsoxHidDevice(dev_path=args.device, backend=args.backend)
-    print(f"Connected to {dev.connect()}")
+    device = PulsoxHidDevice(device_path=args.device, backend=args.backend)
+    print(f"Connected to {device.connect()}")
     try:
-        trace = record(dev, download=not args.no_download, session=args.session,
+        trace = record(device, download=not args.no_download, session=args.session,
                        offsets=offsets, firmware=args.probe_firmware)
     finally:
-        dev.close()
+        device.close()
     trace.to_json(args.output, note="Recorded from a real device; contains device identifiers and, unless --no-download, measurements.")
     print(f"Recorded {len(trace.groups)} command exchanges to {args.output}")
     return 0

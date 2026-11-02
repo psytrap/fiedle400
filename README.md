@@ -68,6 +68,8 @@ python -m fiedle400 info
 
 ### 1. Install the standalone binary
 
+The binary needs Ubuntu 22.04 LTS or newer (or another distribution with glibc 2.35 or newer).
+
 Download `fiedle400-linux-x64.tar.gz` from the [GitHub Release](https://github.com/psytrap/fiedle400/releases), then:
 
 ```bash
@@ -133,6 +135,20 @@ means hidraw, a bus path like `1-7.4.4:1.0` means libusb:
 ```bash
 python3 -c "import hid; print(hid.enumerate(0x28E9, 0x028A)[0]['path'])"
 ```
+
+---
+
+## Running on macOS
+
+Untested on real Mac hardware; CI checks these exact steps on every release build (T-049).
+
+1. Download `fiedle400-macos-arm64` (Apple Silicon) from the release page.
+2. The binary is not signed, and a browser download is quarantined and loses its execute bit:
+   ```bash
+   chmod +x fiedle400-macos-arm64
+   xattr -d com.apple.quarantine fiedle400-macos-arm64
+   ./fiedle400-macos-arm64 --version
+   ```
 
 ---
 

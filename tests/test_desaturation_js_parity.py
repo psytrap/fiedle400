@@ -26,11 +26,11 @@ BEGIN, END = "// BEGIN desaturation-port", "// END desaturation-port"
 RUNNER = """
 var fs = require('fs');
 var block = process.argv[1];
-var port = new Function(block + '; return {detectEvents: detectEvents, summarizeEvents: summarizeEvents, summarizePulse: summarizePulse, PULSE_HI: PULSE_HI, PULSE_INVALID: PULSE_INVALID};')();
+var port = new Function(block + '; return {detectEvents: detectEvents, summarizeEvents: summarizeEvents, summarizePulse: summarizePulse, PULSE_HIGH: PULSE_HIGH, PULSE_INVALID: PULSE_INVALID};')();
 var cases = JSON.parse(fs.readFileSync(0, 'utf8'));
 var out = cases.map(function (c) {
   if (c.pulse) {
-    var pe = port.detectEvents(c.spo2, c.drop, c.min_time, port.PULSE_HI, port.PULSE_INVALID);
+    var pe = port.detectEvents(c.spo2, c.drop, c.min_time, port.PULSE_HIGH, port.PULSE_INVALID);
     return {events: pe, summary: port.summarizePulse(c.spo2, pe)};
   }
   var events = port.detectEvents(c.spo2, c.drop, c.min_time);
@@ -42,12 +42,12 @@ process.stdout.write(JSON.stringify(out));
 
 def _js_block():
     html = spo2_viewer.build_viewer_html([{"timestamp": "2026-10-20T22:00:00", "spo2": 97, "heart_rate": 70, "flags": None}])
-    a, b = html.index(BEGIN), html.index(END)
-    return html[html.index("\n", a):b]  # from the line after BEGIN
+    begin_index, end_index = html.index(BEGIN), html.index(END)
+    return html[html.index("\n", begin_index):end_index]  # from the line after BEGIN
 
 
-def _fall(start, depth, dur):
-    return [start - -(-depth * k // dur) for k in range(1, dur + 1)]
+def _fall(start, depth, duration):
+    return [start - -(-depth * k // duration) for k in range(1, duration + 1)]
 
 
 def _desaturation_cases():
@@ -68,38 +68,38 @@ def _desaturation_cases():
 
 
 def _fuzz_cases(count, seed=400):
-    rng = random.Random(seed)
-    out = []
+    generator = random.Random(seed)
+    output = []
     for _ in range(count):
-        n = rng.randint(30, 700)
-        v = rng.randint(88, 99)
-        x = []
-        while len(x) < n:
-            kind = rng.random()
+        length = generator.randint(30, 700)
+        value = generator.randint(88, 99)
+        series = []
+        while len(series) < length:
+            kind = generator.random()
             if kind < 0.35:  # plateau
-                x += [v] * rng.randint(1, 25)
+                series += [value] * generator.randint(1, 25)
             elif kind < 0.65:  # staircase / slope down, possibly with small rebounds
-                for _ in range(rng.randint(2, 30)):
-                    v = max(60, v - rng.choice((0, 0, 1, 1, 1, 2)))
-                    if rng.random() < 0.08:
-                        v = min(100, v + 1)
-                    x.append(v)
+                for _ in range(generator.randint(2, 30)):
+                    value = max(60, value - generator.choice((0, 0, 1, 1, 1, 2)))
+                    if generator.random() < 0.08:
+                        value = min(100, value + 1)
+                    series.append(value)
             elif kind < 0.85:  # recovery
-                for _ in range(rng.randint(1, 15)):
-                    v = min(100, v + rng.choice((0, 1, 1, 2)))
-                    x.append(v)
+                for _ in range(generator.randint(1, 15)):
+                    value = min(100, value + generator.choice((0, 1, 1, 2)))
+                    series.append(value)
             elif kind < 0.93:  # gap
-                x += [rng.choice((None, 127, 0, 255))] * rng.randint(1, 6)
+                series += [generator.choice((None, 127, 0, 255))] * generator.randint(1, 6)
             else:  # noise
-                v = max(60, min(100, v + rng.randint(-2, 2)))
-                x.append(v)
-        out.append(x[:n])
-    return out
+                value = max(60, min(100, value + generator.randint(-2, 2)))
+                series.append(value)
+        output.append(series[:length])
+    return output
 
 
 @unittest.skipUnless(shutil.which("node"), "node not installed")
 class TestJsMatchesPython(unittest.TestCase):
-    PARAMS = [(4, 10, 88), (3, 10, 88), (4, 8, 88), (3, 4, 90), (4, 10, 90), (5, 12, 85)]
+    PARAMETERS = [(4, 10, 88), (3, 10, 88), (4, 8, 88), (3, 4, 90), (4, 10, 90), (5, 12, 85)]
 
     @classmethod
     def setUpClass(cls):
@@ -111,20 +111,20 @@ class TestJsMatchesPython(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return json.loads(proc.stdout)
 
-    def _compare(self, series_list, params):
-        cases = [dict(spo2=s, drop=d, min_time=m, criteria=c) for s in series_list for d, m, c in params]
+    def _compare(self, series_list, parameters):
+        cases = [dict(spo2=case_series, drop=drop, min_time=min_time, criteria=criteria) for case_series in series_list for drop, min_time, criteria in parameters]
         got = self._run_js(cases)
         self.assertEqual(len(got), len(cases))
-        for case, js in zip(cases, got):
+        for case, js_result in zip(cases, got):
             events = desaturation.detect_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
-            py = json.loads(json.dumps({"events": events,
+            python_result = json.loads(json.dumps({"events": events,
                                         "summary": desaturation.summarize(case["spo2"], events, case["criteria"])}))
             where = f"drop={case['drop']} min_time={case['min_time']} criteria={case['criteria']} spo2={case['spo2']}"
-            self.assertEqual(js["events"], py["events"], where)
-            self.assertEqual(js["summary"], py["summary"], where)
+            self.assertEqual(js_result["events"], python_result["events"], where)
+            self.assertEqual(js_result["summary"], python_result["summary"], where)
 
     def test_cases_of_the_python_tests(self):
-        self._compare(_desaturation_cases(), self.PARAMS)
+        self._compare(_desaturation_cases(), self.PARAMETERS)
 
     def test_basal_is_not_computed_when_every_valid_sample_is_in_an_event(self):
         series = [None] + [97 - k for k in range(13)]
@@ -135,41 +135,41 @@ class TestJsMatchesPython(unittest.TestCase):
 
     def test_t019_probe_with_default_and_changed_parameters(self):
         series, _ = make_desat_probe.build_series()
-        self._compare([series], self.PARAMS)
+        self._compare([series], self.PARAMETERS)
         # The numbers the real program reported (7 / 8 / 9 events) hold for the JS too.
-        cases = [dict(spo2=series, drop=d, min_time=m, criteria=88) for d, m in ((4, 10), (3, 10), (4, 8))]
-        self.assertEqual([len(r["events"]) for r in self._run_js(cases)], [7, 8, 9])
+        cases = [dict(spo2=series, drop=drop, min_time=min_time, criteria=88) for drop, min_time in ((4, 10), (3, 10), (4, 8))]
+        self.assertEqual([len(result["events"]) for result in self._run_js(cases)], [7, 8, 9])
 
     def test_seeded_random_sequences(self):
         series = _fuzz_cases(300)
-        found = sum(len(desaturation.detect_events(s)) for s in series)
+        found = sum(len(desaturation.detect_events(case_series)) for case_series in series)
         self.assertGreater(found, 50)  # the fuzz must actually produce events to compare
-        self._compare(series, self.PARAMS[:4])
+        self._compare(series, self.PARAMETERS[:4])
 
     def test_rounding_ties_follow_python(self):
         # Exact ties (x.25, x.125 ...) go to the even digit in Python's round(); Math.round does not.
         # Four events averaging 0.25 s steps: durations 10, 10, 10, 11 -> mean 10.25 -> 10.2.
-        x = []
-        for dur in (10, 10, 10, 11):
-            x += [97] * 15 + _fall(97, 4, dur) + [96, 97]
-        events = desaturation.detect_events(x)
+        series = []
+        for duration in (10, 10, 10, 11):
+            series += [97] * 15 + _fall(97, 4, duration) + [96, 97]
+        events = desaturation.detect_events(series)
         self.assertEqual(len(events), 4)
-        self.assertEqual(desaturation.summarize(x, events)["avg_event_duration_s"], 10.2)
-        self._compare([x], [(4, 10, 88)])
+        self.assertEqual(desaturation.summarize(series, events)["average_event_duration_seconds"], 10.2)
+        self._compare([series], [(4, 10, 88)])
 
     # Pulse series (T-030): same detector with range 0..254 / probe-out 255, plus summarize_pulse.
-    PULSE_PARAMS = [(6, 8), (4, 8), (6, 12), (10, 5)]
+    PULSE_PARAMETERS = [(6, 8), (4, 8), (6, 12), (10, 5)]
 
-    def _compare_pulse(self, series_list, params=None):
-        cases = [dict(spo2=s, drop=d, min_time=m, pulse=True) for s in series_list for d, m in (params or self.PULSE_PARAMS)]
+    def _compare_pulse(self, series_list, parameters=None):
+        cases = [dict(spo2=case_series, drop=drop, min_time=min_time, pulse=True) for case_series in series_list for drop, min_time in (parameters or self.PULSE_PARAMETERS)]
         got = self._run_js(cases)
         self.assertEqual(len(got), len(cases))
-        for case, js in zip(cases, got):
+        for case, js_result in zip(cases, got):
             events = desaturation.detect_pulse_events(case["spo2"], drop=case["drop"], min_time=case["min_time"])
-            py = json.loads(json.dumps({"events": events, "summary": desaturation.summarize_pulse(case["spo2"], events)}))
+            python_result = json.loads(json.dumps({"events": events, "summary": desaturation.summarize_pulse(case["spo2"], events)}))
             where = f"pulse drop={case['drop']} min_time={case['min_time']} series={case['spo2']}"
-            self.assertEqual(js["events"], py["events"], where)
-            self.assertEqual(js["summary"], py["summary"], where)
+            self.assertEqual(js_result["events"], python_result["events"], where)
+            self.assertEqual(js_result["summary"], python_result["summary"], where)
 
     def test_pulse_cases_above_100_and_gaps(self):
         cases = [
@@ -186,13 +186,13 @@ class TestJsMatchesPython(unittest.TestCase):
         self.assertEqual(len(got["events"]), 1)
 
     def test_pulse_seeded_random_sequences(self):
-        rng = random.Random(30)
+        generator = random.Random(30)
         series = []
-        for s in _fuzz_cases(150, seed=30):
-            off = rng.choice((0, 40, 100, 160))  # lift into the pulse range, incl. above 100
-            series.append([v if v is None or v in (127, 255) or v == 0 else v + off for v in s])
-        self.assertGreater(sum(len(desaturation.detect_pulse_events(s)) for s in series), 30)
-        self._compare_pulse(series, self.PULSE_PARAMS[:2])
+        for case_series in _fuzz_cases(150, seed=30):
+            offset = generator.choice((0, 40, 100, 160))  # lift into the pulse range, incl. above 100
+            series.append([value if value is None or value in (127, 255) or value == 0 else value + offset for value in case_series])
+        self.assertGreater(sum(len(desaturation.detect_pulse_events(pulse_series)) for pulse_series in series), 30)
+        self._compare_pulse(series, self.PULSE_PARAMETERS[:2])
 
 
 if __name__ == "__main__":

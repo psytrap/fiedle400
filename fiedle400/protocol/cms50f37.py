@@ -43,26 +43,26 @@ def build_command(opcode: int, session: int = 0, user: int = 0) -> bytes:
                   0x80, 0x80, 0x80, 0x80])
 
 
-def split_frames(buf: bytes) -> Tuple[List[Frame], bytes]:
+def split_frames(buffer: bytes) -> Tuple[List[Frame], bytes]:
     """Cuts a byte stream into Frames, data with bit 7 restored.
 
     Bytes that cannot start a frame are skipped. Returns the frames and the incomplete rest.
     """
     frames: List[Frame] = []
     i = 0
-    while i < len(buf):
-        code = buf[i]
+    while i < len(buffer):
+        code = buffer[i]
         length = LENGTHS[code & 0x1F] if code < 0x80 else 0
         if length == 0:
             i += 1
             continue
-        if i + length > len(buf):
+        if i + length > len(buffer):
             break
-        hi = buf[i + 1]
-        data = bytes((b & 0x7F) | (0x80 if (hi >> k) & 1 else 0) for k, b in enumerate(buf[i + 2:i + length]))
+        high = buffer[i + 1]
+        data = bytes((byte & 0x7F) | (0x80 if (high >> k) & 1 else 0) for k, byte in enumerate(buffer[i + 2:i + length]))
         frames.append(Frame(code, data))
         i += length
-    return frames, bytes(buf[i:])
+    return frames, bytes(buffer[i:])
 
 
 def _text(data: bytes) -> str:
@@ -72,10 +72,10 @@ def _text(data: bytes) -> str:
 def model_from_frames(frames: List[Frame]) -> Optional[str]:
     """The model string from the `0x02` frames: the first carries data[0] == 0, a second one
     (data[0] != 0) may continue it. None if no `0x02` frame came."""
-    parts = [(f.data[0], f.data[1:7]) for f in frames if f.code == REPLY_MODEL and len(f.data) >= 7]
+    parts = [(frame.data[0], frame.data[1:7]) for frame in frames if frame.code == REPLY_MODEL and len(frame.data) >= 7]
     if not parts:
         return None
-    first = next((t for k, t in parts if k == 0), parts[0][1])
-    extra = b"".join(t for k, t in parts if k != 0)
+    first = next((text for k, text in parts if k == 0), parts[0][1])
+    extra = b"".join(text for k, text in parts if k != 0)
     model = (_text(first) + _text(extra)).strip()
     return model or None

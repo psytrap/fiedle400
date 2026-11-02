@@ -1,6 +1,6 @@
 # T-043: Write down coding conventions, starting with identifier names
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
+- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**
@@ -47,19 +47,34 @@ What is NOT decided:
 
 ## Criteria
 
-- [ ] A conventions file exists under `.agents/rules/`, with a naming rule
+- [x] A conventions file exists under `.agents/rules/`, with a naming rule
       that would have ruled out `st`/`en`/`v`/`p` and that states where the
       line sits for short names that stay acceptable.
-- [ ] It says what it deliberately does not cover, and does not duplicate or
+- [x] It says what it deliberately does not cover, and does not duplicate or
       contradict `AGENTS.md` or `code-review-standards.md`.
-- [ ] `AGENTS.md` points at it, the way it points at
+- [x] `AGENTS.md` points at it, the way it points at
       `code-review-standards.md`.
-- [ ] Any renaming of existing code is filed as its own follow-up ticket
+- [x] Any renaming of existing code is filed as its own follow-up ticket
       rather than done here.
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`).
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`).
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Done 2026-11-02 (cloud, patch 0039).
+
+- New `.agents/rules/coding-conventions.md`, naming only. The line: one- or two-letter names
+  only for a loop index or element whose scope is about ten lines (and only one such name
+  alive at once), fixed idioms (`_`, `f`, `e`, `m`), names that copy an outside source
+  (`PROTOCOL.md` byte names, termios `cc`), and established domain abbreviations (`spo2`,
+  `hr`, `ts`, `dt`, `lo`/`hi`, ...). `st`/`en`/`v`/`p` as used in the old `_detect` fail it.
+- It lists what it does not cover (consistency: `code-review-standards.md`; tests, pyflakes,
+  delivery: `AGENTS.md`; line length, type hints, docstrings, comments: undecided) instead of
+  repeating them.
+- `AGENTS.md`'s definition of done points at it.
+- `desaturation.py` had already been renamed locally. A scan of the rest of `fiedle400/` found
+  a handful of other short names (`sn`, `up`, `ow`, `sq`, ...); filed as
+  [T-106](T-106-rename-short-identifiers.md), done in the same patch at psytrap's request.
+- Tightened the same day by T-106 (psytrap: "rename all"): the abbreviation allowances
+  (`hr`, `ts`, `dt`, `sess`, `dev`, ...) were dropped and all of `fiedle400/` renamed.

@@ -28,11 +28,11 @@ from typing import Optional
 
 APP_NAME = "fiedle400"
 LEGACY_APP_NAME = "po400"
-ENV_PREFIX = "FIEDLE400_"
-LEGACY_ENV_PREFIX = "PO400_"
+ENVIRONMENT_PREFIX = "FIEDLE400_"
+LEGACY_ENVIRONMENT_PREFIX = "PO400_"
 CONFIG_FILENAME = "config.json"
 WORKDIR_KEY = "workdir"
-WORKDIR_ENV = "FIEDLE400_WORKDIR"
+WORKDIR_ENVIRONMENT = "FIEDLE400_WORKDIR"
 
 
 class WorkdirError(ValueError):
@@ -41,16 +41,16 @@ class WorkdirError(ValueError):
 
 def getenv(name: str, default: str = "") -> str:
     """Read a FIEDLE400_* variable, falling back to its pre-rename PO400_* name."""
-    found = env_source(name)
+    found = environment_source(name)
     return os.environ[found] if found else default
 
 
-def env_source(name: str) -> Optional[str]:
+def environment_source(name: str) -> Optional[str]:
     """Return which variable actually supplies `name` (new or legacy), or None."""
     if name in os.environ:
         return name
-    if name.startswith(ENV_PREFIX):
-        legacy = LEGACY_ENV_PREFIX + name[len(ENV_PREFIX):]
+    if name.startswith(ENVIRONMENT_PREFIX):
+        legacy = LEGACY_ENVIRONMENT_PREFIX + name[len(ENVIRONMENT_PREFIX):]
         if legacy in os.environ:
             return legacy
     return None
@@ -68,7 +68,7 @@ def _settings_base() -> str:
     return base
 
 
-def config_dir() -> str:
+def config_directory() -> str:
     """Return the directory holding the settings file (not created by this call)."""
     return os.path.join(_settings_base(), APP_NAME)
 
@@ -89,11 +89,11 @@ def migrate_legacy_config() -> bool:
     if os.path.exists(new) or not os.path.isfile(old):
         return False
     try:
-        with open(old, "r", encoding="utf-8") as fh:
-            content = fh.read()
+        with open(old, "r", encoding="utf-8") as file:
+            content = file.read()
         os.makedirs(os.path.dirname(new), exist_ok=True)
-        with open(new, "w", encoding="utf-8") as fh:
-            fh.write(content)
+        with open(new, "w", encoding="utf-8") as file:
+            file.write(content)
         return True
     except OSError:
         return False
@@ -101,7 +101,7 @@ def migrate_legacy_config() -> bool:
 
 def config_path() -> str:
     """Return the full path of the settings file."""
-    return os.path.join(config_dir(), CONFIG_FILENAME)
+    return os.path.join(config_directory(), CONFIG_FILENAME)
 
 
 def default_workdir() -> str:
@@ -120,8 +120,8 @@ def load_config() -> dict:
     """Read the settings file. A missing or unreadable file yields {}."""
     migrate_legacy_config()
     try:
-        with open(config_path(), "r", encoding="utf-8") as fh:
-            data = json.load(fh)
+        with open(config_path(), "r", encoding="utf-8") as file:
+            data = json.load(file)
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
@@ -132,9 +132,9 @@ def save_config(data: dict) -> Optional[str]:
     path = config_path()
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
-            fh.write("\n")
+        with open(path, "w", encoding="utf-8") as file:
+            json.dump(data, file, indent=2)
+            file.write("\n")
         return path
     except OSError:
         return None  # A read-only or unwritable home must not break the command
@@ -153,7 +153,7 @@ def set_workdir(path: str) -> Optional[str]:
     return save_config(data)
 
 
-def ensure_usable_dir(path: str) -> Optional[str]:
+def ensure_usable_directory(path: str) -> Optional[str]:
     """Create the directory if needed and confirm it is writable.
 
     Returns the absolute path, or None when it cannot be created or written to.
@@ -180,17 +180,17 @@ def explicit_workdir(flag_value: Optional[str] = None) -> Optional[str]:
     if flag_value and flag_value.strip():
         source, value = "--workdir", flag_value
     else:
-        source = env_source(WORKDIR_ENV)
+        source = environment_source(WORKDIR_ENVIRONMENT)
         value = os.environ[source] if source else ""
         if not value.strip():
             return None
-    usable = ensure_usable_dir(value)
+    usable = ensure_usable_directory(value)
     if not usable:
         raise WorkdirError(f"{source}: cannot create or write to {value}")
     return usable
 
 
-def resolve_workdir(prompt_func=None, stream=None) -> str:
+def resolve_workdir(prompt_function=None, stream=None) -> str:
     """Return the directory new recordings should be written to.
 
     Callers check explicit_workdir() first: the --workdir flag and the
@@ -204,13 +204,13 @@ def resolve_workdir(prompt_func=None, stream=None) -> str:
     The prompt only appears when stdin is a TTY *and* nothing is configured yet.
     In any non-interactive context -- a script, a pipe, CI, a test run -- this
     returns silently rather than blocking on input() for a keystroke that will
-    never come. `prompt_func` exists so tests can drive both branches.
+    never come. `prompt_function` exists so tests can drive both branches.
     """
     stream = stream or sys.stdout
 
     configured = get_workdir()
     if configured:
-        usable = ensure_usable_dir(configured)
+        usable = ensure_usable_directory(configured)
         if usable:
             return usable
         # Configured but unusable (removed drive, deleted folder, permissions).
@@ -222,10 +222,10 @@ def resolve_workdir(prompt_func=None, stream=None) -> str:
         )
         return os.getcwd()
 
-    if prompt_func is None and not _stdin_is_interactive():
+    if prompt_function is None and not _stdin_is_interactive():
         return os.getcwd()
 
-    chosen = (prompt_func or _prompt_for_workdir)(default_workdir(), stream)
+    chosen = (prompt_function or _prompt_for_workdir)(default_workdir(), stream)
     if not chosen:
         return os.getcwd()
 
@@ -256,7 +256,7 @@ def _prompt_for_workdir(default: str, stream) -> Optional[str]:
         return None
 
     if answer in ("", "y", "yes", "j", "ja"):
-        return ensure_usable_dir(default)
+        return ensure_usable_directory(default)
 
     while True:
         try:
@@ -265,7 +265,7 @@ def _prompt_for_workdir(default: str, stream) -> Optional[str]:
             print("", file=stream)
             return None
         candidate = entered or default
-        usable = ensure_usable_dir(candidate)
+        usable = ensure_usable_directory(candidate)
         if usable:
             return usable
         print(f"  Cannot write to '{candidate}'. Try another path.", file=stream)

@@ -64,4 +64,26 @@ something unexpected happen since `UsePreviousAppDir=no` normally
 
 ## Execution Notes
 
-(Not started.)
+CI part done 2026-11-02 (cloud, patch 0039, v0.5.7). Stays open until the first CI run
+passes and the Windows test machine is cleaned up.
+
+- **New CI step** in `build-release.yml`'s `installer-windows` job, "Upgrade Test", before the
+  existing fresh-install smoke test. It downloads the latest published release's
+  `fiedle400-setup.exe`, installs it silently with the context-menu task, edits the user's
+  `demo.SpO2` and adds a recording to `Documents\fiedle400`, then runs this build's installer
+  over it. Checks: `--version` is the new one; the uninstall registry entry's `DisplayVersion`
+  is the new one; one uninstaller, no other files in the program folder; the Start Menu group
+  holds exactly its three shortcuts; both context-menu commands point at the installed exe; the
+  edited demo and the recording are untouched. Then it uninstalls (waiting for the
+  uninstaller, which re-launches itself from TEMP) and checks the program folder, Start Menu
+  group, context-menu keys and uninstall entry are gone while the user's files stay. The
+  existing step then covers "clean uninstall, then fresh install". This covers criteria 1 to 3
+  with the real installer, on a CI runner rather than on 192.168.2.165.
+- **Static finding (not changed):** `UsePreviousAppDir=no` (kept for the po400 rename)
+  makes every upgrade install to the default `%LOCALAPPDATA%\Programs\fiedle400`. Same-folder
+  upgrades, which is everyone on the default, overwrite in place. A user who picked a custom
+  folder gets the new version in the default folder, the uninstall entry and shortcuts move
+  there, and the old copy is orphaned. Rare, so documented in `PACKAGING.md` only.
+- **Left for local:** confirm the first CI run is green (a manual "Run workflow" on
+  `build-release.yml` is enough, no tag needed), and remove the portable test binaries from
+  the Windows machine (criterion 5).

@@ -26,7 +26,7 @@ recorded here so they aren't lost.
    accept 26 and specifically check whether the PyInstaller Linux binary
    needs a newer glibc than target systems have (the concern
    `RELEASE_PLAN.md` raised but never checked -- the check itself is
-   [T-050](T-050-ubuntu-lts-compat-check.md)).
+   [T-050](../done/2026-W45/T-050-ubuntu-lts-compat-check.md)).
 2. **GitHub Actions Node 20 deprecation warnings -- status unknown, not
    fixed.** `tests.yml`/`build-release.yml` still pin only major versions
    (`actions/checkout@v4`, `actions/setup-python@v5`,
@@ -50,16 +50,40 @@ recorded here so they aren't lost.
 
 ## Criteria
 
-- [ ] `ubuntu-latest`/Ubuntu 26 decision made and recorded (pin
+- [x] `ubuntu-latest`/Ubuntu 26 decision made and recorded (pin
       `ubuntu-24.04`, or accept 26 with the glibc question checked)
 - [ ] A CI run's log checked for the Node 20 deprecation warnings; pin
       specific action versions only if they still appear
 - [ ] A macOS Gatekeeper/quarantine step added (download the packaged
       asset and run it as fetched) and passing
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+Partly done 2026-11-02 (cloud, patch 0039, v0.5.7). Stays open for item 2 and for the first
+run of the new macOS job.
+
+1. **Ubuntu: decided, pinned.** psytrap, 2026-11-02: "22 LTS is minimum". `build-release.yml`'s
+   Linux build now runs on `ubuntu-22.04` (glibc 2.35), the oldest supported release, so the
+   shipped binary runs on 22.04 and everything newer. (Until 2026-10-19 `ubuntu-latest` was
+   24.04, glibc 2.39, so earlier binaries likely did not start on 22.04 at all; T-050 adds the
+   container check.) `tests.yml` stays on `ubuntu-latest`: it only runs the Python suite, and
+   following the newest Ubuntu there is useful early warning. When GitHub retires its 22.04
+   runner image, build in an `ubuntu:22.04` container instead.
+2. **Node 20 warnings: not checked.** The cloud has no access to the repo's Actions logs.
+   Background: GitHub made Node 24 the default for JavaScript actions on 2026-06-16 and
+   removes Node 20 from its runners in fall 2026 ([tenki.cloud summary](https://tenki.cloud/blog/migrate-github-actions-node-24)),
+   so `@v4` actions now run forced on Node 24 with a warning rather than failing. Sources
+   disagree on which majors of `upload-artifact`/`download-artifact` are the first on Node 24
+   (v5 vs v7/v8), so nothing was bumped blind. To do: open the annotations of the next
+   `build-release.yml` run and bump only the actions it names, to the version its warning
+   suggests.
+3. **macOS quarantine: job added.** New job `quarantine-macos` (needs `build`; `release` now
+   needs it too) downloads the packaged `fiedle400-macos-arm64`, sets
+   `com.apple.quarantine` as a browser download would, records whether Gatekeeper lets it
+   run (informational, bounded to 30 s), then follows the new README "Running on macOS"
+   steps (`chmod +x`, `xattr -d com.apple.quarantine`) and requires `--version` to match and
+   `--help` to work. The release notes name the same two commands. Not run yet: the first
+   tag or manual run is the test.

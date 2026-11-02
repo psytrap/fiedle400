@@ -26,11 +26,11 @@ class TestVersionSync(unittest.TestCase):
         self.assertEqual(versions["fiedle400/__init__.py"], fiedle400.__version__)
 
     def test_cli_version_flag(self):
-        out = io.StringIO()
-        with redirect_stdout(out), self.assertRaises(SystemExit) as cm:
+        output = io.StringIO()
+        with redirect_stdout(output), self.assertRaises(SystemExit) as caught:
             cli.main(["--version"])
-        self.assertEqual(cm.exception.code, 0)
-        self.assertEqual(out.getvalue().strip(), f"fiedle400 {fiedle400.__version__}")
+        self.assertEqual(caught.exception.code, 0)
+        self.assertEqual(output.getvalue().strip(), f"fiedle400 {fiedle400.__version__}")
 
 
 class TestVersionInOutput(unittest.TestCase):
@@ -41,28 +41,28 @@ class TestVersionInOutput(unittest.TestCase):
         self.assertTrue(line.startswith(fiedle400.__version__ + " ("), line)
 
     def test_wizard_header_shows_version(self):
-        out = io.StringIO()
-        with mock.patch.object(cli, "PulsoxHidDevice") as dev_cls, redirect_stdout(out):
-            dev_cls.return_value.connect.side_effect = RuntimeError("no device")
-            rc = cli.run_interactive_wizard(mock.Mock(device=None, backend=None, verbose=0))
-        self.assertEqual(rc, 1)
-        self.assertIn(f"fiedle400 v{fiedle400.__version__}", out.getvalue())
+        output = io.StringIO()
+        with mock.patch.object(cli, "PulsoxHidDevice") as device_class, redirect_stdout(output):
+            device_class.return_value.connect.side_effect = RuntimeError("no device")
+            exit_code = cli.run_interactive_wizard(mock.Mock(device=None, backend=None, verbose=0))
+        self.assertEqual(exit_code, 1)
+        self.assertIn(f"fiedle400 v{fiedle400.__version__}", output.getvalue())
 
     def test_no_stale_hardcoded_version_in_cli(self):
-        with open(os.path.join(ROOT, "fiedle400", "cli.py"), encoding="utf-8") as f:
-            self.assertNotIn("v2.0.0", f.read())
+        with open(os.path.join(ROOT, "fiedle400", "cli.py"), encoding="utf-8") as file:
+            self.assertNotIn("v2.0.0", file.read())
 
 
 class TestBumpVersion(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        os.makedirs(os.path.join(self.tmp.name, "fiedle400"))
-        shutil.copy(os.path.join(ROOT, "pyproject.toml"), self.tmp.name)
-        shutil.copy(os.path.join(ROOT, "fiedle400", "__init__.py"), os.path.join(self.tmp.name, "fiedle400"))
-        self.root = self.tmp.name
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        os.makedirs(os.path.join(self.temporary_directory.name, "fiedle400"))
+        shutil.copy(os.path.join(ROOT, "pyproject.toml"), self.temporary_directory.name)
+        shutil.copy(os.path.join(ROOT, "fiedle400", "__init__.py"), os.path.join(self.temporary_directory.name, "fiedle400"))
+        self.root = self.temporary_directory.name
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.temporary_directory.cleanup()
 
     def _run(self, *argv):
         with redirect_stdout(io.StringIO()), mock.patch("sys.stderr", io.StringIO()):
@@ -82,10 +82,10 @@ class TestBumpVersion(unittest.TestCase):
 
     def test_refuses_bump_when_manifests_disagree(self):
         init = os.path.join(self.root, "fiedle400", "__init__.py")
-        with open(init, encoding="utf-8") as f:
-            text = f.read()
-        with open(init, "w", encoding="utf-8") as f:
-            f.write(text.replace(f'"{fiedle400.__version__}"', '"9.9.9"'))
+        with open(init, encoding="utf-8") as file:
+            text = file.read()
+        with open(init, "w", encoding="utf-8") as file:
+            file.write(text.replace(f'"{fiedle400.__version__}"', '"9.9.9"'))
         self.assertEqual(self._run("patch"), 1)
         self.assertEqual(bump_version.read_versions(self.root)["fiedle400/__init__.py"], "9.9.9")
 

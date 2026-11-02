@@ -105,24 +105,24 @@ def enlarge_owned_console(
             return False
 
         largest = kernel32.GetLargestConsoleWindowSize(handle)
-        max_cols = largest & 0xFFFF if isinstance(largest, int) else largest.X
+        max_columns = largest & 0xFFFF if isinstance(largest, int) else largest.X
         max_rows = (largest >> 16) & 0xFFFF if isinstance(largest, int) else largest.Y
-        if max_cols <= 0 or max_rows <= 0:
+        if max_columns <= 0 or max_rows <= 0:
             return False
 
-        cur_cols = info.srWindow.Right - info.srWindow.Left + 1
-        cur_rows = info.srWindow.Bottom - info.srWindow.Top + 1
-        want_cols = min(max(columns, cur_cols), max_cols)
-        want_rows = min(max(lines, cur_rows), max_rows)
-        if want_cols == cur_cols and want_rows == cur_rows:
+        current_columns = info.srWindow.Right - info.srWindow.Left + 1
+        current_rows = info.srWindow.Bottom - info.srWindow.Top + 1
+        want_columns = min(max(columns, current_columns), max_columns)
+        want_rows = min(max(lines, current_rows), max_rows)
+        if want_columns == current_columns and want_rows == current_rows:
             return False
 
         # The buffer must be at least as large as the window, so grow it first.
-        buf = _Coord(max(info.dwSize.X, want_cols), max(info.dwSize.Y, want_rows, scrollback))
-        if not kernel32.SetConsoleScreenBufferSize(handle, buf):
+        buffer = _Coord(max(info.dwSize.X, want_columns), max(info.dwSize.Y, want_rows, scrollback))
+        if not kernel32.SetConsoleScreenBufferSize(handle, buffer):
             return False
-        rect = _SmallRect(0, 0, want_cols - 1, want_rows - 1)
-        return bool(kernel32.SetConsoleWindowInfo(handle, True, ctypes.byref(rect)))
+        rectangle = _SmallRect(0, 0, want_columns - 1, want_rows - 1)
+        return bool(kernel32.SetConsoleWindowInfo(handle, True, ctypes.byref(rectangle)))
     except Exception:
         return False  # Cosmetic only: never let sizing break a command
 

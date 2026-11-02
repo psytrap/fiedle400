@@ -10,13 +10,13 @@ from .models import (
     SessionInfo,
     DeviceInfo,
     DecodedPacket,
-    HID_POLL_INTERVAL_SEC,
-    HID_READ_TIMEOUT_SEC,
-    COMMAND_ACK_DELAY_SEC,
+    HID_POLL_INTERVAL_SECONDS,
+    HID_READ_TIMEOUT_SECONDS,
+    COMMAND_ACK_DELAY_SECONDS,
 )
 
 from .checksums import (
-    calc_checksum_7bit,
+    calculate_checksum_7bit,
     pack_7bit_le_14bit,
     unpack_7bit_le_14bit,
     pack_7bit_le_28bit,
@@ -89,11 +89,11 @@ __all__ = [
     "SessionInfo",
     "DeviceInfo",
     "DecodedPacket",
-    "HID_POLL_INTERVAL_SEC",
-    "HID_READ_TIMEOUT_SEC",
-    "COMMAND_ACK_DELAY_SEC",
+    "HID_POLL_INTERVAL_SECONDS",
+    "HID_READ_TIMEOUT_SECONDS",
+    "COMMAND_ACK_DELAY_SECONDS",
     # Checksums
-    "calc_checksum_7bit",
+    "calculate_checksum_7bit",
     "pack_7bit_le_14bit",
     "unpack_7bit_le_14bit",
     "pack_7bit_le_28bit",

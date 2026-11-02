@@ -18,15 +18,15 @@ _spec = importlib.util.spec_from_file_location("sync_patch", os.path.join(ROOT, 
 sync_patch = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(sync_patch)
 
-_GIT_ENV = {
+_GIT_ENVIRONMENT = {
     "GIT_AUTHOR_NAME": "Test Author", "GIT_AUTHOR_EMAIL": "author@example.invalid",
     "GIT_COMMITTER_NAME": "Test Committer", "GIT_COMMITTER_EMAIL": "committer@example.invalid",
 }
 
 
-def _git(cwd, *args):
-    env = dict(os.environ, **_GIT_ENV)
-    result = subprocess.run(["git", *args], cwd=cwd, env=env, text=True, capture_output=True)
+def _git(repository, *args):
+    environment = dict(os.environ, **_GIT_ENVIRONMENT)
+    result = subprocess.run(["git", *args], cwd=repository, env=environment, text=True, capture_output=True)
     if result.returncode != 0:
         raise AssertionError(f"git {' '.join(args)} failed: {result.stdout}{result.stderr}")
     return result.stdout.strip()
@@ -35,8 +35,8 @@ def _git(cwd, *args):
 def _write(repo, rel, text):
     path = os.path.join(repo, rel)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(text)
+    with open(path, "w", encoding="utf-8", newline="\n") as file:
+        file.write(text)
 
 
 class TestPatchNumbering(unittest.TestCase):
@@ -83,7 +83,7 @@ class TestApplyAndGenerate(unittest.TestCase):
     def setUp(self):
         self.repo = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.repo, True)
-        for key, value in _GIT_ENV.items():
+        for key, value in _GIT_ENVIRONMENT.items():
             patcher = unittest.mock.patch.dict(os.environ, {key: value})
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -107,16 +107,16 @@ class TestApplyAndGenerate(unittest.TestCase):
         _git(self.repo, "commit", "-q", "-m", message)
         patch = os.path.join(tempfile.mkdtemp(), "0001-add-things.patch")
         self.addCleanup(shutil.rmtree, os.path.dirname(patch), True)
-        with open(patch, "w", encoding="utf-8", newline="\n") as f:
-            f.write(_git(self.repo, "format-patch", "--stdout", "-1") + "\n")
+        with open(patch, "w", encoding="utf-8", newline="\n") as file:
+            file.write(_git(self.repo, "format-patch", "--stdout", "-1") + "\n")
         _git(self.repo, "reset", "-q", "--hard", self.base)
         return patch
 
     def run_main(self, *argv):
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        output, error_output = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error_output):
             code = sync_patch.main(list(argv))
-        return code, out.getvalue() + err.getvalue()
+        return code, output.getvalue() + error_output.getvalue()
 
     def test_apply_commits_with_the_patch_author_and_keeps_a_copy(self):
         patch = self.make_patch({"new.txt": "hello\n"})
@@ -164,8 +164,8 @@ class TestApplyAndGenerate(unittest.TestCase):
         self.assertEqual(code, 0, output)
         generated = os.path.join(self.repo, "0005-local-change.patch")
         self.assertTrue(os.path.exists(generated), output)
-        with open(generated, encoding="utf-8") as f:
-            self.assertIn("Subject: [PATCH] A local change", f.read())
+        with open(generated, encoding="utf-8") as file:
+            self.assertIn("Subject: [PATCH] A local change", file.read())
 
     def test_generate_number_override_and_no_overwrite(self):
         _write(self.repo, "feature.txt", "x\n")

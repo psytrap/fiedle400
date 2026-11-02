@@ -21,8 +21,8 @@ def _make_root():
         raise unittest.SkipTest("tkinter is not installed")
     try:
         root = tk.Tk()
-    except tk.TclError as e:  # no display
-        raise unittest.SkipTest(f"no display for tkinter: {e}")
+    except tk.TclError as error:  # no display
+        raise unittest.SkipTest(f"no display for tkinter: {error}")
     root.withdraw()
     return root
 
@@ -51,36 +51,36 @@ class TestWizardGuiMockup(unittest.TestCase):
     def test_every_screen_builds(self):
         for screen in self.mod.SCREENS:
             with self.subTest(screen=screen):
-                m = self.mod.Mockup(self.root, screen)
+                mockup = self.mod.Mockup(self.root, screen)
                 self.root.update_idletasks()
-                self.assertTrue(list(_buttons(m.body)), screen)
+                self.assertTrue(list(_buttons(mockup.body)), screen)
 
     def test_device_screen_selects_all_recordings_and_offers_the_download(self):
-        m = self.mod.Mockup(self.root, "device")
-        tree = next(_widgets(m.body, ttk.Treeview))
+        mockup = self.mod.Mockup(self.root, "device")
+        tree = next(_widgets(mockup.body, ttk.Treeview))
         self.assertEqual(len(tree.selection()), len(self.mod.SESSIONS))
-        labels = [b.cget("text") for b in _buttons(m.body)]
+        labels = [button.cget("text") for button in _buttons(mockup.body)]
         self.assertIn("Download 3 recordings…", labels)
 
     def test_save_screen_defaults_to_html_and_follows_the_format(self):
-        m = self.mod.Mockup(self.root, "save")
-        self.assertEqual(m.fmt.get(), "html")
-        self.assertTrue(m.path.get().endswith(".html"))
-        m.fmt.set("csv")
-        m._fmt_changed()
-        self.assertTrue(m.path.get().endswith(".csv"))
+        mockup = self.mod.Mockup(self.root, "save")
+        self.assertEqual(mockup.format.get(), "html")
+        self.assertTrue(mockup.path.get().endswith(".html"))
+        mockup.format.set("csv")
+        mockup._fmt_changed()
+        self.assertTrue(mockup.path.get().endswith(".csv"))
 
     def test_erase_dialog_defaults_to_keeping_the_recordings(self):
-        m = self.mod.Mockup(self.root, "erase")
-        dlg = next(w for w in self.root.winfo_children() if isinstance(w, tk.Toplevel))
-        self.assertEqual(m.erase_default.cget("text"), "Keep recordings")
-        self.assertTrue(dlg.bind("<Return>"))  # Enter presses the default button
-        dlg.destroy()
+        mockup = self.mod.Mockup(self.root, "erase")
+        dialog = next(widget for widget in self.root.winfo_children() if isinstance(widget, tk.Toplevel))
+        self.assertEqual(mockup.erase_default.cget("text"), "Keep recordings")
+        self.assertTrue(dialog.bind("<Return>"))  # Enter presses the default button
+        dialog.destroy()
 
     def test_buttons_switch_screens(self):
-        m = self.mod.Mockup(self.root, "device")
-        next(b for b in _buttons(m.body) if b.cget("text").startswith("Download")).invoke()
-        self.assertTrue(any(b.cget("text") == "Browse…" for b in _buttons(m.body)))
+        mockup = self.mod.Mockup(self.root, "device")
+        next(button for button in _buttons(mockup.body) if button.cget("text").startswith("Download")).invoke()
+        self.assertTrue(any(button.cget("text") == "Browse…" for button in _buttons(mockup.body)))
 
 
 if __name__ == "__main__":

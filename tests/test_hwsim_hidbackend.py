@@ -30,7 +30,7 @@ import unittest
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from hwsim import scrub_env, FakeOximeter, Trace, VirtualClock, command_key, make_fake_hid_module  # noqa: E402
+from hwsim import scrub_environment, FakeOximeter, Trace, VirtualClock, command_key, make_fake_hid_module  # noqa: E402
 import test_hwsim_realtrace as rt  # noqa: E402  (module import only: its test classes are not collected here)
 
 from fiedle400 import cli  # noqa: E402
@@ -40,16 +40,16 @@ from fiedle400.hid_driver import PulsoxHidDevice  # noqa: E402
 
 def run_cli(argv, fake_module):
     """Run the CLI's main() with stdout/stderr captured, hid faked, exit() caught."""
-    out, err = io.StringIO(), io.StringIO()
+    output, error_output = io.StringIO(), io.StringIO()
     with mock.patch.dict(sys.modules, {"hid": fake_module}), mock.patch.dict(os.environ), \
-            contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        scrub_env()
+            contextlib.redirect_stdout(output), contextlib.redirect_stderr(error_output):
+        scrub_environment()
         try:
             cli.main(argv)
-            rc = 0
-        except SystemExit as e:
-            rc = e.code or 0
-    return rc, out.getvalue(), err.getvalue()
+            exit_code = 0
+        except SystemExit as error:
+            exit_code = error.code or 0
+    return exit_code, output.getvalue(), error_output.getvalue()
 
 
 # --------------------------------------------------------------------------
@@ -71,28 +71,28 @@ class FlowCase(unittest.TestCase):
         # tell SerialDeviceEngine not to start its background reader thread even when a test
         # drives real CLI code that asks for one.
         from fiedle400.engine import device as device_module
-        sim_patcher = mock.patch.object(device_module, "SIMULATED_DEVICE_ACTIVE", True)
-        sim_patcher.start()
-        self.addCleanup(sim_patcher.stop)
+        simulator_patcher = mock.patch.object(device_module, "SIMULATED_DEVICE_ACTIVE", True)
+        simulator_patcher.start()
+        self.addCleanup(simulator_patcher.stop)
         # Same engine code as the Linux flows: time.sleep() in its polling
         # loops is real whichever backend sits underneath, so speed it up
         # the same way HidrawSim's tests do (fiedle400.engine.device.time).
         clock_patch = VirtualClock().patch()
         clock_patch.start()
         self.addCleanup(clock_patch.stop)
-        self.dev = PulsoxHidDevice(backend="hid")
-        self.dev.connect()
-        self.addCleanup(self.dev.close)
-        self.engine = SerialDeviceEngine(self.dev)
+        self.hid_device = PulsoxHidDevice(backend="hid")
+        self.hid_device.connect()
+        self.addCleanup(self.hid_device.close)
+        self.engine = SerialDeviceEngine(self.hid_device)
 
     def assert_fully_answered(self):
-        self.assertEqual([r.hex()[:24] for r in self.fake.unmatched], [])
+        self.assertEqual([report.hex()[:24] for report in self.fake.unmatched], [])
         self.assertEqual(self.fake.destructive, [])
 
     def download(self):
-        sess = self.engine.list_sessions()[0]
+        session = self.engine.list_sessions()[0]
         with contextlib.redirect_stdout(io.StringIO()):
-            return self.engine.download_session(sess)
+            return self.engine.download_session(session)
 
     def run_info(self):
         return run_cli(["info", "--backend", "hid"], self.fake_module)
@@ -100,19 +100,19 @@ class FlowCase(unittest.TestCase):
 
 class TestSessions(FlowCase):
     def test_lists_the_recorded_session(self):
-        (s,) = self.engine.list_sessions()
-        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 214, 214))
-        self.assertEqual(s.timestamp.isoformat(), "2026-09-30T19:54:53")
+        (session,) = self.engine.list_sessions()
+        self.assertEqual((session.session_id, session.user_id, session.record_count, session.raw_samples), (1, 1, 214, 214))
+        self.assertEqual(session.timestamp.isoformat(), "2026-09-30T19:54:53")
         self.assert_fully_answered()
 
     def test_sends_unlock_reset_then_query(self):
         self.engine.list_sessions()
-        self.assertEqual([command_key(r) for r in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
+        self.assertEqual([command_key(report) for report in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
 
     def test_header_count_is_seconds_so_duration_is_214_seconds(self):
         """T-075, same as on Linux: 214 samples, one per second, are 214 s."""
-        (s,) = self.engine.list_sessions()
-        self.assertEqual(s.duration_seconds, 214)
+        (session,) = self.engine.list_sessions()
+        self.assertEqual(session.duration_seconds, 214)
 
 
 class TestDownload(FlowCase):
@@ -129,29 +129,29 @@ class TestDownload(FlowCase):
         """T6/T1 (fixed), T-075, same as on Linux: one window, each sample once, through HidBackend."""
         records = self.download()
         self.assertEqual(len(records), 214)
-        self.assertEqual([r["spo2"] for r in records], rt.window(rt.SPO2, 0))
-        self.assertEqual([r["flags"] for r in records], ["ok"] * 214)
+        self.assertEqual([record["spo2"] for record in records], rt.window(rt.SPO2, 0))
+        self.assertEqual([record["flags"] for record in records], ["ok"] * 214)
 
 
 class TestInfo(FlowCase):
     def test_clock_and_user_come_from_recorded_replies(self):
-        res = self.engine.read_device_info()
-        self.assertEqual(res["rtc_time_str"], "not reported by the device")
-        self.assertEqual(res["device_info"].user_profile, "user")
+        result = self.engine.read_device_info()
+        self.assertEqual(result["rtc_time_text"], "not reported by the device")
+        self.assertEqual(result["device_info"].user_profile, "user")
         self.assert_fully_answered()
 
     def test_firmware_serial_and_geometry_are_not_made_up(self):
         """T4/T7 (fixed), same as on Linux."""
-        rc, out, err = self.run_info()
-        self.assertEqual(rc, 0)
-        self.assertNotIn("v2.0 (CMS-60D/PO-400 v2)", out)
-        self.assertNotIn("112 Bytes Sub-chunk Payload", out)
+        exit_code, output, error_output = self.run_info()
+        self.assertEqual(exit_code, 0)
+        self.assertNotIn("v2.0 (CMS-60D/PO-400 v2)", output)
+        self.assertNotIn("112 Bytes Sub-chunk Payload", output)
         for label in ("Firmware Version", "Serial Number", "Storage Memory Geometry"):
-            self.assertRegex(out, rf"{label}\s*: not reported by the device")
+            self.assertRegex(output, rf"{label}\s*: not reported by the device")
 
     def test_the_model_descriptor_is_shown_as_such(self):
-        rc, out, err = self.run_info()
-        self.assertRegex(out, r"Device Model Descriptor\s*: 50F")
+        exit_code, output, error_output = self.run_info()
+        self.assertRegex(output, r"Device Model Descriptor\s*: 50F")
 
 
 class TestSelftest(FlowCase):
@@ -170,9 +170,9 @@ class TestSelftest(FlowCase):
         device -- selftest must say so and name the fix, not just "not readable"."""
         with mock.patch("fiedle400.hid_driver.find_pulsox_hid_devices",
                          return_value=[("/dev/hidraw0", "", False)]):
-            rc, out, err = run_cli(["--backend", "hid", "selftest"], self.fake_module)
-        self.assertEqual(rc, 1)
-        self.assertIn("fiedle400_setup-udev.sh", out)
+            exit_code, output, error_output = run_cli(["--backend", "hid", "selftest"], self.fake_module)
+        self.assertEqual(exit_code, 1)
+        self.assertIn("fiedle400_setup-udev.sh", output)
 
     def test_all_checks_pass_against_a_fully_answering_device(self):
         # Deliberately decoupled from trace-replay fidelity/ordering (unlike the
@@ -201,10 +201,10 @@ class TestSelftest(FlowCase):
                                    return_value=bytes.fromhex("f200000207000c07")), \
                 mock.patch.object(SerialDeviceEngine, "list_sessions",
                                    return_value=[object()]):
-            rc, out, err = run_cli(["--backend", "hid", "selftest"], self.fake_module)
-        self.assertEqual(rc, 0, out + err)
-        self.assertIn("All checks passed", out)
-        self.assertNotIn("❌", out)  # no failure marker anywhere
+            exit_code, output, error_output = run_cli(["--backend", "hid", "selftest"], self.fake_module)
+        self.assertEqual(exit_code, 0, output + error_output)
+        self.assertIn("All checks passed", output)
+        self.assertNotIn("❌", output)  # no failure marker anywhere
 
     def test_backend_flag_also_works_after_the_subcommand(self):
         """`fiedle400 selftest -b hid` used to fail with "unrecognized arguments"; it takes -b like the others."""
@@ -218,18 +218,18 @@ class TestSelftest(FlowCase):
                                    return_value=bytes.fromhex("f200000207000c07")), \
                 mock.patch.object(SerialDeviceEngine, "list_sessions",
                                    return_value=[object()]):
-            rc, out, err = run_cli(["selftest", "-b", "hid"], self.fake_module)
-        self.assertEqual(rc, 0, out + err)
-        self.assertIn("All checks passed", out)
-        self.assertNotIn("❌", out)  # no failure marker anywhere
+            exit_code, output, error_output = run_cli(["selftest", "-b", "hid"], self.fake_module)
+        self.assertEqual(exit_code, 0, output + error_output)
+        self.assertIn("All checks passed", output)
+        self.assertNotIn("❌", output)  # no failure marker anywhere
 
     def test_a_device_that_only_acks_and_never_answers_is_reported_as_failed(self):
         unresponsive = FakeOximeter(Trace())  # no recordings at all: ACKs unlock, answers nothing else
         fake_module = make_fake_hid_module(unresponsive)
-        rc, out, err = run_cli(["--backend", "hid", "selftest"], fake_module)
-        self.assertEqual(rc, 1, out + err)
-        self.assertIn("Some checks failed", out)
-        self.assertIn("no data returned", out)
+        exit_code, output, error_output = run_cli(["--backend", "hid", "selftest"], fake_module)
+        self.assertEqual(exit_code, 1, output + error_output)
+        self.assertIn("Some checks failed", output)
+        self.assertIn("no data returned", output)
 
 
 # --------------------------------------------------------------------------
@@ -239,9 +239,9 @@ class TestConnectionFaults(unittest.TestCase):
     def test_no_device_found_raises_a_clear_error_not_a_crash(self):
         fake_module = make_fake_hid_module(FakeOximeter(rt.real_trace()), present=False)
         with mock.patch.dict(sys.modules, {"hid": fake_module}):
-            with self.assertRaises(RuntimeError) as ctx:
+            with self.assertRaises(RuntimeError) as context:
                 PulsoxHidDevice(backend="hid").connect()
-            self.assertIn("No Pulsox PO-400 device found", str(ctx.exception))
+            self.assertIn("No Pulsox PO-400 device found", str(context.exception))
 
     def test_a_broken_enumerate_is_reported_as_an_installation_problem_not_a_missing_device(self):
         """Regression guard for the bug fixed in 0ab3bf0: hid.enumerate() raising must not
@@ -253,9 +253,9 @@ class TestConnectionFaults(unittest.TestCase):
 
         fake_module.enumerate = broken_enumerate
         with mock.patch.dict(sys.modules, {"hid": fake_module}):
-            with self.assertRaises(RuntimeError) as ctx:
+            with self.assertRaises(RuntimeError) as context:
                 PulsoxHidDevice(backend="hid").connect()
-            self.assertIn("installation problem", str(ctx.exception))
+            self.assertIn("installation problem", str(context.exception))
 
 
 # --------------------------------------------------------------------------
@@ -270,15 +270,15 @@ class TestCtypesStyleBranch(unittest.TestCase):
         fake = FakeOximeter(rt.real_trace(), strict=True)
         fake_module = make_fake_hid_module(fake, style="ctypes")
         with mock.patch.dict(sys.modules, {"hid": fake_module}):
-            dev = PulsoxHidDevice(backend="hid")
-            dev.connect()
+            device = PulsoxHidDevice(backend="hid")
+            device.connect()
             try:
-                self.assertEqual(dev.backend_name, "hid")
-                engine = SerialDeviceEngine(dev)
-                (s,) = engine.list_sessions()
-                self.assertEqual(s.record_count, 214)
+                self.assertEqual(device.backend_name, "hid")
+                engine = SerialDeviceEngine(device)
+                (session,) = engine.list_sessions()
+                self.assertEqual(session.record_count, 214)
             finally:
-                dev.close()
+                device.close()
         self.assertEqual(fake.destructive, [])
 
 

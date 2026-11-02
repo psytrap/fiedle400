@@ -19,9 +19,9 @@ class Framing(IntEnum):
 # --- Protocol Timing Constants ---
 # Microcontrollers over USB HID require small delays between writes to flush output buffers
 # and allow report state machines to transition without packet drops.
-HID_POLL_INTERVAL_SEC = 0.002   # 2ms poll interval to avoid high CPU utilization during HID reads
-HID_READ_TIMEOUT_SEC = 0.25     # 250ms maximum timeout when waiting for a specific HID response packet
-COMMAND_ACK_DELAY_SEC = 0.05    # 50ms settling time after issuing command reports before reading ACKs
+HID_POLL_INTERVAL_SECONDS = 0.002   # 2ms poll interval to avoid high CPU utilization during HID reads
+HID_READ_TIMEOUT_SECONDS = 0.25     # 250ms maximum timeout when waiting for a specific HID response packet
+COMMAND_ACK_DELAY_SECONDS = 0.05    # 50ms settling time after issuing command reports before reading ACKs
 
 
 class Opcode(IntEnum):
@@ -61,7 +61,7 @@ class SessionInfo:
     session_id: int
     user_id: int = 1
     record_count: int = 0
-    duration_sec: int = 0
+    stored_duration_seconds: int = 0
     timestamp: Optional[datetime] = None
     raw_samples: int = 0   # samples stored (0xEC header), one per second, so equal to record_count (T-075)
     manual: bool = False   # the Manual-mode recording (0xD0 header, PROTOCOL.md 3.14), not an 0xEC entry
@@ -69,25 +69,25 @@ class SessionInfo:
     @property
     def duration_seconds(self) -> int:
         """Returns duration in seconds."""
-        if self.duration_sec > 0:
-            return self.duration_sec
+        if self.stored_duration_seconds > 0:
+            return self.stored_duration_seconds
         return max(0, self.record_count)
 
     @property
-    def duration_str(self) -> str:
+    def duration_text(self) -> str:
         """Formats record count into human-readable duration (e.g., '3h 37m 36s', '42m 44s', '15s')."""
-        total_sec = self.duration_seconds
-        if total_sec <= 0:
+        total_seconds = self.duration_seconds
+        if total_seconds <= 0:
             return "0s"
-        hrs = total_sec // 3600
-        mins = (total_sec % 3600) // 60
-        secs = total_sec % 60
-        if hrs > 0:
-            return f"{hrs}h {mins:02d}m {secs:02d}s"
-        elif mins > 0:
-            return f"{mins}m {secs:02d}s"
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        if hours > 0:
+            return f"{hours}h {minutes:02d}m {seconds:02d}s"
+        elif minutes > 0:
+            return f"{minutes}m {seconds:02d}s"
         else:
-            return f"{secs}s"
+            return f"{seconds}s"
 
 
 @dataclass
@@ -111,12 +111,12 @@ class DecodedPacket:
     heart_rate: Optional[int] = None
     ppg_wave: int = 0
     status_flags: int = 0x00
-    status_str: str = "ok"
+    status_text: str = "ok"
     session_info: Optional[SessionInfo] = None
     device_info: Optional[DeviceInfo] = None
     raw_payload: Optional[bytes] = None
     block_id: Optional[int] = None
-    seq: Optional[int] = None
+    sequence: Optional[int] = None
     sequence_gap: bool = False
-    expected_seq: Optional[int] = None
+    expected_sequence: Optional[int] = None
     invalid_sample: bool = False  # stored series pair outside the physiological range (finger out): value is None

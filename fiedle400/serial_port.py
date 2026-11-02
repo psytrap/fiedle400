@@ -22,9 +22,9 @@ BAUD_RATE = 115200  # SpO2.exe's connect routine, PROTOCOL.md §5
 REPORT_SIZE = 64
 # A reply arrives as one burst (64 bytes take about 5.6 ms at 115200 baud). A gap this long
 # ends a "report", so each reply starts at offset 0 like a HID report does.
-QUIET_GAP_SEC = 0.01
+QUIET_GAP_SECONDS = 0.01
 
-PROBE_TIMEOUT_SEC = 0.3
+PROBE_TIMEOUT_SECONDS = 0.3
 
 # Module constant so tests can point it at a simulated tree (as hid_driver.SYSFS_HIDRAW_ROOT).
 SYSFS_TTY_ROOT = "/sys/class/tty"
@@ -55,17 +55,17 @@ def is_serial_path(path: Optional[str]) -> bool:
     """True for a path that names a serial port rather than a HID node."""
     if not path:
         return False
-    p = str(path)
-    if p.upper().startswith("COM") and p[3:].isdigit():
+    text = str(path)
+    if text.upper().startswith("COM") and text[3:].isdigit():
         return True
-    base = os.path.basename(p)
+    base = os.path.basename(text)
     return base.startswith(("ttyUSB", "ttyACM", "cu.", "tty.usb"))
 
 
 def _read_text(path: str) -> Optional[str]:
     try:
-        with open(path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read().strip()
+        with open(path, "r", encoding="utf-8", errors="ignore") as text_file:
+            return text_file.read().strip()
     except OSError:
         return None
 
@@ -74,20 +74,20 @@ def _linux_candidates() -> List[Tuple[str, str, str]]:
     found = []
     if not os.path.isdir(SYSFS_TTY_ROOT):
         return found
-    wanted = {(f"{v:04X}", f"{p:04X}") for v, p in SERIAL_USB_IDS}
+    wanted = {(f"{vendor:04X}", f"{product:04X}") for vendor, product in SERIAL_USB_IDS}
     for node in sorted(os.listdir(SYSFS_TTY_ROOT)):
-        dev_link = os.path.join(SYSFS_TTY_ROOT, node, "device")
-        if not os.path.exists(dev_link):
+        device_link = os.path.join(SYSFS_TTY_ROOT, node, "device")
+        if not os.path.exists(device_link):
             continue
-        curr = os.path.realpath(dev_link)
+        current = os.path.realpath(device_link)
         for _ in range(6):  # walk up from the interface to the USB device
-            vid = _read_text(os.path.join(curr, "idVendor"))
-            pid = _read_text(os.path.join(curr, "idProduct"))
+            vid = _read_text(os.path.join(current, "idVendor"))
+            pid = _read_text(os.path.join(current, "idProduct"))
             if vid and pid:
                 if (vid.upper(), pid.upper()) in wanted:
                     found.append((os.path.join("/dev", node), vid.upper(), pid.upper()))
                 break
-            curr = os.path.dirname(curr)
+            current = os.path.dirname(current)
     return found
 
 
@@ -117,19 +117,19 @@ def _windows_candidates(winreg=None) -> List[Tuple[str, str, str]]:
     for vid, pid in SERIAL_USB_IDS:
         key_path = rf"SYSTEM\CurrentControlSet\Enum\USB\VID_{vid:04X}&PID_{pid:04X}"
         try:
-            dev_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path)
+            device_key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path)
         except OSError:
             continue
         i = 0
         while True:
             try:
-                instance = winreg.EnumKey(dev_key, i)
+                instance = winreg.EnumKey(device_key, i)
             except OSError:
                 break
             i += 1
             try:
-                params = winreg.OpenKey(dev_key, instance + r"\Device Parameters")
-                port, _ = winreg.QueryValueEx(params, "PortName")
+                parameters = winreg.OpenKey(device_key, instance + r"\Device Parameters")
+                port, _ = winreg.QueryValueEx(parameters, "PortName")
             except OSError:
                 continue
             if port and (present is None or str(port).upper() in present):
@@ -164,12 +164,12 @@ def find_model_frame(data: bytes) -> Optional[str]:
         frame = data[i:i + 10]
         if frame[0] != 0xF1 or frame[9] != sum(frame[:9]) & 0x7F:
             continue
-        if all(0x20 <= b < 0x7F for b in frame[1:9]):
+        if all(0x20 <= byte < 0x7F for byte in frame[1:9]):
             return frame[1:9].decode("ascii").strip()
     return None
 
 
-def probe_model(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
+def probe_model(backend, timeout: float = PROBE_TIMEOUT_SECONDS) -> Optional[str]:
     """Asks a just-opened device for its model; None if it does not answer like an oximeter.
 
     Sends what `info` sends first (unlock, then `81 01`), so an oximeter sees nothing new. A
@@ -181,9 +181,9 @@ def probe_model(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
     data = b""
     start = time.time()
     while time.time() - start < timeout:
-        rep = backend.read_report(64)
-        if rep:
-            data += rep
+        report = backend.read_report(64)
+        if report:
+            data += report
             model = find_model_frame(data)
             if model is not None:
                 # Drop anything else the probe stirred up, but never wait on a device that
@@ -197,7 +197,7 @@ def probe_model(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
     return None
 
 
-def probe_cms50f37(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]:
+def probe_cms50f37(backend, timeout: float = PROBE_TIMEOUT_SECONDS) -> Optional[str]:
     """Asks for the model in protocol B (CMS50F v3.7 family, CMS50_COMPATIBILITY.md §6); None
     without an answer.
 
@@ -215,11 +215,11 @@ def probe_cms50f37(backend, timeout: float = PROBE_TIMEOUT_SEC) -> Optional[str]
     data = b""
     start = time.time()
     while time.time() - start < timeout:
-        rep = backend.read_report(64)
-        if rep:
-            data += rep
+        report = backend.read_report(64)
+        if report:
+            data += report
             frames, _ = cms50f37.split_frames(data)
-            if sum(1 for f in frames if f.code == cms50f37.REPLY_MODEL) >= 2:
+            if sum(1 for frame in frames if frame.code == cms50f37.REPLY_MODEL) >= 2:
                 break
         else:
             time.sleep(0.02)
@@ -246,10 +246,10 @@ class _PosixPort:
     def __init__(self, path: str):
         import termios
         self._termios = termios
-        self.fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        self.file_descriptor = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
         try:
-            attrs = termios.tcgetattr(self.fd)
-            iflag, oflag, cflag, lflag, _ispeed, _ospeed, cc = attrs
+            attributes = termios.tcgetattr(self.file_descriptor)
+            iflag, oflag, cflag, lflag, _ispeed, _ospeed, cc = attributes
             iflag &= ~(termios.IGNBRK | termios.BRKINT | termios.PARMRK | termios.ISTRIP
                        | termios.INLCR | termios.IGNCR | termios.ICRNL | termios.IXON
                        | termios.IXOFF | termios.IXANY)
@@ -263,13 +263,13 @@ class _PosixPort:
             cc[termios.VMIN] = 0
             cc[termios.VTIME] = 0
             speed = termios.B115200
-            termios.tcsetattr(self.fd, termios.TCSANOW, [iflag, oflag, cflag, lflag, speed, speed, cc])
-            termios.tcflush(self.fd, termios.TCIOFLUSH)
+            termios.tcsetattr(self.file_descriptor, termios.TCSANOW, [iflag, oflag, cflag, lflag, speed, speed, cc])
+            termios.tcflush(self.file_descriptor, termios.TCIOFLUSH)
             if hasattr(termios, "TIOCEXCL"):  # keep other programs (e.g. ModemManager) off the port
                 import fcntl
-                fcntl.ioctl(self.fd, termios.TIOCEXCL)
+                fcntl.ioctl(self.file_descriptor, termios.TIOCEXCL)
         except Exception:
-            os.close(self.fd)
+            os.close(self.file_descriptor)
             raise
 
     def write(self, data: bytes) -> int:
@@ -278,24 +278,24 @@ class _PosixPort:
         view, deadline = memoryview(data), time.time() + 1.0
         while view:
             try:
-                n = os.write(self.fd, view)
+                written = os.write(self.file_descriptor, view)
             except BlockingIOError:
-                n = 0
-            view = view[n:]
+                written = 0
+            view = view[written:]
             if view:
                 if time.time() > deadline:
                     raise OSError(f"serial write timed out with {len(view)} of {len(data)} bytes unsent")
                 time.sleep(0.002)
         return len(data)
 
-    def read(self, n: int) -> bytes:
+    def read(self, size: int) -> bytes:
         try:
-            return os.read(self.fd, n)
+            return os.read(self.file_descriptor, size)
         except BlockingIOError:
             return b""
 
     def close(self) -> None:
-        os.close(self.fd)
+        os.close(self.file_descriptor)
 
 
 class _WindowsPort:
@@ -305,23 +305,23 @@ class _WindowsPort:
         import ctypes
         from ctypes import wintypes
         self._ctypes = ctypes
-        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        self._k32 = k32
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel32 = kernel32
         # Explicit argtypes: without them ctypes passes ints as 32-bit C ints, which truncates a
         # 64-bit HANDLE and overflows on GENERIC_READ (0x80000000).
-        H, D, P = wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p
-        k32.CreateFileW.argtypes = [wintypes.LPCWSTR, D, D, P, D, D, H]
-        k32.CreateFileW.restype = H
-        k32.GetCommState.argtypes = [H, P]
-        k32.SetCommState.argtypes = [H, P]
-        k32.SetCommTimeouts.argtypes = [H, P]
-        k32.PurgeComm.argtypes = [H, D]
-        k32.WriteFile.argtypes = [H, ctypes.c_char_p, D, ctypes.POINTER(D), P]
-        k32.ReadFile.argtypes = [H, ctypes.c_char_p, D, ctypes.POINTER(D), P]
-        k32.CloseHandle.argtypes = [H]
+        HANDLE, DWORD, VOIDP = wintypes.HANDLE, wintypes.DWORD, ctypes.c_void_p
+        kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, DWORD, DWORD, VOIDP, DWORD, DWORD, HANDLE]
+        kernel32.CreateFileW.restype = HANDLE
+        kernel32.GetCommState.argtypes = [HANDLE, VOIDP]
+        kernel32.SetCommState.argtypes = [HANDLE, VOIDP]
+        kernel32.SetCommTimeouts.argtypes = [HANDLE, VOIDP]
+        kernel32.PurgeComm.argtypes = [HANDLE, DWORD]
+        kernel32.WriteFile.argtypes = [HANDLE, ctypes.c_char_p, DWORD, ctypes.POINTER(DWORD), VOIDP]
+        kernel32.ReadFile.argtypes = [HANDLE, ctypes.c_char_p, DWORD, ctypes.POINTER(DWORD), VOIDP]
+        kernel32.CloseHandle.argtypes = [HANDLE]
         name = path if path.startswith("\\\\.\\") else "\\\\.\\" + path
         GENERIC_READ, GENERIC_WRITE, OPEN_EXISTING = 0x80000000, 0x40000000, 3
-        handle = k32.CreateFileW(name, GENERIC_READ | GENERIC_WRITE, 0, None, OPEN_EXISTING, 0, None)
+        handle = kernel32.CreateFileW(name, GENERIC_READ | GENERIC_WRITE, 0, None, OPEN_EXISTING, 0, None)
         if handle in (None, wintypes.HANDLE(-1).value):
             raise OSError(ctypes.get_last_error(), f"cannot open {path}")
         self.handle = handle
@@ -345,41 +345,41 @@ class _WindowsPort:
 
         dcb = DCB()
         dcb.DCBlength = ctypes.sizeof(DCB)
-        if not k32.GetCommState(handle, ctypes.byref(dcb)):
+        if not kernel32.GetCommState(handle, ctypes.byref(dcb)):
             self.close()
             raise OSError(ctypes.get_last_error(), f"GetCommState failed on {path}")
         dcb.BaudRate = BAUD_RATE
         dcb.ByteSize, dcb.Parity, dcb.StopBits = 8, 0, 0  # 8N1
         # fBinary, DTR and RTS on (as a POSIX open leaves them), no flow control, no parity check.
         dcb.fBits = 0x0001 | 0x0010 | 0x1000
-        if not k32.SetCommState(handle, ctypes.byref(dcb)):
+        if not kernel32.SetCommState(handle, ctypes.byref(dcb)):
             self.close()
             raise OSError(ctypes.get_last_error(), f"SetCommState failed on {path}")
         # MAXDWORD, 0, 0: ReadFile returns immediately with whatever has arrived.
         timeouts = COMMTIMEOUTS(0xFFFFFFFF, 0, 0, 0, 1000)
-        k32.SetCommTimeouts(handle, ctypes.byref(timeouts))
-        k32.PurgeComm(handle, 0x0004 | 0x0008)  # PURGE_TXCLEAR | PURGE_RXCLEAR
+        kernel32.SetCommTimeouts(handle, ctypes.byref(timeouts))
+        kernel32.PurgeComm(handle, 0x0004 | 0x0008)  # PURGE_TXCLEAR | PURGE_RXCLEAR
 
     def write(self, data: bytes) -> int:
         from ctypes import wintypes
         written = wintypes.DWORD(0)
-        if not self._k32.WriteFile(self.handle, bytes(data), len(data), self._ctypes.byref(written), None):
+        if not self._kernel32.WriteFile(self.handle, bytes(data), len(data), self._ctypes.byref(written), None):
             raise OSError(self._ctypes.get_last_error(), "WriteFile failed")
         if written.value != len(data):
             raise OSError(f"serial write timed out with {len(data) - written.value} of {len(data)} bytes unsent")
         return written.value
 
-    def read(self, n: int) -> bytes:
+    def read(self, size: int) -> bytes:
         from ctypes import wintypes
-        buf = self._ctypes.create_string_buffer(n)
+        buffer = self._ctypes.create_string_buffer(size)
         got = wintypes.DWORD(0)
-        if not self._k32.ReadFile(self.handle, buf, n, self._ctypes.byref(got), None):
+        if not self._kernel32.ReadFile(self.handle, buffer, size, self._ctypes.byref(got), None):
             raise OSError(self._ctypes.get_last_error(), "ReadFile failed")
-        return buf.raw[:got.value]
+        return buffer.raw[:got.value]
 
     def close(self) -> None:
         if self.handle is not None:
-            self._k32.CloseHandle(self.handle)
+            self._kernel32.CloseHandle(self.handle)
             self.handle = None
 
 
@@ -405,8 +405,8 @@ class SerialBackend:
     and the engine's parsers work unchanged.
     """
 
-    def __init__(self, dev_path: Optional[str] = None):
-        self.dev_path = dev_path
+    def __init__(self, device_path: Optional[str] = None):
+        self.device_path = device_path
         self._port = None
         self._pending = b""
         self._usb_id: Optional[Tuple[str, str]] = None
@@ -421,14 +421,14 @@ class SerialBackend:
         backend only ever sends protocol-C (PO-x00) commands, and protocol B has no checksum and
         a disjoint, overlapping-by-coincidence opcode set (its `AA` is the PO-400's
         `FLASH_CLEAR`), so guessing wrong here is not safe to paper over."""
-        if self.dev_path:
-            self._open(self.dev_path)
+        if self.device_path:
+            self._open(self.device_path)
             self.model_string, self.protocol = probe_any(self)
             if self.protocol == "cms50f37":
-                self._refuse_cms50f37(self.dev_path, self.model_string)
+                self._refuse_cms50f37(self.device_path, self.model_string)
             if self.model_string is None:
-                print(f"⚠️ {self.dev_path} did not answer like an oximeter; continuing because you chose it.")
-            return self.dev_path
+                print(f"⚠️ {self.device_path} did not answer like an oximeter; continuing because you chose it.")
+            return self.device_path
 
         candidates = find_serial_candidates()
         if not candidates:
@@ -438,16 +438,16 @@ class SerialBackend:
             other = SerialBackend(port)
             try:
                 other._open(port)
-            except Exception as e:
-                skipped.append(f"{port} ({vid}:{pid}): {e}")
+            except Exception as error:
+                skipped.append(f"{port} ({vid}:{pid}): {error}")
                 continue
-            model, proto = probe_any(other)
+            model, protocol = probe_any(other)
             if model is None:
                 other.close()
                 print(f"Probing {port} ({vid}:{pid})... not an oximeter, skipped")
                 skipped.append(f"{port} ({vid}:{pid}) did not answer like an oximeter")
                 continue
-            if proto == "cms50f37":
+            if protocol == "cms50f37":
                 other.close()
                 print(f"Probing {port} ({vid}:{pid})... found a {model} (protocol B, not supported), skipped")
                 if other_protocol is None:
@@ -464,7 +464,7 @@ class SerialBackend:
             raise RuntimeError("No oximeter answered on the serial port(s) found: " + "; ".join(skipped))
         other, port, vid, pid, model = chosen
         self._port, other._port = other._port, None
-        self.dev_path, self._usb_id, self.model_string = port, (vid, pid), model
+        self.device_path, self._usb_id, self.model_string = port, (vid, pid), model
         if len(answered) > 1:
             print(f"Oximeters answered on {', '.join(answered)}; using {port}. Pick another with --device.")
         return port
@@ -481,13 +481,13 @@ class SerialBackend:
         try:
             self._port = open_port(path)
             self._pending = b""
-        except PermissionError as e:
+        except PermissionError as error:
             raise PermissionError(
                 f"Permission denied accessing '{path}'. On Linux, add your user to the "
                 "'dialout' group (then log out and in again)."
-            ) from e
-        except Exception as e:
-            raise RuntimeError(f"Failed to open serial port '{path}': {e}") from e
+            ) from error
+        except Exception as error:
+            raise RuntimeError(f"Failed to open serial port '{path}': {error}") from error
 
     def is_connected(self) -> bool:
         return self._port is not None
@@ -517,7 +517,7 @@ class SerialBackend:
                 return None
             # Keep reading until the line goes quiet or a full report has arrived.
             while len(self._pending) < max_bytes:
-                time.sleep(QUIET_GAP_SEC)
+                time.sleep(QUIET_GAP_SECONDS)
                 more = self._port.read(256)
                 if not more:
                     break
@@ -525,9 +525,9 @@ class SerialBackend:
         out, self._pending = self._pending[:max_bytes], self._pending[max_bytes:]
         return out
 
-    def read_report_blocking(self, max_bytes: int = REPORT_SIZE, timeout_sec: float = 2.0) -> Optional[bytes]:
+    def read_report_blocking(self, max_bytes: int = REPORT_SIZE, timeout_seconds: float = 2.0) -> Optional[bytes]:
         start = time.time()
-        while time.time() - start < timeout_sec:
+        while time.time() - start < timeout_seconds:
             data = self.read_report(max_bytes)
             if data:
                 return data
@@ -536,10 +536,10 @@ class SerialBackend:
 
     def get_descriptor_info(self) -> dict:
         vid, pid = self._usb_id or (None, None)
-        if vid is None and self.dev_path:
-            for port, v, p in find_serial_candidates():
-                if port == self.dev_path:
-                    vid, pid = v, p
+        if vid is None and self.device_path:
+            for port, candidate_vid, candidate_pid in find_serial_candidates():
+                if port == self.device_path:
+                    vid, pid = candidate_vid, candidate_pid
                     break
         return {
             "manufacturer": None,
@@ -551,7 +551,7 @@ class SerialBackend:
             "hid_name": None,
             "vid_hex": vid,
             "pid_hex": pid,
-            "metadata_source": f"USB-serial port {self.dev_path} ({BAUD_RATE} baud)",
+            "metadata_source": f"USB-serial port {self.device_path} ({BAUD_RATE} baud)",
         }
 
     def close(self):

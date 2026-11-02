@@ -77,9 +77,9 @@ class TestRecordedSession(unittest.TestCase):
 
     def test_header_reports_214_raw_samples_for_session_1_started_2026_09_30(self):
         (group,) = real_trace().responses((0x9C, 1))
-        hdr = group[0]
-        self.assertEqual(hdr[0], 0xEC)
-        self.assertEqual(tuple(hdr[4:10]), (26, 9, 30, 19, 54, 53))
+        header = group[0]
+        self.assertEqual(header[0], 0xEC)
+        self.assertEqual(tuple(header[4:10]), (26, 9, 30, 19, 54, 53))
 
     def test_every_stored_frame_has_a_valid_checksum(self):
         checked = 0
@@ -96,19 +96,19 @@ class TestRecordedSession(unittest.TestCase):
     def test_the_page_number_is_a_sample_offset_each_reply_is_the_session_shifted_by_that_many_samples(self):
         """T6: page k returns the same session starting k raw samples in (214, 213, 212 values)."""
         for series in (SPO2, PULSE):
-            w0, w1, w2 = (window(series, k) for k in (0, 1, 2))
-            self.assertEqual((len(w0), len(w1), len(w2)), (214, 213, 212))
-            self.assertEqual(w1, w0[1:])
-            self.assertEqual(w2, w0[2:])
+            first_window, second_window, third_window = (window(series, k) for k in (0, 1, 2))
+            self.assertEqual((len(first_window), len(second_window), len(third_window)), (214, 213, 212))
+            self.assertEqual(second_window, first_window[1:])
+            self.assertEqual(third_window, first_window[2:])
 
     def test_the_probe_recording_confirms_offsets_in_raw_samples_up_to_the_end_of_the_data(self):
         """Each reply is the session from that raw sample to the end (both for 50, 107, 150 and 213)."""
         full = window(SPO2, 0)
-        for off, count in ((1, 213), (50, 164), (107, 107), (150, 64), (213, 1)):
-            stream = b"".join(probe_trace().responses((0x9D, 4, SPO2, 1, 1, off & 0x7F, off >> 7))[0])
+        for offset, count in ((1, 213), (50, 164), (107, 107), (150, 64), (213, 1)):
+            stream = b"".join(probe_trace().responses((0x9D, 4, SPO2, 1, 1, offset & 0x7F, offset >> 7))[0])
             frames = [stream[i:i + 30] for i in range(0, len(stream) - 29, 30)]
             got = decode_ed_subframes(frames, is_spo2=True)
-            self.assertEqual((len(got), got == full[off:]), (count, True), off)
+            self.assertEqual((len(got), got == full[offset:]), (count, True), offset)
 
     def test_the_last_frame_of_a_reply_is_a_short_filler_frame_whose_mask_bytes_are_0x7f(self):
         stream = b"".join(real_trace().responses((0x9D, 4, SPO2, 1, 1, 0, 0))[0])
@@ -125,42 +125,42 @@ class RealFlow(base.FlowCase):
         return FakeOximeter(real_trace(), strict=True)
 
     def assert_fully_answered(self):
-        self.assertEqual([r.hex()[:24] for r in self.fake.unmatched], [])
+        self.assertEqual([report.hex()[:24] for report in self.fake.unmatched], [])
         self.assertEqual(self.fake.destructive, [])
 
 
 class TestSessions(RealFlow):
     def test_lists_the_recorded_session(self):
-        (s,) = self.engine.list_sessions()
-        self.assertEqual((s.session_id, s.user_id, s.record_count, s.raw_samples), (1, 1, 214, 214))
-        self.assertEqual(s.timestamp.isoformat(), "2026-09-30T19:54:53")
+        (session,) = self.engine.list_sessions()
+        self.assertEqual((session.session_id, session.user_id, session.record_count, session.raw_samples), (1, 1, 214, 214))
+        self.assertEqual(session.timestamp.isoformat(), "2026-09-30T19:54:53")
         self.assert_fully_answered()
 
     def test_sends_unlock_reset_then_query(self):
         self.engine.list_sessions()
-        self.assertEqual([command_key(r) for r in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
+        self.assertEqual([command_key(report) for report in self.fake.sent], [("unlock",), (0x9C, 0x80), (0x9C, 1)])
 
     def test_header_count_is_seconds_so_duration_is_214_seconds(self):
         """T-075 (reverses T3) on real data: the header counts one sample per second, and the
         independent decode of the first reply agrees (214 values)."""
-        (s,) = self.engine.list_sessions()
-        self.assertEqual(s.duration_seconds, 214)
-        self.assertEqual(s.duration_str, "3m 34s")
+        (session,) = self.engine.list_sessions()
+        self.assertEqual(session.duration_seconds, 214)
+        self.assertEqual(session.duration_text, "3m 34s")
         self.assertEqual(len(window(SPO2, 0)), 214)
 
 
 class TestDownload(RealFlow):
     def keys_sent(self):
-        out = []
-        for r in self.fake.sent:
-            k = command_key(r)
-            if not out or out[-1] != k:
-                out.append(k)
-        return out
+        output = []
+        for report in self.fake.sent:
+            k = command_key(report)
+            if not output or output[-1] != k:
+                output.append(k)
+        return output
 
     def test_command_sequence_reads_the_session_in_one_window(self):
         self.download()
-        page = lambda s, k: (0x9D, 4, s, 1, 1, k, 0)  # noqa: E731
+        page = lambda sample, k: (0x9D, 4, sample, 1, 1, k, 0)  # noqa: E731
         self.assertEqual(self.keys_sent(), [
             ("unlock",), (0x9C, 0x80), (0x9C, 1),
             ("unlock",), (0x9D, 2),
@@ -182,9 +182,9 @@ class TestDownload(RealFlow):
         first reply. The engine used to ask for windows 1 and 2 as well (T6), and until 0.4.41
         averaged pairs of samples into 107 records (T3, wrong)."""
         records = self.download()
-        self.assertEqual([r["spo2"] for r in records], window(SPO2, 0))
-        self.assertEqual([r["heart_rate"] for r in records], window(PULSE, 0))
-        self.assertEqual([r["flags"] for r in records], ["ok"] * 214)
+        self.assertEqual([record["spo2"] for record in records], window(SPO2, 0))
+        self.assertEqual([record["heart_rate"] for record in records], window(PULSE, 0))
+        self.assertEqual([record["flags"] for record in records], ["ok"] * 214)
         self.assertEqual(records[-1]["timestamp"], "2026-09-30T19:58:26")
 
     def test_no_samples_are_lost_at_the_end_of_a_window(self):
@@ -192,11 +192,11 @@ class TestDownload(RealFlow):
         samples. Its byte 7 is the third MSB mask, not a status field."""
         stream = b"".join(real_trace().responses((0x9D, 4, SPO2, 1, 1, 0, 0))[0])
         SerialPacketDetector.reset_decoder_state()
-        buf = SerialByteStreamBuffer()
-        buf.write(stream)
-        events = [e for e in SerialPacketDetector.detect_and_decode_stream(buf) if e.packet_type == "STORED_BLOCK"]
-        self.assertEqual(sum(e.spo2 is not None for e in events), 214)
-        self.assertEqual({e.status_str for e in events}, {"ok"})
+        buffer = SerialByteStreamBuffer()
+        buffer.write(stream)
+        events = [event for event in SerialPacketDetector.detect_and_decode_stream(buffer) if event.packet_type == "STORED_BLOCK"]
+        self.assertEqual(sum(event.spo2 is not None for event in events), 214)
+        self.assertEqual({event.status_text for event in events}, {"ok"})
 
 
 class TestDownloadPastTheEnd(RealFlow):
@@ -210,25 +210,25 @@ class TestDownloadPastTheEnd(RealFlow):
         silence. A header announcing 400 samples must not make the engine loop or invent records."""
         records = self.download()
         self.assertEqual(len(records), 214)
-        keys = [command_key(r) for r in self.fake.sent if command_key(r)[:3] == (0x9D, 4, SPO2)]
+        keys = [command_key(report) for report in self.fake.sent if command_key(report)[:3] == (0x9D, 4, SPO2)]
         offsets = [k[5] | k[6] << 7 for k in keys]
         self.assertEqual(sorted(set(offsets)), [0, 214])
         self.assertEqual(offsets.count(214), 3, "an answer without samples reads as silence: one request plus two retries")
         self.assertEqual(self.fake.destructive, [])
 
     def test_the_end_marker_is_a_frame_of_0xff_filler_and_offsets_beyond_it_are_not_answered(self):
-        end = probe_trace().responses((0x9D, 4, SPO2, 1, 1, 214 & 0x7F, 214 >> 7))[0]
-        self.assertEqual(end[0][:8].hex(), "ed0401000" + "07b7f7f"[0:7])
-        self.assertEqual(unmask_subframe_msb(end[0][:30])[:2], bytearray(b"\xff\xff"))   # decodes to the terminator
-        for off in (215, 300):
-            self.assertEqual(probe_trace().responses((0x9D, 4, SPO2, 1, 1, off & 0x7F, off >> 7)), [[]], off)
+        end_marker = probe_trace().responses((0x9D, 4, SPO2, 1, 1, 214 & 0x7F, 214 >> 7))[0]
+        self.assertEqual(end_marker[0][:8].hex(), "ed0401000" + "07b7f7f"[0:7])
+        self.assertEqual(unmask_subframe_msb(end_marker[0][:30])[:2], bytearray(b"\xff\xff"))   # decodes to the terminator
+        for offset in (215, 300):
+            self.assertEqual(probe_trace().responses((0x9D, 4, SPO2, 1, 1, offset & 0x7F, offset >> 7)), [[]], offset)
 
 
 class TestInfo(RealFlow):
     def test_clock_and_user_come_from_recorded_replies(self):
-        res = self.engine.read_device_info()
-        self.assertEqual(res["rtc_time_str"], "not reported by the device")
-        self.assertEqual(res["device_info"].user_profile, "user")
+        result = self.engine.read_device_info()
+        self.assertEqual(result["rtc_time_text"], "not reported by the device")
+        self.assertEqual(result["device_info"].user_profile, "user")
         self.assert_fully_answered()
 
     def run_info(self):
@@ -237,9 +237,9 @@ class TestInfo(RealFlow):
             return base.run_cli(["info", "--backend", "hidraw"])
 
     def info_lines(self):
-        rc, out, err = self.run_info()
-        self.assertEqual(rc, 0)
-        return dict((k.strip(), v.strip()) for k, _, v in (l.partition(":") for l in out.splitlines()) if v)
+        exit_code, output, error_output = self.run_info()
+        self.assertEqual(exit_code, 0)
+        return dict((k.strip(), value.strip()) for k, _, value in (line.partition(":") for line in output.splitlines()) if value)
 
     def test_firmware_serial_and_geometry_are_not_made_up(self):
         """T4/T7 (fixed): the device answers 0xAD and 0x9E with a bare ACK (and 0x80 too, see the probe
@@ -265,16 +265,16 @@ class TestInfo(RealFlow):
 # --------------------------------------------------------------------------
 # Finger out: the stream marks it with out-of-range values, not with a flag byte (T1)
 # --------------------------------------------------------------------------
-def stored_frame(series: int, seq: int, data: bytes) -> bytes:
+def stored_frame(series: int, sequence: int, data: bytes) -> bytes:
     """A 30-byte 0xED frame: header, three MSB masks, 21 data bytes (0xFF padded), 7-bit checksum."""
     data = bytes(data) + b"\xff" * (21 - len(data))
     masks = [0, 0, 0]
     low = bytearray()
-    for i, b in enumerate(data):
-        if b & 0x80:
+    for i, value in enumerate(data):
+        if value & 0x80:
             masks[i // 7] |= 1 << (i % 7)
-        low.append(b & 0x7F)
-    body = bytes([0xED, 0x04, series, seq & 0x7F, seq >> 7, *masks]) + bytes(low)
+        low.append(value & 0x7F)
+    body = bytes([0xED, 0x04, series, sequence & 0x7F, sequence >> 7, *masks]) + bytes(low)
     return body + bytes([sum(body) & 0x7F])
 
 
@@ -286,14 +286,14 @@ def reply_reports(frame: bytes):
 class TestFingerOut(unittest.TestCase):
     def detect(self, series, data):
         SerialPacketDetector.reset_decoder_state()
-        buf = SerialByteStreamBuffer()
-        buf.write(stored_frame(series, 0, data))
-        return [e for e in SerialPacketDetector.detect_and_decode_stream(buf) if e.packet_type == "STORED_BLOCK"]
+        buffer = SerialByteStreamBuffer()
+        buffer.write(stored_frame(series, 0, data))
+        return [event for event in SerialPacketDetector.detect_and_decode_stream(buffer) if event.packet_type == "STORED_BLOCK"]
 
     def test_out_of_range_spo2_is_an_invalid_sample_not_a_status_flag(self):
         # base 127 (0xF7 0xFF), two 127s; base 98 (0xF6 0xF2), two 98s
         events = self.detect(SPO2, bytes([0xF7, 0xFF, 0x00, 0xF6, 0xF2, 0x00]))
-        self.assertEqual([(e.spo2, e.invalid_sample, e.status_str) for e in events],
+        self.assertEqual([(event.spo2, event.invalid_sample, event.status_text) for event in events],
                          [(None, True, "probe-out")] * 2 + [(98, False, "ok")] * 2)
 
     def test_status_byte_values_in_the_mask_position_do_not_change_the_result(self):
@@ -301,31 +301,31 @@ class TestFingerOut(unittest.TestCase):
         frame[7] |= 0x70            # m2 with bits for data bytes that are 0xFF padding anyway
         frame[29] = sum(frame[:29]) & 0x7F
         SerialPacketDetector.reset_decoder_state()
-        buf = SerialByteStreamBuffer()
-        buf.write(bytes(frame))
-        events = [e for e in SerialPacketDetector.detect_and_decode_stream(buf) if e.packet_type == "STORED_BLOCK"]
-        self.assertEqual({e.status_str for e in events}, {"ok"})
+        buffer = SerialByteStreamBuffer()
+        buffer.write(bytes(frame))
+        events = [event for event in SerialPacketDetector.detect_and_decode_stream(buffer) if event.packet_type == "STORED_BLOCK"]
+        self.assertEqual({event.status_text for event in events}, {"ok"})
 
     @unittest.skipUnless(base.LINUX, "LinuxHidrawBackend is Linux-only")
     def test_download_gives_empty_records_for_the_finger_out_seconds(self):
-        t = Trace()
-        for out, key, ins in real_trace().with_header_samples(4).groups:
+        trace = Trace()
+        for output, key, replies in real_trace().with_header_samples(4).groups:
             if key[:2] != (0x9D, 4):
-                t.add(out, ins)
+                trace.add(output, replies)
         from fiedle400.protocol import Commands
-        t.add(Commands.session_page(1, 1, 0, 1), reply_reports(stored_frame(SPO2, 0, bytes([0xF7, 0xFF, 0x00, 0xF6, 0xF2, 0x00]))))
-        t.add(Commands.session_page(2, 1, 0, 1), reply_reports(stored_frame(PULSE, 0, bytes([0xF4, 0xF6, 0x00, 0x00]))))
-        fake = FakeOximeter(t, strict=True)
+        trace.add(Commands.session_page(1, 1, 0, 1), reply_reports(stored_frame(SPO2, 0, bytes([0xF7, 0xFF, 0x00, 0xF6, 0xF2, 0x00]))))
+        trace.add(Commands.session_page(2, 1, 0, 1), reply_reports(stored_frame(PULSE, 0, bytes([0xF4, 0xF6, 0x00, 0x00]))))
+        fake = FakeOximeter(trace, strict=True)
         with HidrawSim(fake), VirtualClock().patch(), contextlib.redirect_stdout(io.StringIO()):
-            dev = PulsoxHidDevice(backend="hidraw")
-            dev.connect()
-            engine = SerialDeviceEngine(dev)
+            device = PulsoxHidDevice(backend="hidraw")
+            device.connect()
+            engine = SerialDeviceEngine(device)
             records = engine.download_session(engine.list_sessions()[0])
-            dev.close()
+            device.close()
         self.assertEqual(fake.unmatched, [])
-        self.assertEqual([(r["spo2"], r["heart_rate"], r["flags"]) for r in records],
+        self.assertEqual([(record["spo2"], record["heart_rate"], record["flags"]) for record in records],
                          [(None, None, "probe-out")] * 2 + [(98, 70, "ok")] * 2)
-        self.assertEqual([r["timestamp"][-8:] for r in records], ["19:54:53", "19:54:54", "19:54:55", "19:54:56"])
+        self.assertEqual([record["timestamp"][-8:] for record in records], ["19:54:53", "19:54:54", "19:54:55", "19:54:56"])
 
 
 # --------------------------------------------------------------------------
@@ -339,16 +339,16 @@ class TestRecorderRoundTrip(unittest.TestCase):
         import record_exchange
         fake = FakeOximeter(real_trace(), strict=True)
         with HidrawSim(fake), VirtualClock().patch(), contextlib.redirect_stdout(io.StringIO()):
-            dev = PulsoxHidDevice(backend="hidraw")
-            dev.connect()
-            again = record_exchange.record(dev, download=True)
-            dev.close()
+            device = PulsoxHidDevice(backend="hidraw")
+            device.connect()
+            again = record_exchange.record(device, download=True)
+            device.close()
         self.assertEqual(fake.unmatched, [])
         # The fixture predates the offset fix and holds windows 1 and 2, which the CLI no longer asks for;
         # everything it does ask for is recorded back byte for byte.
-        original = {(k, tuple(ins)) for _, k, ins in real_trace().groups}
-        for _, k, ins in again.groups:
-            self.assertIn((k, tuple(ins)), original, k)
+        original = {(k, tuple(recorded_replies)) for _, k, recorded_replies in real_trace().groups}
+        for _, k, replies in again.groups:
+            self.assertIn((k, tuple(replies)), original, k)
         self.assertEqual([k for _, k, _ in again.groups],
                          [k for _, k, _ in real_trace().groups if not (k[:2] == (0x9D, 4) and k[5] in (1, 2))])
 

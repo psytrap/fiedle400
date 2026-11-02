@@ -19,20 +19,20 @@ PULSE_REQUEST = 0xA2
 DELETE_REQUEST = 0xA1
 DELETE_REPLY = 0xD1
 
-SUBFRAME_LEN = 20
+SUBFRAME_LENGTH = 20
 SAMPLES_PER_SUBFRAME = 27   # 1 base value + 13 bytes of two deltas each
 NO_SPO2 = 0x7F              # invalid / no finger, as SpO2.exe stores it
 NO_PULSE = 0xFF
 
 # Frame lengths of everything that can share a report with the manual-mode replies.
-_FRAME_LEN = {HEADER: 14, SPO2_DATA: SUBFRAME_LEN, PULSE_DATA: SUBFRAME_LEN, BLOCK_ACK: 4,
+_FRAME_LENGTH = {HEADER: 14, SPO2_DATA: SUBFRAME_LENGTH, PULSE_DATA: SUBFRAME_LENGTH, BLOCK_ACK: 4,
               DELETE_REPLY: 4, 0xEB: 6, 0xF0: 2}
 
 
 def _report(*body: int) -> bytes:
     """A raw (unprefixed) command as SpO2 Assistant sends it: body, 7-bit checksum, zero padding."""
-    b = list(body) + [sum(body) & 0x7F]
-    return bytes(b + [0] * (64 - len(b)))
+    frame = list(body) + [sum(body) & 0x7F]
+    return bytes(frame + [0] * (64 - len(frame)))
 
 
 def header_query() -> bytes:
@@ -82,18 +82,18 @@ def frames(reports: Iterable[bytes]) -> List[bytes]:
 
     Live-stream (0xEB) and acknowledgement (F0 70) frames and the zero padding are skipped.
     """
-    stream = b"".join(bytes(r) for r in reports)
+    stream = b"".join(bytes(report) for report in reports)
     out, i = [], 0
     while i < len(stream):
-        op = stream[i]
-        n = _FRAME_LEN.get(op)
-        if n is None:
+        opcode = stream[i]
+        frame_length = _FRAME_LENGTH.get(opcode)
+        if frame_length is None:
             i += 1
             continue
-        frame = stream[i:i + n]
-        if len(frame) == n and op in (HEADER, SPO2_DATA, PULSE_DATA, BLOCK_ACK, DELETE_REPLY) and _checksum_ok(frame):
+        frame = stream[i:i + frame_length]
+        if len(frame) == frame_length and opcode in (HEADER, SPO2_DATA, PULSE_DATA, BLOCK_ACK, DELETE_REPLY) and _checksum_ok(frame):
             out.append(frame)
-        i += n
+        i += frame_length
     return out
 
 
@@ -116,7 +116,7 @@ def parse_header(frame: bytes) -> Optional[ManualHeader]:
     return ManualHeader(start=start, samples=samples, kind=frame[1])
 
 
-def subframe_seq(frame: bytes) -> int:
+def subframe_sequence(frame: bytes) -> int:
     return frame[1] | (frame[2] << 7)
 
 
@@ -129,21 +129,21 @@ def decode_subframe(frame: bytes) -> List[int]:
     ends. That is how a recording ends inside a subframe (0x7F filler bytes).
     """
     is_spo2 = frame[0] == SPO2_DATA
-    bad, hi = (NO_SPO2, 100) if is_spo2 else (NO_PULSE, 254)
+    bad, high = (NO_SPO2, 100) if is_spo2 else (NO_PULSE, 254)
     base = frame[5]
-    if base <= 0 or base > hi:
+    if base <= 0 or base > high:
         base = bad
     if base == bad:
         return [bad] * SAMPLES_PER_SUBFRAME
-    vals = [base]
+    values = [base]
     for byte in frame[6:6 + (SAMPLES_PER_SUBFRAME - 1) // 2]:
-        for nib in (byte >> 4, byte & 0x0F):
-            mag = nib & 7
-            if nib & 8:
-                vals.append(bad if mag == 7 else (vals[-1] - mag) & 0xFF)
+        for nibble in (byte >> 4, byte & 0x0F):
+            magnitude = nibble & 7
+            if nibble & 8:
+                values.append(bad if magnitude == 7 else (values[-1] - magnitude) & 0xFF)
             else:
-                vals.append((vals[-1] + mag) & 0xFF)
-    return [v if 0 < v <= hi else bad for v in vals]
+                values.append((values[-1] + magnitude) & 0xFF)
+    return [value if 0 < value <= high else bad for value in values]
 
 
 def records(spo2: List[int], pulse: List[int], samples: int) -> List[Tuple[Optional[int], Optional[int]]]:
@@ -154,10 +154,10 @@ def records(spo2: List[int], pulse: List[int], samples: int) -> List[Tuple[Optio
     """
     out = []
     for i in range(samples):
-        s = spo2[i] if i < len(spo2) else NO_SPO2
-        p = pulse[i] if i < len(pulse) else NO_PULSE
-        if s == NO_SPO2:
+        spo2_value = spo2[i] if i < len(spo2) else NO_SPO2
+        pulse_value = pulse[i] if i < len(pulse) else NO_PULSE
+        if spo2_value == NO_SPO2:
             out.append((None, None))
         else:
-            out.append((s, None if p == NO_PULSE else p))
+            out.append((spo2_value, None if pulse_value == NO_PULSE else pulse_value))
     return out

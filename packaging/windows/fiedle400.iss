@@ -69,8 +69,8 @@ DisableDirPage=no
 WizardStyle=modern
 
 [Languages]
+; English only (T-065, psytrap). Kept explicit rather than relying on the default.
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 
 [Dirs]
 ; Default landing folder for the Start Menu shortcut. uninsneveruninstall keeps

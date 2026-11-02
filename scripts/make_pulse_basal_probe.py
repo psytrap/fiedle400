@@ -117,7 +117,7 @@ def predict(spo2, pulse, cases):
         evs = events if c["channel"] == "spo2" else pevents
         got = [e for e in evs if c["start_s"] - 1 <= e["start"] < c["end_s"]]
         c["predicted"] = "event" if got else "none"
-        c["events"] = [dict(start_s=e["start"], nadir_s=e["nadir"], from_value=e["from_pct"], to_value=e["to_pct"])
+        c["events"] = [dict(start_s=e["start"], nadir_s=e["nadir"], from_value=e["from_percent"], to_value=e["to_percent"])
                        for e in got]
         assert c["predicted"] == c["expect"], c
     valid = [v for v in spo2 if v is not None]

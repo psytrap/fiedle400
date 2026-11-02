@@ -57,8 +57,8 @@ def import_hid_or_skip(test: unittest.TestCase):
 def is_device_connected() -> bool:
     """Checks if a physical Pulsox PO-400 device is connected and readable."""
     try:
-        devs = find_pulsox_hid_devices()
-        if devs and devs[0][2]:  # dev_path, uevent, is_readable
+        devices = find_pulsox_hid_devices()
+        if devices and devices[0][2]:  # device_path, uevent, is_readable
             return True
     except Exception:
         pass
@@ -92,8 +92,8 @@ def wait_for_hidraw_reattach(timeout: float = 5.0, interval: float = 0.02) -> bo
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            devs = find_pulsox_hid_devices()
-            if devs and devs[0][2]:  # dev_path, uevent, is_readable
+            devices = find_pulsox_hid_devices()
+            if devices and devices[0][2]:  # device_path, uevent, is_readable
                 return True
         except Exception:
             pass
@@ -103,10 +103,10 @@ def wait_for_hidraw_reattach(timeout: float = 5.0, interval: float = 0.02) -> bo
 
 LIVE_ENABLED = config.getenv("FIEDLE400_LIVE") == "1"  # PO400_LIVE still works
 LOCK_PATH = os.path.join(tempfile.gettempdir(), "fiedle400-live-tests.lock")
-LOCK_TIMEOUT_SEC = 120.0
+LOCK_TIMEOUT_SECONDS = 120.0
 
 
-def acquire_device_lock(path: str = LOCK_PATH, timeout: float = LOCK_TIMEOUT_SEC):
+def acquire_device_lock(path: str = LOCK_PATH, timeout: float = LOCK_TIMEOUT_SECONDS):
     """Serialises live-device test runs across processes.
 
     Two test processes opening the oximeter at once collide (and the libusb
@@ -116,15 +116,15 @@ def acquire_device_lock(path: str = LOCK_PATH, timeout: float = LOCK_TIMEOUT_SEC
     """
     if fcntl is None:
         return None
-    fh = open(path, "w")
+    file = open(path, "w")
     deadline = time.monotonic() + timeout
     while True:
         try:
-            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return fh
+            fcntl.flock(file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return file
         except BlockingIOError:
             if time.monotonic() >= deadline:
-                fh.close()
+                file.close()
                 raise TimeoutError(f"Another live-device test run still holds {path} after {timeout:.0f}s.")
             time.sleep(0.1)
 
@@ -160,11 +160,11 @@ class TestLiveDevice(unittest.TestCase):
         """Verifies that find_pulsox_hid_devices discovers the connected hardware."""
         devices = find_pulsox_hid_devices()
         self.assertTrue(len(devices) >= 1, "Expected at least one PO-400 device detected via sysfs.")
-        dev_path, uevent_str, is_readable = devices[0]
-        self.assertTrue(dev_path.startswith("/dev/hidraw"))
-        self.assertTrue(is_readable, f"Device node {dev_path} is not readable/writable by current user.")
-        self.assertIn("000028E9", uevent_str.upper())
-        self.assertIn("0000028A", uevent_str.upper())
+        device_path, uevent_text, is_readable = devices[0]
+        self.assertTrue(device_path.startswith("/dev/hidraw"))
+        self.assertTrue(is_readable, f"Device node {device_path} is not readable/writable by current user.")
+        self.assertIn("000028E9", uevent_text.upper())
+        self.assertIn("0000028A", uevent_text.upper())
 
     def test_01b_hid_enumeration(self):
         """Verifies the device is visible through hid.enumerate(), the detection path off Linux."""
@@ -179,58 +179,58 @@ class TestLiveDevice(unittest.TestCase):
     @unittest.skipUnless(IS_LINUX, LINUX_ONLY_REASON)
     def test_02_hidraw_backend_connection_and_descriptors(self):
         """Verifies connection and descriptor extraction using native Linux hidraw."""
-        dev = PulsoxHidDevice(backend="hidraw")
-        node_path = dev.connect()
+        device = PulsoxHidDevice(backend="hidraw")
+        node_path = device.connect()
         try:
-            self.assertTrue(dev.is_connected())
-            self.assertEqual(dev.backend_name, "hidraw")
+            self.assertTrue(device.is_connected())
+            self.assertEqual(device.backend_name, "hidraw")
             self.assertTrue(node_path.startswith("/dev/hidraw"))
 
-            meta = dev.get_descriptor_info()
+            meta = device.get_descriptor_info()
             self.assertEqual(meta["vid_hex"], "28E9")
             self.assertEqual(meta["pid_hex"], "028A")
             self.assertIn("Linux sysfs", meta["metadata_source"])
         finally:
-            dev.close()
-        self.assertFalse(dev.is_connected())
+            device.close()
+        self.assertFalse(device.is_connected())
 
     def test_03_hid_backend_connection_and_descriptors(self):
         """Verifies connection and descriptor extraction using cross-platform import hid."""
         import_hid_or_skip(self)
 
-        dev = PulsoxHidDevice(backend="hid")
-        dev.connect()
+        device = PulsoxHidDevice(backend="hid")
+        device.connect()
         try:
-            self.assertTrue(dev.is_connected())
-            self.assertEqual(dev.backend_name, "hid")
+            self.assertTrue(device.is_connected())
+            self.assertEqual(device.backend_name, "hid")
 
-            meta = dev.get_descriptor_info()
+            meta = device.get_descriptor_info()
             self.assertEqual(meta["vid_hex"], "28E9")
             self.assertEqual(meta["pid_hex"], "028A")
             self.assertIn("import hid", meta["metadata_source"])
         finally:
-            dev.close()
+            device.close()
             # Linux/libusb only: do not leak the detached-kernel-driver state into later hidraw tests.
             self.assertTrue(
                 wait_for_hidraw_reattach(),
                 "Kernel hidraw node did not reappear after closing the libusb-backed handle.",
             )
-        self.assertFalse(dev.is_connected())
+        self.assertFalse(device.is_connected())
 
     def test_04_handshake_and_device_info(self):
         """Verifies hardware handshake and reads device info descriptors from firmware."""
-        dev = PulsoxHidDevice()
-        dev.connect()
+        device = PulsoxHidDevice()
+        device.connect()
         try:
-            engine = SerialDeviceEngine(dev)
-            res = engine.read_device_info(debug=0)
+            engine = SerialDeviceEngine(device)
+            result = engine.read_device_info(debug=0)
 
-            self.assertIn("device_info", res, f"read_device_info result: {res!r}")
-            self.assertIn("active_user_id", res, f"read_device_info result: {res!r}")
-            self.assertIn("rtc_time_str", res, f"read_device_info result: {res!r}")
+            self.assertIn("device_info", result, f"read_device_info result: {result!r}")
+            self.assertIn("active_user_id", result, f"read_device_info result: {result!r}")
+            self.assertIn("rtc_time_text", result, f"read_device_info result: {result!r}")
 
-            info = res["device_info"]
-            self.assertEqual(res["active_user_id"], 1, f"read_device_info result: {res!r}")
+            info = result["device_info"]
+            self.assertEqual(result["active_user_id"], 1, f"read_device_info result: {result!r}")
             # This device never answers the firmware/geometry queries (0xAD, 9E 40 04
             # give a bare ACK) -- T4/T7 (RELEASE_PLAN.md 3d) made that honest instead of
             # printing a hard-coded fallback, so flash_geometry is correctly None here,
@@ -239,9 +239,9 @@ class TestLiveDevice(unittest.TestCase):
             self.assertIsNone(info.flash_geometry, f"device_info: {info!r}")
             self.assertEqual(info.hardware_id, "50F", f"device_info: {info!r}")
             self.assertEqual(info.user_profile, "user", f"device_info: {info!r}")
-            self.assertNotEqual(res["rtc_time_str"], "N/A", f"read_device_info result: {res!r}")
+            self.assertNotEqual(result["rtc_time_text"], "N/A", f"read_device_info result: {result!r}")
         finally:
-            dev.close()
+            device.close()
 
     def test_05_rtc_clock_read(self):
         """The clock query gets the 8-byte 0xF2 reply seen in every recording (PROTOCOL.md §3.3).
@@ -249,30 +249,30 @@ class TestLiveDevice(unittest.TestCase):
         If this fails because the bytes differ, the device does report its clock after
         all: record the exchange and update PROTOCOL.md before decoding anything.
         """
-        dev = PulsoxHidDevice()
-        dev.connect()
+        device = PulsoxHidDevice()
+        device.connect()
         try:
-            engine = SerialDeviceEngine(dev)
+            engine = SerialDeviceEngine(device)
             reply = engine.read_rtc_time(debug=0)
             self.assertIsNotNone(reply, "No reply to the clock query.")
             self.assertEqual(reply, bytes.fromhex("f200000207000c07"), reply.hex(" "))
         finally:
-            dev.close()
+            device.close()
 
     def test_06_list_stored_sessions(self):
         """Verifies scanning flash memory index table for stored recording sessions."""
-        dev = PulsoxHidDevice()
-        dev.connect()
+        device = PulsoxHidDevice()
+        device.connect()
         try:
-            engine = SerialDeviceEngine(dev)
+            engine = SerialDeviceEngine(device)
             sessions = engine.list_sessions(debug=0)
             self.assertIsInstance(sessions, list)
-            for sess in sessions:
-                self.assertGreaterEqual(sess.session_id, 1, f"session: {sess!r}")
-                self.assertGreaterEqual(sess.record_count, 0, f"session: {sess!r}")
-                self.assertGreaterEqual(sess.duration_sec, 0, f"session: {sess!r}")
+            for session in sessions:
+                self.assertGreaterEqual(session.session_id, 1, f"session: {session!r}")
+                self.assertGreaterEqual(session.record_count, 0, f"session: {session!r}")
+                self.assertGreaterEqual(session.stored_duration_seconds, 0, f"session: {session!r}")
         finally:
-            dev.close()
+            device.close()
 
 
 if __name__ == "__main__":

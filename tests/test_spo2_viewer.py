@@ -70,10 +70,10 @@ class TestViewerControls(unittest.TestCase):
 
     def test_has_a_switch_per_channel(self):
         self.assertIn('id="showSpo2"', self.html)
-        self.assertIn('id="showHr"', self.html)
+        self.assertIn('id="showHeartRate"', self.html)
 
     def test_has_print_button_and_print_stylesheet(self):
-        self.assertIn('id="printBtn"', self.html)
+        self.assertIn('id="printButton"', self.html)
         self.assertIn("window.print()", self.html)
         self.assertIn("@media print", self.html)
 
@@ -87,16 +87,16 @@ class TestViewerControls(unittest.TestCase):
         self.assertNotIn('id="desatLevel"', self.html)
 
     def test_time_below_level_uses_the_criteria_level(self):
-        self.assertIn("analysis.params.criteria", self.html)
+        self.assertIn("analysis.parameters.criteria", self.html)
 
     def test_probe_out_and_time_below_read_the_shared_summary_not_their_own_count(self):
         # T-044: "No-signal / probe-out" and "Time below <criteria>%" used to be computed
         # inline in stats() by filtering spo2Vals (null/undefined only), disagreeing with
-        # artifact_pct/time_below_criteria_s already computed by summarizeEvents a few
+        # artifact_percent/time_below_criteria_seconds already computed by summarizeEvents a few
         # lines above -- a raw 0 or any numeric sentinel counted as valid in one and not
         # the other. Both rows must now read the shared summary values.
-        self.assertIn("a.artifact_pct", self.html)
-        self.assertIn("a.time_below_criteria_s", self.html)
+        self.assertIn("summary.artifact_percent", self.html)
+        self.assertIn("summary.time_below_criteria_seconds", self.html)
         self.assertNotIn("spo2Vals.filter", self.html)
 
     def test_page_loads_nothing_from_the_network(self):
@@ -114,11 +114,11 @@ class TestViewerDesaturationEvents(unittest.TestCase):
 
     def test_events_and_summary_are_injected(self):
         spo2 = [97] * 30 + [96, 96, 96, 95, 95, 95, 94, 94, 94, 93, 93, 93] + [95, 97] * 5
-        records = [{"timestamp": "t%d" % i, "spo2": v, "heart_rate": 70, "flags": "ok"} for i, v in enumerate(spo2)]
+        records = [{"timestamp": "t%d" % i, "spo2": value, "heart_rate": 70, "flags": "ok"} for i, value in enumerate(spo2)]
         analysis = self._analysis(spo2_viewer.build_viewer_html(records))
         self.assertEqual(len(analysis["events"]), 1)
         self.assertEqual(analysis["summary"]["total_event"], 1)
-        self.assertEqual(analysis["params"]["drop"], 4)
+        self.assertEqual(analysis["parameters"]["drop"], 4)
 
     def test_empty_recording_has_an_analysis_block(self):
         analysis = self._analysis(spo2_viewer.build_viewer_html([]))
@@ -136,30 +136,30 @@ class TestViewerAcrossSessionGap(unittest.TestCase):
     event across the pause, in the chart data or in the statistics."""
 
     def _two_sessions(self):
-        def r(ts, v):
-            return {"timestamp": ts, "spo2": v, "heart_rate": 70, "flags": "ok"}
-        s1 = [98] * 30 + [98, 98, 98, 98, 97, 97, 97, 97]
-        s2 = [96, 96, 95, 95, 95, 94, 94] + [97] * 30
-        recs = [r("2026-10-16T08:37:%02d" % (31 + i) if i < 29 else "2026-10-16T08:38:%02d" % (i - 29), v)
-                for i, v in enumerate(s1)]
-        recs += [r("2026-10-16T08:41:%02d" % (10 + i) if i < 50 else "2026-10-16T08:42:%02d" % (i - 50), v)
-                 for i, v in enumerate(s2)]
-        return recs
+        def r(timestamp, spo2):
+            return {"timestamp": timestamp, "spo2": spo2, "heart_rate": 70, "flags": "ok"}
+        first_series = [98] * 30 + [98, 98, 98, 98, 97, 97, 97, 97]
+        second_series = [96, 96, 95, 95, 95, 94, 94] + [97] * 30
+        records = [r("2026-10-16T08:37:%02d" % (31 + i) if i < 29 else "2026-10-16T08:38:%02d" % (i - 29), value)
+                for i, value in enumerate(first_series)]
+        records += [r("2026-10-16T08:41:%02d" % (10 + i) if i < 50 else "2026-10-16T08:42:%02d" % (i - 50), value)
+                 for i, value in enumerate(second_series)]
+        return records
 
     def _blocks(self, html):
-        out = []
+        output = []
         for tag in ('<script id="spo2-data" type="application/json">',
                     '<script id="spo2-events" type="application/json">'):
             start = html.index(tag) + len(tag)
-            out.append(json.loads(html[start:html.index("</script>", start)]))
-        return out
+            output.append(json.loads(html[start:html.index("</script>", start)]))
+        return output
 
     def test_no_false_event_across_the_pause(self):
         from fiedle400 import desaturation
-        recs = self._two_sessions()
+        records = self._two_sessions()
         # What the viewer used to see: the sessions side by side, an event across the join.
-        self.assertEqual(len(desaturation.detect_events([r["spo2"] for r in recs])), 1)
-        data, analysis = self._blocks(spo2_viewer.build_viewer_html(recs))
+        self.assertEqual(len(desaturation.detect_events([record["spo2"] for record in records])), 1)
+        data, analysis = self._blocks(spo2_viewer.build_viewer_html(records))
         self.assertEqual(analysis["events"], [])
         self.assertEqual(analysis["summary"]["total_event"], 0)
 
@@ -185,24 +185,24 @@ class TestViewerConfigurableEventParameters(unittest.TestCase):
         self.html = spo2_viewer.build_viewer_html([])
 
     def test_has_an_input_per_parameter(self):
-        self.assertIn('id="dropPct"', self.html)
-        self.assertIn('id="minDur"', self.html)
-        self.assertIn('id="critLevel"', self.html)
+        self.assertIn('id="dropPercent"', self.html)
+        self.assertIn('id="minimumTime"', self.html)
+        self.assertIn('id="criteriaLevel"', self.html)
 
     def test_ranges_match_the_real_spo2_assistant_dialog(self):
-        self.assertIn('id="dropPct" min="1" max="20"', self.html)
-        self.assertIn('id="minDur" min="1" max="180"', self.html)
-        self.assertIn('id="critLevel" min="1" max="99"', self.html)
+        self.assertIn('id="dropPercent" min="1" max="20"', self.html)
+        self.assertIn('id="minimumTime" min="1" max="180"', self.html)
+        self.assertIn('id="criteriaLevel" min="1" max="99"', self.html)
 
     def test_defaults_are_not_hardcoded_separately_from_desaturation_py(self):
         # No value="..." on these inputs in the template itself -- they're set
-        # from analysis.params in JS, so desaturation.py's constants stay the one
+        # from analysis.parameters in JS, so desaturation.py's constants stay the one
         # source of truth for the page's initial numbers.
-        for input_id in ("dropPct", "minDur", "critLevel"):
+        for input_id in ("dropPercent", "minimumTime", "criteriaLevel"):
             self.assertNotRegex(self.html, r'id="%s"[^>]*value=' % input_id)
-        self.assertIn("document.getElementById('dropPct').value = analysis.params.drop", self.html)
-        self.assertIn("document.getElementById('minDur').value = analysis.params.min_time", self.html)
-        self.assertIn("document.getElementById('critLevel').value = analysis.params.criteria", self.html)
+        self.assertIn("document.getElementById('dropPercent').value = analysis.parameters.drop", self.html)
+        self.assertIn("document.getElementById('minimumTime').value = analysis.parameters.min_time", self.html)
+        self.assertIn("document.getElementById('criteriaLevel').value = analysis.parameters.criteria", self.html)
 
     def test_inputs_recompute_on_change(self):
         self.assertIn("addEventListener('input', recomputeEvents)", self.html)
@@ -216,16 +216,16 @@ class TestViewerPulseRateEvents(unittest.TestCase):
     def setUp(self):
         self.html = spo2_viewer.build_viewer_html([])
 
-    def _analysis(self, recs):
-        return TestViewerAcrossSessionGap()._blocks(spo2_viewer.build_viewer_html(recs))[1]
+    def _analysis(self, records):
+        return TestViewerAcrossSessionGap()._blocks(spo2_viewer.build_viewer_html(records))[1]
 
     def test_has_an_input_per_pulse_parameter(self):
         self.assertIn('id="pulseDropBpm"', self.html)
-        self.assertIn('id="pulseMinDur"', self.html)
+        self.assertIn('id="pulseMinimumTime"', self.html)
 
     def test_inputs_are_live_and_no_longer_marked_dummy(self):
         self.assertNotRegex(self.html, r'id="pulseDropBpm"[^>]*\bdisabled\b')
-        self.assertNotRegex(self.html, r'id="pulseMinDur"[^>]*\bdisabled\b')
+        self.assertNotRegex(self.html, r'id="pulseMinimumTime"[^>]*\bdisabled\b')
         self.assertNotIn("dummy", self.html.lower())
         self.assertNotIn("not functional", self.html.lower())
         self.assertNotIn("T-030", self.html)
@@ -233,30 +233,30 @@ class TestViewerPulseRateEvents(unittest.TestCase):
 
     def test_ranges_match_the_real_spo2_assistant_dialog(self):
         self.assertIn('id="pulseDropBpm" min="2" max="20"', self.html)
-        self.assertIn('id="pulseMinDur" min="1" max="180"', self.html)
+        self.assertIn('id="pulseMinimumTime" min="1" max="180"', self.html)
 
     def test_defaults_come_from_desaturation_py_not_the_template(self):
         from fiedle400 import desaturation
-        for input_id in ("pulseDropBpm", "pulseMinDur"):
+        for input_id in ("pulseDropBpm", "pulseMinimumTime"):
             self.assertNotRegex(self.html, r'id="%s"[^>]*value=' % input_id)
-        self.assertIn("document.getElementById('pulseDropBpm').value = analysis.pulse.params.drop", self.html)
-        self.assertIn("document.getElementById('pulseMinDur').value = analysis.pulse.params.min_time", self.html)
-        params = self._analysis([])["pulse"]["params"]
-        self.assertEqual(params, {"drop": desaturation.PULSE_DROP, "min_time": desaturation.PULSE_MIN_TIME})
-        self.assertEqual((params["drop"], params["min_time"]), (6, 8))  # the real program's defaults
+        self.assertIn("document.getElementById('pulseDropBpm').value = analysis.pulse.parameters.drop", self.html)
+        self.assertIn("document.getElementById('pulseMinimumTime').value = analysis.pulse.parameters.min_time", self.html)
+        parameters = self._analysis([])["pulse"]["parameters"]
+        self.assertEqual(parameters, {"drop": desaturation.PULSE_DROP, "min_time": desaturation.PULSE_MIN_TIME})
+        self.assertEqual((parameters["drop"], parameters["min_time"]), (6, 8))  # the real program's defaults
 
     def test_inputs_recompute_on_change(self):
         self.assertIn("addEventListener('input', recomputePulse)", self.html)
 
     def test_pulse_events_and_summary_are_injected(self):
-        def r(i, hr):
-            return {"timestamp": "2026-10-20T22:%02d:%02d" % (i // 60, i % 60), "spo2": 97, "heart_rate": hr, "flags": "ok"}
-        hr = [80] * 30 + [80 - (6 * k + 9) // 10 for k in range(1, 11)] + [80] * 30
-        pulse = self._analysis([r(i, v) for i, v in enumerate(hr)])["pulse"]
+        def r(i, heart_rate):
+            return {"timestamp": "2026-10-20T22:%02d:%02d" % (i // 60, i % 60), "spo2": 97, "heart_rate": heart_rate, "flags": "ok"}
+        heart_rate = [80] * 30 + [80 - (6 * k + 9) // 10 for k in range(1, 11)] + [80] * 30
+        pulse = self._analysis([r(i, heart_rate_value) for i, heart_rate_value in enumerate(heart_rate)])["pulse"]
         self.assertEqual(len(pulse["events"]), 1)
-        self.assertEqual((pulse["events"][0]["from_pct"], pulse["events"][0]["to_pct"]), (80, 74))
+        self.assertEqual((pulse["events"][0]["from_percent"], pulse["events"][0]["to_percent"]), (80, 74))
         self.assertEqual(pulse["summary"]["total_event"], 1)
-        self.assertEqual(pulse["summary"]["avg_event_duration_s"], 10.0)
+        self.assertEqual(pulse["summary"]["average_event_duration_seconds"], 10.0)
 
     def test_drawn_and_listed(self):
         self.assertIn("analysis.pulse.events.forEach", self.html)

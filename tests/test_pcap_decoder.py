@@ -11,9 +11,9 @@ PCAP_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "analy
 
 # SpO2 Assistant's own download of the recording in bum400.pcapng (archive/ is not in git: the test
 # runs where the capture is present, e.g. psytrap's checkout and the cloud mirror).
-CAPTURE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "archive", "capture"))
-VENDOR_PCAP = os.path.join(CAPTURE_DIR, "bum400.pcapng")
-VENDOR_FILE = os.path.join(CAPTURE_DIR, "_user_1_0_20260903074127-20260903074137joint.SpO2")
+CAPTURE_DIRECTORY = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "archive", "capture"))
+VENDOR_PCAP = os.path.join(CAPTURE_DIRECTORY, "bum400.pcapng")
+VENDOR_FILE = os.path.join(CAPTURE_DIRECTORY, "_user_1_0_20260903074127-20260903074137joint.SpO2")
 
 
 class TestPcapDecoder(unittest.TestCase):
@@ -32,11 +32,11 @@ class TestPcapDecoder(unittest.TestCase):
         self.assertGreater(len(samples), 0)
 
         # Check that valid samples (status == ok) have physiological SpO2 (30..100) and HR (25..250)
-        valid_samples = [s for s in samples if s["status"] == "ok"]
+        valid_samples = [sample for sample in samples if sample["status"] == "ok"]
         self.assertGreater(len(valid_samples), 0)
-        for s in valid_samples:
-            self.assertTrue(30 <= s["spo2"] <= 100)
-            self.assertTrue(25 <= s["heart_rate"] <= 250)
+        for sample in valid_samples:
+            self.assertTrue(30 <= sample["spo2"] <= 100)
+            self.assertTrue(25 <= sample["heart_rate"] <= 250)
 
     @unittest.skipUnless(os.path.exists(VENDOR_PCAP) and os.path.exists(VENDOR_FILE), "archive/capture not present")
     def test_one_value_per_second_like_spo2_assistants_own_file(self):
@@ -45,14 +45,14 @@ class TestPcapDecoder(unittest.TestCase):
         sessions, samples = decode_pcap_reports(parse_pcap_file(VENDOR_PCAP))
         self.assertEqual(sessions[0]["raw_samples"], 9705)
         _, vendor = read_spo2_file(VENDOR_FILE)
-        ours = [s["spo2"] for s in samples if s.get("spo2")][:9705]
-        self.assertEqual(ours, [r["spo2"] for r in vendor[:9705]])
+        ours = [sample["spo2"] for sample in samples if sample.get("spo2")][:9705]
+        self.assertEqual(ours, [record["spo2"] for record in vendor[:9705]])
         self.assertNotIn(vendor[9705]["spo2"], range(1, 101))  # the gap before session 2 starts here
 
     def test_legacy_pcap_little_endian_is_parsed(self):
         """A little-endian legacy pcap (d4 c3 b2 a1 on disk) must yield reports, not an empty list."""
-        with open(PCAP_PATH, "rb") as f:
-            self.assertEqual(f.read(4), b"\xd4\xc3\xb2\xa1")
+        with open(PCAP_PATH, "rb") as file:
+            self.assertEqual(file.read(4), b"\xd4\xc3\xb2\xa1")
         self.assertGreater(len(parse_pcap_file(PCAP_PATH)), 0)
 
 

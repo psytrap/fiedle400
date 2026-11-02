@@ -23,7 +23,10 @@ jobs:
             arch: x64
             asset_name: fiedle400-windows-x64.exe
           - os: linux
-            runner: ubuntu-latest
+            # Pinned, not ubuntu-latest (T-049): a PyInstaller binary needs at least the
+            # glibc it was built against, and Ubuntu 22.04 LTS is the minimum supported Linux
+            # (psytrap, 2026-11-02). Build on the oldest supported release: glibc 2.35.
+            runner: ubuntu-22.04
             arch: x64
             asset_name: fiedle400-linux-x64.tar.gz
           - os: macos
@@ -116,6 +119,88 @@ jobs:
           path: release/${{ matrix.asset_name }}
 
 
+  quarantine-macos:
+    # T-049 / RELEASE_PLAN D2: the build job's smoke test runs the binary it just built,
+    # which never carries the com.apple.quarantine attribute a browser download gets.
+    # This job takes the packaged asset, marks it quarantined like a download, and checks
+    # that the steps the README gives a Mac user make it run.
+    name: macOS Quarantine Check
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download macOS Binary
+        uses: actions/download-artifact@v4
+        with:
+          name: fiedle400-macos-arm64
+          path: artifact
+
+      - name: Mark It as Downloaded (quarantine attribute)
+        run: |
+          f=artifact/fiedle400-macos-arm64
+          xattr -w com.apple.quarantine "0083;$(printf %x "$(date +%s)");Safari;" "$f"
+          xattr -l "$f"
+
+      - name: Run As Downloaded (informational)
+        run: |
+          # A browser download also loses the execute bit; the README covers both.
+          f=artifact/fiedle400-macos-arm64
+          spctl --assess --type execute -vv "$f" || true
+          chmod +x "$f"
+          # Gatekeeper may block (expected for an unsigned download) or the runner may
+          # allow it; either is recorded, neither fails the job. Bounded so a policy
+          # prompt can never hang the job.
+          "$f" --version & pid=$!
+          ( sleep 30; kill "$pid" 2>/dev/null ) & watchdog=$!
+          if wait "$pid"; then echo "ran while quarantined"; else echo "blocked while quarantined (exit $?)"; fi
+          kill "$watchdog" 2>/dev/null || true
+
+      - name: Follow the README Steps and Run
+        run: |
+          f=artifact/fiedle400-macos-arm64
+          chmod +x "$f"
+          xattr -d com.apple.quarantine "$f"
+          if xattr -p com.apple.quarantine "$f" 2>/dev/null; then
+            echo "quarantine attribute still present" >&2; exit 1
+          fi
+          out=$("$f" --version)
+          echo "binary reports: $out"
+          expected=$(python3 -c "import fiedle400; print(fiedle400.__version__)")
+          case "$out" in
+            *"$expected"*) ;;
+            *) echo "version mismatch: expected $expected, got '$out'" >&2; exit 1 ;;
+          esac
+          "$f" --help > /dev/null
+
+  linux-oldest-lts:
+    # T-050: the packaged Linux asset must run on the oldest supported Ubuntu (22.04 LTS,
+    # psytrap 2026-11-02) in a clean system: no Python, no build tools, nothing but the image.
+    name: Linux Binary on Ubuntu 22.04
+    needs: build
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Download Linux Asset
+        uses: actions/download-artifact@v4
+        with:
+          name: fiedle400-linux-x64.tar.gz
+          path: artifact
+
+      - name: Unpack and Run
+        shell: bash
+        run: |
+          grep PRETTY_NAME /etc/os-release
+          ldd --version | head -1
+          mkdir unpacked
+          tar -C unpacked -xzf artifact/fiedle400-linux-x64.tar.gz
+          cd unpacked
+          ./fiedle400 --version
+          ./fiedle400 --help > /dev/null
+          ./fiedle400 config > /dev/null
+          echo "runs on $(grep VERSION_ID /etc/os-release)"
+
   installer-windows:
     name: Windows Installer
     needs: build
@@ -164,6 +249,68 @@ jobs:
         run: |
           & "$env:ISCC" /DAppVersion=${{ steps.ver.outputs.version }} packaging\windows\fiedle400.iss
 
+      - name: Upgrade Test (previous release's installer, then this one over it)
+        # T-097: run the real installer over an existing install, as a user upgrading does,
+        # then uninstall and check nothing is left. The fresh-install smoke test below then
+        # covers the "clean uninstall, then new install" path.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $new = "${{ steps.ver.outputs.version }}"
+          $app = "$env:LOCALAPPDATA\Programs\fiedle400"
+          $exe = "$app\fiedle400.exe"
+          $docs = [Environment]::GetFolderPath("MyDocuments") + "\fiedle400"
+          $group = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\fiedle400"
+          $uninstKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{1C4AFF42-942E-45D2-ACF1-908840BCC434}_is1"
+          $ctxKeys = @("HKCU:\SOFTWARE\Classes\Directory\shell\fiedle400",
+                       "HKCU:\SOFTWARE\Classes\Directory\Background\shell\fiedle400")
+          $silent = @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/TASKS=contextmenu")
+
+          # 1. The latest published release, installed the way a user had it.
+          $prev = "$env:RUNNER_TEMP\prev-setup.exe"
+          Invoke-WebRequest "https://github.com/$env:GITHUB_REPOSITORY/releases/latest/download/fiedle400-setup.exe" -OutFile $prev
+          Start-Process -FilePath $prev -ArgumentList $silent -Wait
+          if (-not (Test-Path $exe)) { throw "previous release did not install to $exe" }
+          Write-Host "previous release reports: $(& $exe --version)"
+
+          # The user's own files must survive the upgrade: an edited demo and a recording.
+          Add-Content "$docs\demo.SpO2" "user-edit-marker"
+          Set-Content "$docs\my_recording.html" "keep me"
+          $demoHash = (Get-FileHash "$docs\demo.SpO2").Hash
+
+          # 2. This build over it.
+          Start-Process -FilePath "installer\fiedle400-setup.exe" -ArgumentList $silent -Wait
+          $out = & $exe --version
+          Write-Host "after upgrade: $out"
+          if ($out -notmatch [regex]::Escape($new)) { throw "upgrade left '$out', expected $new" }
+          $reg = Get-ItemProperty $uninstKey
+          if ($reg.DisplayVersion -ne $new) { throw "uninstall entry says $($reg.DisplayVersion), expected $new" }
+          $uninstallers = @(Get-ChildItem $app -Filter "unins*.exe")
+          if ($uninstallers.Count -ne 1) { throw "expected one uninstaller, found: $($uninstallers.Name -join ', ')" }
+          $extra = @(Get-ChildItem $app -File | Where-Object { $_.Name -notmatch '^(fiedle400\.exe|unins\d+\.(exe|dat))$' })
+          if ($extra.Count) { throw "unexpected files in ${app}: $($extra.Name -join ', ')" }
+          $links = @(Get-ChildItem $group -Filter "*.lnk" | ForEach-Object Name | Sort-Object)
+          if (($links -join "|") -ne "fiedle400.lnk|Uninstall fiedle400.lnk|View Demo Recording.lnk") {
+            throw "Start Menu group has: $($links -join ', ')"
+          }
+          foreach ($k in $ctxKeys) {
+            $cmd = (Get-ItemProperty "$k\command")."(default)"
+            if ($cmd -ne "`"$exe`"") { throw "$k\command is '$cmd'" }
+          }
+          if ((Get-FileHash "$docs\demo.SpO2").Hash -ne $demoHash) { throw "upgrade overwrote the user's demo.SpO2" }
+          if (-not (Test-Path "$docs\my_recording.html")) { throw "upgrade removed a user recording" }
+
+          # 3. Uninstall. The uninstaller re-launches itself from TEMP and returns at once,
+          #    so wait for the program folder to go before checking.
+          Start-Process -FilePath $uninstallers[0].FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait
+          for ($i = 0; $i -lt 60 -and (Test-Path $exe); $i++) { Start-Sleep 1 }
+          Start-Sleep 2
+          $left = @($app, $group) + $ctxKeys + @($uninstKey) | Where-Object { Test-Path $_ }
+          if ($left) { throw "left behind after uninstall: $($left -join ', ')" }
+          if (-not (Test-Path "$docs\my_recording.html")) { throw "uninstall removed a user recording" }
+          if (-not (Test-Path "$docs\demo.SpO2")) { throw "uninstall removed demo.SpO2" }
+          Write-Host "upgrade and uninstall clean"
+
       - name: Smoke Test the Installer (silent install, run, uninstall)
         shell: pwsh
         run: |
@@ -203,7 +350,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build, installer-windows]
+    needs: [build, installer-windows, quarantine-macos, linux-oldest-lts]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     # The repo's default Actions token is read-only (confirmed via
@@ -254,6 +401,7 @@ jobs:
             - **Linux**: Download `fiedle400-linux-x64.tar.gz`, extract it, then `./install.sh`
               (installs `fiedle400` to `~/.local/bin`). Device access needs a one-time root step:
               `sudo ./fiedle400_setup-udev.sh`. Then verify with `fiedle400 selftest`.
-            - **macOS**: Download `fiedle400-macos-arm64` (Apple Silicon M1/M2/M3/M4).
+            - **macOS**: Download `fiedle400-macos-arm64` (Apple Silicon M1/M2/M3/M4). It is unsigned:
+              run `chmod +x fiedle400-macos-arm64` and `xattr -d com.apple.quarantine fiedle400-macos-arm64` once.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

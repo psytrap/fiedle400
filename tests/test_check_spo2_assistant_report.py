@@ -41,51 +41,51 @@ def report(totle=7, index="9.7", drop=4, min_time=10):
 
 class TestCheckReport(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.expected = os.path.join(self.tmp.name, "expected.json")
-        with open(self.expected, "w") as f:
-            json.dump(EXPECTED, f)
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.expected = os.path.join(self.temporary_directory.name, "expected.json")
+        with open(self.expected, "w") as file:
+            json.dump(EXPECTED, file)
 
     def tearDown(self):
-        self.tmp.cleanup()
+        self.temporary_directory.cleanup()
 
     def run_check(self, xml, *extra, encoding="utf-8"):
-        path = os.path.join(self.tmp.name, "report.xml")
-        with open(path, "w", encoding=encoding) as f:
-            f.write(xml)
-        out = io.StringIO()
-        with redirect_stdout(out):
-            rc = check.main([path, self.expected, *extra])
-        return rc, out.getvalue()
+        path = os.path.join(self.temporary_directory.name, "report.xml")
+        with open(path, "w", encoding=encoding) as file:
+            file.write(xml)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            exit_code = check.main([path, self.expected, *extra])
+        return exit_code, output.getvalue()
 
     def test_matching_report_at_printed_precision(self):
-        rc, out = self.run_check(report())
-        self.assertEqual(rc, 0, out)
-        self.assertIn("| total_event (event/totle/spo2) | 7 | 7.0 | Match |", out)
-        self.assertIn("time_below_88_s (spo2/time_low) | 2.9 | 2.9 | Match", out)
-        self.assertNotIn("basal_spo2_mean", out)  # a superseded prediction is not compared
+        exit_code, output = self.run_check(report())
+        self.assertEqual(exit_code, 0, output)
+        self.assertIn("| total_event (event/totle/spo2) | 7 | 7.0 | Match |", output)
+        self.assertIn("time_below_88_s (spo2/time_low) | 2.9 | 2.9 | Match", output)
+        self.assertNotIn("basal_spo2_mean", output)  # a superseded prediction is not compared
 
     def test_difference_is_reported(self):
-        rc, out = self.run_check(report(totle=6))
-        self.assertEqual(rc, 1)
-        self.assertIn("**Differs**", out)
+        exit_code, output = self.run_check(report(totle=6))
+        self.assertEqual(exit_code, 1)
+        self.assertIn("**Differs**", output)
 
     def test_variant_checks_parameters_and_count(self):
-        rc, out = self.run_check(report(totle=8, drop=3), "--variant", "drop=3")
-        self.assertEqual(rc, 0, out)
+        exit_code, output = self.run_check(report(totle=8, drop=3), "--variant", "drop=3")
+        self.assertEqual(exit_code, 0, output)
         # The same report does not pass as the default run: its drop is 3.
-        rc, out = self.run_check(report(totle=8, drop=3))
-        self.assertEqual(rc, 1)
-        self.assertIn("parameter spo2/drop | 4 | 3 | **Differs**", out)
+        exit_code, output = self.run_check(report(totle=8, drop=3))
+        self.assertEqual(exit_code, 1)
+        self.assertIn("parameter spo2/drop | 4 | 3 | **Differs**", output)
 
     def test_utf16_file(self):
-        rc, out = self.run_check(report(), encoding="utf-16")
-        self.assertEqual(rc, 0, out)
+        exit_code, output = self.run_check(report(), encoding="utf-16")
+        self.assertEqual(exit_code, 0, output)
 
     def test_not_a_report(self):
         with redirect_stdout(io.StringIO()), unittest.mock.patch("sys.stderr", io.StringIO()):
-            rc, _ = self.run_check("<html></html>")
-        self.assertEqual(rc, 2)
+            exit_code, _ = self.run_check("<html></html>")
+        self.assertEqual(exit_code, 2)
 
 
 if __name__ == "__main__":

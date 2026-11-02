@@ -54,14 +54,14 @@ def parse_header(data: bytes) -> dict:
     count  = struct.unpack_from("<I", data, 0x0438)[0]
 
     try:
-        start_dt = datetime(year, month, day, hour, minute, second)
+        start_date_time = datetime(year, month, day, hour, minute, second)
     except ValueError:
-        start_dt = None
+        start_date_time = None
 
     return {
         "magic":        f"0x{magic:08X}",
         "version":      version,
-        "start_time":   start_dt,
+        "start_time":   start_date_time,
         "sample_count": count,
     }
 
@@ -74,33 +74,33 @@ def parse_samples(data: bytes, start_time, header_count: int = 0):
     """
     payload = data[HEADER_SIZE:]
     samples = []
-    n = min(len(payload) // 2, header_count) if header_count > 0 else len(payload) // 2
+    sample_count = min(len(payload) // 2, header_count) if header_count > 0 else len(payload) // 2
 
-    for i in range(n):
+    for i in range(sample_count):
         spo2 = payload[i * 2]
-        hr   = payload[i * 2 + 1]
-        ts   = (start_time + timedelta(seconds=i)).isoformat() if start_time else None
+        heart_rate   = payload[i * 2 + 1]
+        timestamp   = (start_time + timedelta(seconds=i)).isoformat() if start_time else None
 
         # 0 = no signal; >100 / >250 = sentinel/padding byte — all mean probe-out
         spo2_valid = 1 <= spo2 <= 100
-        hr_valid   = 1 <= hr   <= 250
-        status     = "ok" if (spo2_valid and hr_valid) else "probe-out"
+        heart_rate_valid   = 1 <= heart_rate   <= 250
+        status     = "ok" if (spo2_valid and heart_rate_valid) else "probe-out"
 
         samples.append({
             "index":      i + 1,
-            "timestamp":  ts,
+            "timestamp":  timestamp,
             "spo2":       spo2 if spo2_valid else None,
-            "heart_rate": hr   if hr_valid   else None,
+            "heart_rate": heart_rate   if heart_rate_valid   else None,
             "status":     status,
         })
     return samples
 
 
 def print_summary(meta, samples, filepath):
-    valid   = [s for s in samples if s["status"] == "ok"]
+    valid   = [sample for sample in samples if sample["status"] == "ok"]
     invalid = len(samples) - len(valid)
-    spo2_vals = [s["spo2"] for s in valid]
-    hr_vals   = [s["heart_rate"] for s in valid]
+    spo2_values = [sample["spo2"] for sample in valid]
+    heart_rate_values   = [sample["heart_rate"] for sample in valid]
 
     print(f"\n{'='*54}")
     print("  Contec .SpO2 File Decoder")
@@ -113,21 +113,21 @@ def print_summary(meta, samples, filepath):
     print(f"  Parsed Samples  : {len(samples):,}  (ok={len(valid)}, probe-out={invalid})")
     if valid:
         print(f"  Duration        : {timedelta(seconds=len(samples))}")
-        print(f"  SpO2 Min/Avg/Max: {min(spo2_vals)}% / {sum(spo2_vals)/len(spo2_vals):.1f}% / {max(spo2_vals)}%")
-        print(f"  HR   Min/Avg/Max: {min(hr_vals)} / {sum(hr_vals)/len(hr_vals):.1f} / {max(hr_vals)} bpm")
+        print(f"  SpO2 Min/Avg/Max: {min(spo2_values)}% / {sum(spo2_values)/len(spo2_values):.1f}% / {max(spo2_values)}%")
+        print(f"  HR   Min/Avg/Max: {min(heart_rate_values)} / {sum(heart_rate_values)/len(heart_rate_values):.1f} / {max(heart_rate_values)} bpm")
     print(f"{'='*54}\n")
 
 
 def write_csv(samples, output_path):
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["index", "timestamp", "spo2", "heart_rate", "status"])
+    with open(output_path, "w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["index", "timestamp", "spo2", "heart_rate", "status"])
         writer.writeheader()
         writer.writerows(samples)
     print(f"✅ CSV saved to: {os.path.abspath(output_path)}")
 
 
 def write_json(samples, meta, output_path):
-    out = {
+    output = {
         "session": {
             "start_time":   meta["start_time"].isoformat() if meta["start_time"] else None,
             "sample_count": meta["sample_count"],
@@ -135,8 +135,8 @@ def write_json(samples, meta, output_path):
         },
         "samples": samples,
     }
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(out, f, indent=2)
+    with open(output_path, "w", encoding="utf-8") as file:
+        json.dump(output, file, indent=2)
     print(f"✅ JSON saved to: {os.path.abspath(output_path)}")
 
 
@@ -156,19 +156,19 @@ def main():
         print(f"❌ File not found: {args.file}", file=sys.stderr)
         sys.exit(1)
 
-    with open(args.file, "rb") as f:
-        data = f.read()
+    with open(args.file, "rb") as file:
+        data = file.read()
 
     try:
         meta = parse_header(data)
-    except ValueError as e:
-        print(f"❌ Header parse error: {e}", file=sys.stderr)
+    except ValueError as error:
+        print(f"❌ Header parse error: {error}", file=sys.stderr)
         sys.exit(1)
 
     samples = parse_samples(data, meta["start_time"], header_count=meta["sample_count"])
 
     if args.no_invalid:
-        samples = [s for s in samples if s["status"] == "ok"]
+        samples = [sample for sample in samples if sample["status"] == "ok"]
 
     if not args.quiet:
         print_summary(meta, samples, args.file)

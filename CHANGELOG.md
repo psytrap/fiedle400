@@ -8,6 +8,35 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.7 (2026-11-02)
+
+- **Minimum Linux: Ubuntu 22.04 LTS** (psytrap). The Linux release binary is now built on
+  `ubuntu-22.04` instead of `ubuntu-latest` (T-049): a PyInstaller binary needs at least the
+  glibc it was built on, and `ubuntu-latest` moved to 26 on 2026-10-19 (it was 24.04 before,
+  so earlier binaries most likely did not start on 22.04). New CI job `linux-oldest-lts` runs
+  the packaged asset in a clean `ubuntu:22.04` container (T-050).
+- **macOS:** new CI job `quarantine-macos` marks the packaged binary quarantined like a browser
+  download and checks that the new README steps (`chmod +x`, `xattr -d com.apple.quarantine`)
+  make it run (T-049). The release notes name the same steps.
+- **Windows installer:** English only (T-065). New CI step installs the latest published release,
+  upgrades it with this build's installer, checks version, files, shortcuts, context-menu keys
+  and that the user's files survive, then uninstalls and checks nothing is left (T-097).
+- **T-043:** new `.agents/rules/coding-conventions.md` (readable names; where short names
+  are still fine), linked from `AGENTS.md`. **T-106:** every identifier in `fiedle400/` renamed to
+  follow it (locals, parameters, attributes, fields, functions, constants; e.g. `sess_info` ->
+  `session_info`, `calc_checksum_7bit` -> `calculate_checksum_7bit`,
+  `SessionInfo.duration_sec` -> `stored_duration_seconds`), and the same in `tests/` and the
+  viewer's JavaScript and HTML element ids. No behaviour change; CLI flags are unchanged.
+- **CSV/JSON export column renamed: `seq` -> `sequence`.** A script that reads fiedle400's CSV or
+  JSON by column name needs the new name. The `.SpO2` file and the viewer are unchanged in use;
+  the viewer's embedded analysis keys are spelled out too (`from_pct` -> `from_percent`,
+  `index_per_hr` -> `index_per_hour`, `artifact_pct` -> `artifact_percent`,
+  `avg_low_spo2` -> `average_low_spo2`, `time_below_criteria_s` -> `time_below_criteria_seconds`,
+  `avg_event_duration_s` -> `average_event_duration_seconds`, `params` -> `parameters`).
+  Checked in a browser: no script errors, and the same statistics, tooltip and zoom as before.
+- None of the new CI checks has run yet; the next tag or manual run of `build-release.yml` is
+  their first run.
+
 ## 0.5.6 (2026-10-29)
 
 - **T-105** (detection only, hold on the download engine unchanged): the serial probe

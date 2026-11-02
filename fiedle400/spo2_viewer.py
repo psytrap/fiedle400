@@ -23,7 +23,7 @@ _TEMPLATE = """<!doctype html>
   #legend { margin-bottom: 0.5em; font-size: 0.9em; display: flex; align-items: center; gap: 1.5em; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 0.4em; }
   #resetZoom { display: none; font-size: 0.85em; color: #2b6cb0; cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; }
-  #chartWrap { position: relative; }
+  #chartWrapper { position: relative; }
   canvas { background: #fff; border: 1px solid #ddd; display: block; width: 100%; }
   #tooltip {
     position: absolute; display: none; pointer-events: none;
@@ -37,18 +37,18 @@ _TEMPLATE = """<!doctype html>
   #stats tr:first-child th.statsGroup { padding-top: 3px; }
   #legend label { cursor: pointer; user-select: none; }
   #legend input[type=checkbox] { margin-right: 0.4em; }
-  #printBtn { font-size: 0.85em; margin-left: auto; cursor: pointer; }
-  #dropPct, #minDur, #critLevel, #maxTimeFixed { width: 3.5em; }
-  #maxTimeFixed { color: #999; background: #f5f5f5; }
-  #pulseDropBpm, #pulseMinDur { width: 3.5em; }
-  .paramTable { border-collapse: collapse; margin: 0.4em 0; }
-  .paramTable td { padding: 1px 8px 1px 0; }
-  .paramTable td:first-child { color: #666; }
-  .paramGroup { padding: 0.6em 0 0.2em; margin-top: 0.4em; border-top: 1px solid #e5e5e5; }
-  .paramGroup:first-of-type { border-top: none; }
+  #printButton { font-size: 0.85em; margin-left: auto; cursor: pointer; }
+  #dropPercent, #minimumTime, #criteriaLevel, #maximumTimeFixed { width: 3.5em; }
+  #maximumTimeFixed { color: #999; background: #f5f5f5; }
+  #pulseDropBpm, #pulseMinimumTime { width: 3.5em; }
+  .parameterTable { border-collapse: collapse; margin: 0.4em 0; }
+  .parameterTable td { padding: 1px 8px 1px 0; }
+  .parameterTable td:first-child { color: #666; }
+  .parameterGroup { padding: 0.6em 0 0.2em; margin-top: 0.4em; border-top: 1px solid #e5e5e5; }
+  .parameterGroup:first-of-type { border-top: none; }
   @media print {
     body { margin: 0.5em; background: #fff; }
-    #resetZoom, #printBtn, #legend input[type=checkbox] { display: none !important; }
+    #resetZoom, #printButton, #legend input[type=checkbox] { display: none !important; }
     .dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     #tooltip { display: none !important; }
     canvas { border: 1px solid #999; }
@@ -60,28 +60,28 @@ _TEMPLATE = """<!doctype html>
 <div id="meta"></div>
 <div id="legend">
   <label><input type="checkbox" id="showSpo2" checked><span class="dot" style="background:#2b6cb0"></span>SpO2 (%, range 50-100)</label>
-  <label><input type="checkbox" id="showHr" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, range 30-220)</label>
+  <label><input type="checkbox" id="showHeartRate" checked><span class="dot" style="background:#c05621"></span>Heart rate (bpm, range 30-220)</label>
   <button id="resetZoom">Reset zoom</button>
-  <button id="printBtn" type="button">Print</button>
+  <button id="printButton" type="button">Print</button>
 </div>
-<div id="chartWrap">
-  <canvas id="c" height="420"></canvas>
+<div id="chartWrapper">
+  <canvas id="chart" height="420"></canvas>
   <div id="tooltip"></div>
 </div>
 <table id="stats"></table>
-<div id="eventParamsGroup" class="paramGroup">
-<table id="eventParamsTable" class="paramTable" style="font-size:0.85em">
+<div id="eventParametersGroup" class="parameterGroup">
+<table id="eventParametersTable" class="parameterTable" style="font-size:0.85em">
   <tr><td colspan="2"><strong>Desaturation event</strong></td></tr>
-  <tr><td>fall of at least</td><td><input type="number" id="dropPct" min="1" max="20" step="1"> %</td></tr>
-  <tr><td>over</td><td><input type="number" id="minDur" min="1" max="180" step="1"> - <input type="number" id="maxTimeFixed" value="180" readonly title="Fixed by SpO2 Assistant, not adjustable (SPO2_FORMAT.md Sec7.2)"> s</td></tr>
-  <tr><td>count event as severe if under</td><td><input type="number" id="critLevel" min="1" max="99" step="1"> %</td></tr>
+  <tr><td>fall of at least</td><td><input type="number" id="dropPercent" min="1" max="20" step="1"> %</td></tr>
+  <tr><td>over</td><td><input type="number" id="minimumTime" min="1" max="180" step="1"> - <input type="number" id="maximumTimeFixed" value="180" readonly title="Fixed by SpO2 Assistant, not adjustable (SPO2_FORMAT.md Sec7.2)"> s</td></tr>
+  <tr><td>count event as severe if under</td><td><input type="number" id="criteriaLevel" min="1" max="99" step="1"> %</td></tr>
 </table>
 </div>
-<div id="pulseParamsGroup" class="paramGroup">
-<table id="pulseParamsTable" class="paramTable" style="font-size:0.85em">
+<div id="pulseParametersGroup" class="parameterGroup">
+<table id="pulseParametersTable" class="parameterTable" style="font-size:0.85em">
   <tr><td colspan="2"><strong>Pulse-rate event</strong></td></tr>
   <tr><td>fall of at least</td><td><input type="number" id="pulseDropBpm" min="2" max="20" step="1"> bpm</td></tr>
-  <tr><td>over</td><td><input type="number" id="pulseMinDur" min="1" max="180" step="1"> - 180 s</td></tr>
+  <tr><td>over</td><td><input type="number" id="pulseMinimumTime" min="1" max="180" step="1"> - 180 s</td></tr>
 </table>
 </div>
 <script id="spo2-data" type="application/json">%%DATA%%</script>
@@ -89,126 +89,126 @@ _TEMPLATE = """<!doctype html>
 <script>
 (function () {
   var records = JSON.parse(document.getElementById('spo2-data').textContent);
-  // {events, summary, params, pulse: {events, summary, params}}, computed in Python (desaturation.py) for the page's initial
+  // {events, summary, parameters, pulse: {events, summary, parameters}}, computed in Python (desaturation.py) for the page's initial
   // load; re-derived here in JS (detectEvents/summarizeEvents, a 1:1 port of
   // desaturation.py's detect_events/summarize) whenever the event parameters below change,
   // so the page recomputes without a server round-trip (T-025).
   var analysis = JSON.parse(document.getElementById('spo2-events').textContent);
   var meta = document.getElementById('meta');
-  var n = records.length;
-  if (n === 0) {
+  var recordCount = records.length;
+  if (recordCount === 0) {
     meta.textContent = 'No records in this recording.';
     return;
   }
-  function fmtTs(ts) { return ts == null ? ts : String(ts).replace('T', ' '); }
-  function fmtSec(s) {
-    var m = Math.floor(s / 60), ss = s % 60;
-    return m + 'm ' + ss + 's';
+  function formatTimestamp(timestamp) { return timestamp == null ? timestamp : String(timestamp).replace('T', ' '); }
+  function formatSeconds(totalSeconds) {
+    var minutes = Math.floor(totalSeconds / 60), seconds = totalSeconds % 60;
+    return minutes + 'm ' + seconds + 's';
   }
-  meta.textContent = fmtTs(records[0].timestamp) + ' to ' + fmtTs(records[n - 1].timestamp) + ' -- duration ' + fmtSec(n);
-  var spo2Arr = records.map(function (r) { return r.spo2; });
-  var pulseArr = records.map(function (r) { return r.heart_rate; });
+  meta.textContent = formatTimestamp(records[0].timestamp) + ' to ' + formatTimestamp(records[recordCount - 1].timestamp) + ' -- duration ' + formatSeconds(recordCount);
+  var spo2Series = records.map(function (record) { return record.spo2; });
+  var pulseSeries = records.map(function (record) { return record.heart_rate; });
 
   // BEGIN desaturation-port (extracted and run under Node by tests/test_desaturation_js_parity.py, T-027)
   // Desaturation-event detection, ported from fiedle400/desaturation.py (SPO2_FORMAT.md
   // §7.2). max_time/max_avg/oscillation stay fixed, matching SpO2 Assistant's own
   // Analyseparameter dialog, which doesn't expose them either (T-019 screenshot).
-  var EVT_MAX_TIME = 180, EVT_MAX_AVG = 2, EVT_OSCILLATION = 1, EVT_LO = 0, EVT_HI = 100, EVT_INVALID = 127;
+  var EVENT_MAX_TIME = 180, EVENT_MAX_AVERAGE = 2, EVENT_OSCILLATION = 1, EVENT_LOW = 0, EVENT_HIGH = 100, EVENT_INVALID = 127;
 
   // The pulse-rate detector is the same code on the pulse series (SPO2_FORMAT.md §7.3):
   // valid range 0..254, probe-out 255, only falls count.
-  var PULSE_HI = 254, PULSE_INVALID = 255;
+  var PULSE_HIGH = 254, PULSE_INVALID = 255;
 
-  function detectEvents(spo2, drop, minTime, hi, invalid) {
-    if (hi === undefined) hi = EVT_HI;
-    if (invalid === undefined) invalid = EVT_INVALID;
-    var x = spo2.map(function (v) { return (v === null || v === undefined) ? invalid : v; });
-    var cands = [];
-    var st = 0, en = 0;
+  function detectEvents(spo2, drop, minTime, high, invalid) {
+    if (high === undefined) high = EVENT_HIGH;
+    if (invalid === undefined) invalid = EVENT_INVALID;
+    var series = spo2.map(function (value) { return (value === null || value === undefined) ? invalid : value; });
+    var candidates = [];
+    var fallStart = 0, fallEnd = 0;
     function finish() {
-      if (st && en && en - st > 0) cands.push([st, en, x[st], x[en]]);
-      st = 0; en = 0;
+      if (fallStart && fallEnd && fallEnd - fallStart > 0) candidates.push([fallStart, fallEnd, series[fallStart], series[fallEnd]]);
+      fallStart = 0; fallEnd = 0;
     }
-    for (var i = 0; i < x.length; i++) {
-      var v = x[i];
-      if (v > hi || v < EVT_LO) { finish(); continue; }
+    for (var i = 0; i < series.length; i++) {
+      var value = series[i];
+      if (value > high || value < EVENT_LOW) { finish(); continue; }
       if (i === 0) continue;
-      var p = x[i - 1];
-      if (v > p) {
+      var previous = series[i - 1];
+      if (value > previous) {
         finish();
-      } else if (v === p) {
-        if (st) en = i;
-      } else if (st) {
-        en = i;
-      } else if (p > EVT_LO && p < hi) {
-        st = i - 1; en = i;
+      } else if (value === previous) {
+        if (fallStart) fallEnd = i;
+      } else if (fallStart) {
+        fallEnd = i;
+      } else if (previous > EVENT_LOW && previous < high) {
+        fallStart = i - 1; fallEnd = i;
       }
     }
     finish();
 
-    function accepted(c) {
-      var dur = c[1] - c[0], depth = c[2] - c[3];
-      if (!dur || depth < drop || dur < minTime || dur > EVT_MAX_TIME) return false;
-      if (!(Math.floor(depth / dur) < EVT_MAX_AVG)) return false;
-      for (var k = c[0]; k <= c[1]; k++) { if (!(x[k] >= EVT_LO && x[k] <= hi)) return false; }
+    function accepted(candidate) {
+      var duration = candidate[1] - candidate[0], depth = candidate[2] - candidate[3];
+      if (!duration || depth < drop || duration < minTime || duration > EVENT_MAX_TIME) return false;
+      if (!(Math.floor(depth / duration) < EVENT_MAX_AVERAGE)) return false;
+      for (var k = candidate[0]; k <= candidate[1]; k++) { if (!(series[k] >= EVENT_LOW && series[k] <= high)) return false; }
       return true;
     }
 
     var events = [];
-    if (!cands.length) return events;
-    var cur = cands[0].slice();
-    for (var j = 1; j < cands.length; j++) {
-      var nx = cands[j];
-      if (nx[2] - cur[3] <= EVT_OSCILLATION && nx[3] < cur[3] && nx[2] < cur[2] && nx[0] - cur[1] <= minTime) {
-        cur[1] = nx[1]; cur[3] = nx[3];
+    if (!candidates.length) return events;
+    var current = candidates[0].slice();
+    for (var j = 1; j < candidates.length; j++) {
+      var next = candidates[j];
+      if (next[2] - current[3] <= EVENT_OSCILLATION && next[3] < current[3] && next[2] < current[2] && next[0] - current[1] <= minTime) {
+        current[1] = next[1]; current[3] = next[3];
       } else {
-        if (accepted(cur)) events.push(cur);
-        cur = nx.slice();
+        if (accepted(current)) events.push(current);
+        current = next.slice();
       }
     }
-    if (accepted(cur)) events.push(cur);
-    return events.map(function (e) { return { start: e[0], nadir: e[1], from_pct: e[2], to_pct: e[3] }; });
+    if (accepted(current)) events.push(current);
+    return events.map(function (event) { return { start: event[0], nadir: event[1], from_percent: event[2], to_percent: event[3] }; });
   }
 
   // Python's round(x, n): nearest, exact ties to even (Math.round is half-up and
-  // v * 100 is inexact). toFixed is exact; a tie is a value whose exact decimal
+  // value * 100 is inexact). toFixed is exact; a tie is a value whose exact decimal
   // expansion is the kept digits, a 5 and nothing else.
-  function pyRound(v, nd) {
-    var t = Math.abs(v).toFixed(nd + 40);
-    var cut = t.length - 40;
-    var down = Number(t.slice(0, cut)), up = Number(Math.abs(v).toFixed(nd));
-    var r = up;
-    if (t.slice(cut) === '5' + new Array(40).join('0') && Number(t.slice(cut - 1, cut)) % 2 === 0) r = down;
-    return v < 0 ? -r : r;
+  function pyRound(value, digits) {
+    var fixedText = Math.abs(value).toFixed(digits + 40);
+    var cutIndex = fixedText.length - 40;
+    var roundedDown = Number(fixedText.slice(0, cutIndex)), roundedUp = Number(Math.abs(value).toFixed(digits));
+    var result = roundedUp;
+    if (fixedText.slice(cutIndex) === '5' + new Array(40).join('0') && Number(fixedText.slice(cutIndex - 1, cutIndex)) % 2 === 0) result = roundedDown;
+    return value < 0 ? -result : result;
   }
-  function r2(v) { return pyRound(v, 2); }
-  function r1(v) { return pyRound(v, 1); }
-  function sum(a, f) { return a.reduce(function (s, e) { return s + f(e); }, 0); }
+  function round2(value) { return pyRound(value, 2); }
+  function round1(value) { return pyRound(value, 1); }
+  function sum(items, valueOf) { return items.reduce(function (total, item) { return total + valueOf(item); }, 0); }
 
   function summarizeEvents(spo2, events, criteria) {
     var valid = [];
     for (var i = 0; i < spo2.length; i++) {
-      var v = spo2[i];
-      if (v !== null && v !== undefined && v >= 1 && v <= 100) valid.push(i);
+      var value = spo2[i];
+      if (value !== null && value !== undefined && value >= 1 && value <= 100) valid.push(i);
     }
     var out = { samples: spo2.length, valid_samples: valid.length, total_event: events.length };
     if (!spo2.length) return out;
     var hours = spo2.length / 3600.0;
-    out.index_per_hr = r2(events.length / hours);
-    out.adjusted_index_per_hr = valid.length ? r2(events.length / (valid.length / 3600.0)) : null;
-    out.artifact_pct = r2(100.0 * (spo2.length - valid.length) / spo2.length);
-    out.avg_low_spo2 = events.length ? r2(sum(events, function (e) { return e.to_pct; }) / events.length) : null;
-    var low = events.filter(function (e) { return e.to_pct < criteria; });
+    out.index_per_hour = round2(events.length / hours);
+    out.adjusted_index_per_hour = valid.length ? round2(events.length / (valid.length / 3600.0)) : null;
+    out.artifact_percent = round2(100.0 * (spo2.length - valid.length) / spo2.length);
+    out.average_low_spo2 = events.length ? round2(sum(events, function (event) { return event.to_percent; }) / events.length) : null;
+    var low = events.filter(function (event) { return event.to_percent < criteria; });
     out.events_below_criteria = low.length;
-    out.avg_low_spo2_below_criteria = low.length ? r2(sum(low, function (e) { return e.to_pct; }) / low.length) : null;
+    out.average_low_spo2_below_criteria = low.length ? round2(sum(low, function (event) { return event.to_percent; }) / low.length) : null;
     // "Time (min) <criteria" (SPO2_FORMAT.md Sec7.1), same valid samples as the rest of
     // this report -- not a separately-filtered count (T-044).
-    out.time_below_criteria_s = valid.filter(function (i) { return spo2[i] < criteria; }).length;
-    out.avg_event_duration_s = events.length ? r1(sum(events, function (e) { return e.nadir - e.start; }) / events.length) : null;
+    out.time_below_criteria_seconds = valid.filter(function (i) { return spo2[i] < criteria; }).length;
+    out.average_event_duration_seconds = events.length ? round1(sum(events, function (event) { return event.nadir - event.start; }) / events.length) : null;
     var inside = {};
-    events.forEach(function (e) { for (var k = e.start; k <= e.nadir; k++) inside[k] = true; });
+    events.forEach(function (event) { for (var k = event.start; k <= event.nadir; k++) inside[k] = true; });
     var basal = valid.filter(function (i) { return !inside[i]; }).map(function (i) { return spo2[i]; });
-    out.basal_spo2 = basal.length ? r2(sum(basal, function (v) { return v; }) / basal.length) : null;
+    out.basal_spo2 = basal.length ? round2(sum(basal, function (value) { return value; }) / basal.length) : null;
     return out;
   }
 
@@ -216,56 +216,56 @@ _TEMPLATE = """<!doctype html>
   function summarizePulse(pulse, events) {
     var valid = 0;
     for (var i = 0; i < pulse.length; i++) {
-      var v = pulse[i];
-      if (v !== null && v !== undefined && v >= 1 && v <= 250) valid++;
+      var value = pulse[i];
+      if (value !== null && value !== undefined && value >= 1 && value <= 250) valid++;
     }
     var out = { samples: pulse.length, valid_samples: valid, total_event: events.length };
     if (!pulse.length) return out;
-    out.index_per_hr = r2(events.length / (pulse.length / 3600.0));
-    out.adjusted_index_per_hr = valid ? r2(events.length / (valid / 3600.0)) : null;
-    out.artifact_pct = r2(100.0 * (pulse.length - valid) / pulse.length);
-    out.avg_event_duration_s = events.length ? r1(sum(events, function (e) { return e.nadir - e.start; }) / events.length) : null;
+    out.index_per_hour = round2(events.length / (pulse.length / 3600.0));
+    out.adjusted_index_per_hour = valid ? round2(events.length / (valid / 3600.0)) : null;
+    out.artifact_percent = round2(100.0 * (pulse.length - valid) / pulse.length);
+    out.average_event_duration_seconds = events.length ? round1(sum(events, function (event) { return event.nadir - event.start; }) / events.length) : null;
     return out;
   }
   // END desaturation-port
 
   function recomputeEvents() {
-    var drop = parseFloat(document.getElementById('dropPct').value);
-    var minTime = parseInt(document.getElementById('minDur').value, 10);
-    var criteria = parseFloat(document.getElementById('critLevel').value);
+    var drop = parseFloat(document.getElementById('dropPercent').value);
+    var minTime = parseInt(document.getElementById('minimumTime').value, 10);
+    var criteria = parseFloat(document.getElementById('criteriaLevel').value);
     if (isNaN(drop) || drop < 1 || drop > 20) return;
-    if (isNaN(minTime) || minTime < 1 || minTime > EVT_MAX_TIME) return;
+    if (isNaN(minTime) || minTime < 1 || minTime > EVENT_MAX_TIME) return;
     if (isNaN(criteria) || criteria < 1 || criteria > 99) return;
-    var events = detectEvents(spo2Arr, drop, minTime);
+    var events = detectEvents(spo2Series, drop, minTime);
     analysis.events = events;
-    analysis.summary = summarizeEvents(spo2Arr, events, criteria);
-    analysis.params = { drop: drop, min_time: minTime, max_time: EVT_MAX_TIME, criteria: criteria };
+    analysis.summary = summarizeEvents(spo2Series, events, criteria);
+    analysis.parameters = { drop: drop, min_time: minTime, max_time: EVENT_MAX_TIME, criteria: criteria };
     stats(); render();
   }
 
   function recomputePulse() {
     var drop = parseFloat(document.getElementById('pulseDropBpm').value);
-    var minTime = parseInt(document.getElementById('pulseMinDur').value, 10);
+    var minTime = parseInt(document.getElementById('pulseMinimumTime').value, 10);
     if (isNaN(drop) || drop < 2 || drop > 20) return;
-    if (isNaN(minTime) || minTime < 1 || minTime > EVT_MAX_TIME) return;
-    var events = detectEvents(pulseArr, drop, minTime, PULSE_HI, PULSE_INVALID);
+    if (isNaN(minTime) || minTime < 1 || minTime > EVENT_MAX_TIME) return;
+    var events = detectEvents(pulseSeries, drop, minTime, PULSE_HIGH, PULSE_INVALID);
     analysis.pulse = {
       events: events,
-      summary: summarizePulse(pulseArr, events),
-      params: { drop: drop, min_time: minTime },
+      summary: summarizePulse(pulseSeries, events),
+      parameters: { drop: drop, min_time: minTime },
     };
     stats(); render();
   }
 
-  document.getElementById('dropPct').value = analysis.params.drop;
-  document.getElementById('minDur').value = analysis.params.min_time;
-  document.getElementById('critLevel').value = analysis.params.criteria;
-  document.getElementById('pulseDropBpm').value = analysis.pulse.params.drop;
-  document.getElementById('pulseMinDur').value = analysis.pulse.params.min_time;
-  ['dropPct', 'minDur', 'critLevel'].forEach(function (id) {
+  document.getElementById('dropPercent').value = analysis.parameters.drop;
+  document.getElementById('minimumTime').value = analysis.parameters.min_time;
+  document.getElementById('criteriaLevel').value = analysis.parameters.criteria;
+  document.getElementById('pulseDropBpm').value = analysis.pulse.parameters.drop;
+  document.getElementById('pulseMinimumTime').value = analysis.pulse.parameters.min_time;
+  ['dropPercent', 'minimumTime', 'criteriaLevel'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', recomputeEvents);
   });
-  ['pulseDropBpm', 'pulseMinDur'].forEach(function (id) {
+  ['pulseDropBpm', 'pulseMinimumTime'].forEach(function (id) {
     document.getElementById(id).addEventListener('input', recomputePulse);
   });
 
@@ -273,27 +273,27 @@ _TEMPLATE = """<!doctype html>
   // auto-scaled per file. SpO2 50-100% (below 50 is clamped, not expected
   // in practice); heart rate 30-220 bpm, a generic pulse-oximeter display
   // range covering rest through heavy exertion.
-  var SPO2_LO = 50, SPO2_HI = 100;
-  var HR_LO = 30, HR_HI = 220;
+  var SPO2_LOW = 50, SPO2_HIGH = 100;
+  var HEART_RATE_LOW = 30, HEART_RATE_HIGH = 220;
   var show = { spo2: true, heart_rate: true }; // per-channel switches (checkboxes in the legend)
 
-  var canvas = document.getElementById('c');
-  var ctx = canvas.getContext('2d');
+  var canvas = document.getElementById('chart');
+  var context = canvas.getContext('2d');
   var tooltip = document.getElementById('tooltip');
-  var resetBtn = document.getElementById('resetZoom');
-  var padL = 50, padR = 55, padT = 20, padB = 34;
+  var resetButton = document.getElementById('resetZoom');
+  var paddingLeft = 50, paddingRight = 55, paddingTop = 20, paddingBottom = 34;
 
   // Zoom window: [viewStart, viewEnd] indices into `records`, inclusive.
   // Horizontal-only responsiveness: canvas width follows the container;
   // height is fixed (set via the height="420" attribute), never stretched.
-  var viewStart = 0, viewEnd = n - 1;
-  var layout = null; // recomputed by render(): {W, plotW, plotH, padL, padT, dpr, viewStart, viewEnd}
+  var viewStart = 0, viewEnd = recordCount - 1;
+  var layout = null; // recomputed by render(): {cssWidth, plotWidth, plotHeight, paddingLeft, paddingTop, paddingBottom, xPosition, visibleStart, visibleEnd, count}
 
-  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 
-  function fmtTime(ts) {
-    var i = String(ts).indexOf('T');
-    return i === -1 ? String(ts) : String(ts).slice(i + 1);
+  function formatTime(timestamp) {
+    var separator = String(timestamp).indexOf('T');
+    return separator === -1 ? String(timestamp) : String(timestamp).slice(separator + 1);
   }
 
   var CSS_HEIGHT = canvas.height; // fixed CSS height, read once; never changed by resize
@@ -303,171 +303,171 @@ _TEMPLATE = """<!doctype html>
   function render() {
     var cssWidth = canvas.parentElement.clientWidth;
     var cssHeight = CSS_HEIGHT;
-    var dpr = window.devicePixelRatio || 1;
+    var pixelRatio = window.devicePixelRatio || 1;
     // Both the pixel buffer (canvas.width/height) and the CSS display size
     // must be set for a sharp, correctly-clipped render at any DPR -- scaling
     // only the width here previously left the buffer too short vertically,
-    // silently clipping anything below CSS y ~= cssHeight / dpr (the x-axis
+    // silently clipping anything below CSS y ~= cssHeight / pixelRatio (the x-axis
     // time labels included).
-    canvas.width = cssWidth * dpr;
-    canvas.height = cssHeight * dpr;
+    canvas.width = cssWidth * pixelRatio;
+    canvas.height = cssHeight * pixelRatio;
     canvas.style.width = cssWidth + 'px';
     canvas.style.height = cssHeight + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, cssWidth, cssHeight);
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    context.clearRect(0, 0, cssWidth, cssHeight);
 
-    var plotW = cssWidth - padL - padR, plotH = cssHeight - padT - padB;
-    var vs = viewStart, ve = viewEnd, count = ve - vs + 1;
+    var plotWidth = cssWidth - paddingLeft - paddingRight, plotHeight = cssHeight - paddingTop - paddingBottom;
+    var visibleStart = viewStart, visibleEnd = viewEnd, count = visibleEnd - visibleStart + 1;
 
-    function x(i) { return padL + (count <= 1 ? 0 : ((i - vs) / (count - 1)) * plotW); }
-    function ySpo2(v) { return padT + (1 - (clamp(v, SPO2_LO, SPO2_HI) - SPO2_LO) / (SPO2_HI - SPO2_LO)) * plotH; }
-    function yHr(v) { return padT + (1 - (clamp(v, HR_LO, HR_HI) - HR_LO) / (HR_HI - HR_LO)) * plotH; }
+    function xPosition(index) { return paddingLeft + (count <= 1 ? 0 : ((index - visibleStart) / (count - 1)) * plotWidth); }
+    function ySpo2(value) { return paddingTop + (1 - (clamp(value, SPO2_LOW, SPO2_HIGH) - SPO2_LOW) / (SPO2_HIGH - SPO2_LOW)) * plotHeight; }
+    function yHeartRate(value) { return paddingTop + (1 - (clamp(value, HEART_RATE_LOW, HEART_RATE_HIGH) - HEART_RATE_LOW) / (HEART_RATE_HIGH - HEART_RATE_LOW)) * plotHeight; }
 
-    layout = { cssWidth: cssWidth, plotW: plotW, plotH: plotH, padL: padL, padT: padT, padB: padB, x: x, vs: vs, ve: ve, count: count };
+    layout = { cssWidth: cssWidth, plotWidth: plotWidth, plotHeight: plotHeight, paddingLeft: paddingLeft, paddingTop: paddingTop, paddingBottom: paddingBottom, xPosition: xPosition, visibleStart: visibleStart, visibleEnd: visibleEnd, count: count };
 
     // Axes
-    ctx.strokeStyle = '#ccc';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + plotH); ctx.lineTo(padL + plotW, padT + plotH);
-    ctx.stroke();
+    context.strokeStyle = '#ccc';
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(paddingLeft, paddingTop); context.lineTo(paddingLeft, paddingTop + plotHeight); context.lineTo(paddingLeft + plotWidth, paddingTop + plotHeight);
+    context.stroke();
 
     // Horizontal gridlines + SpO2 labels (left)
-    ctx.font = '11px sans-serif';
-    ctx.strokeStyle = '#eee';
-    ctx.fillStyle = '#2b6cb0';
-    for (var sv = SPO2_LO; sv <= SPO2_HI; sv += 10) {
-      var syy = ySpo2(sv);
-      ctx.beginPath(); ctx.moveTo(padL, syy); ctx.lineTo(padL + plotW, syy); ctx.stroke();
-      if (show.spo2) ctx.fillText(sv + '%', 4, syy + 4);
+    context.font = '11px sans-serif';
+    context.strokeStyle = '#eee';
+    context.fillStyle = '#2b6cb0';
+    for (var spo2Tick = SPO2_LOW; spo2Tick <= SPO2_HIGH; spo2Tick += 10) {
+      var spo2TickY = ySpo2(spo2Tick);
+      context.beginPath(); context.moveTo(paddingLeft, spo2TickY); context.lineTo(paddingLeft + plotWidth, spo2TickY); context.stroke();
+      if (show.spo2) context.fillText(spo2Tick + '%', 4, spo2TickY + 4);
     }
 
     // Heart-rate labels (right), skipping any that would overlap
-    ctx.fillStyle = '#c05621';
+    context.fillStyle = '#c05621';
     var lastLabelY = null;
-    for (var hv = HR_LO; show.heart_rate && hv <= HR_HI; hv += 40) {
-      var hyy = yHr(hv);
-      if (lastLabelY !== null && Math.abs(hyy - lastLabelY) < 14) continue;
-      ctx.fillText(Math.round(hv) + '', padL + plotW + 6, hyy + 4);
-      lastLabelY = hyy;
+    for (var heartRateTick = HEART_RATE_LOW; show.heart_rate && heartRateTick <= HEART_RATE_HIGH; heartRateTick += 40) {
+      var heartRateTickY = yHeartRate(heartRateTick);
+      if (lastLabelY !== null && Math.abs(heartRateTickY - lastLabelY) < 14) continue;
+      context.fillText(Math.round(heartRateTick) + '', paddingLeft + plotWidth + 6, heartRateTickY + 4);
+      lastLabelY = heartRateTickY;
     }
 
     // X-axis time ticks: ~6 evenly spaced across the visible range
     var tickCount = Math.min(6, count);
-    ctx.fillStyle = '#666';
-    ctx.textAlign = 'center';
-    for (var t = 0; t < tickCount; t++) {
-      var idx = vs + Math.round((t / Math.max(1, tickCount - 1)) * (count - 1));
-      var tx = x(idx);
-      ctx.strokeStyle = '#f2f2f2';
-      ctx.beginPath(); ctx.moveTo(tx, padT); ctx.lineTo(tx, padT + plotH); ctx.stroke();
-      ctx.fillText(fmtTime(records[idx].timestamp), tx, padT + plotH + 16);
+    context.fillStyle = '#666';
+    context.textAlign = 'center';
+    for (var tick = 0; tick < tickCount; tick++) {
+      var tickIndex = visibleStart + Math.round((tick / Math.max(1, tickCount - 1)) * (count - 1));
+      var tickX = xPosition(tickIndex);
+      context.strokeStyle = '#f2f2f2';
+      context.beginPath(); context.moveTo(tickX, paddingTop); context.lineTo(tickX, paddingTop + plotHeight); context.stroke();
+      context.fillText(formatTime(records[tickIndex].timestamp), tickX, paddingTop + plotHeight + 16);
     }
-    ctx.textAlign = 'left';
+    context.textAlign = 'left';
 
-    function drawSeries(key, color, yFn) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
+    function drawSeries(key, color, yPosition) {
+      context.strokeStyle = color;
+      context.lineWidth = 1.5;
+      context.beginPath();
       var drawing = false;
-      for (var i = vs; i <= ve; i++) {
-        var v = records[i][key];
-        if (v === null || v === undefined) { drawing = false; continue; }
-        var px = x(i), py = yFn(v);
-        if (!drawing) { ctx.moveTo(px, py); drawing = true; } else { ctx.lineTo(px, py); }
+      for (var i = visibleStart; i <= visibleEnd; i++) {
+        var value = records[i][key];
+        if (value === null || value === undefined) { drawing = false; continue; }
+        var pointX = xPosition(i), pointY = yPosition(value);
+        if (!drawing) { context.moveTo(pointX, pointY); drawing = true; } else { context.lineTo(pointX, pointY); }
       }
-      ctx.stroke();
+      context.stroke();
     }
 
     // Desaturation events (SpO2 Assistant's method): shaded from the start of the fall to the nadir.
     if (show.spo2) {
-      ctx.fillStyle = 'rgba(197,48,48,0.18)';
-      analysis.events.forEach(function (e) {
-        if (e.nadir < vs || e.start > ve) return;
-        var x0 = x(Math.max(e.start, vs)), x1 = x(Math.min(e.nadir, ve));
-        ctx.fillRect(x0, padT, Math.max(2, x1 - x0), plotH);
+      context.fillStyle = 'rgba(197,48,48,0.18)';
+      analysis.events.forEach(function (event) {
+        if (event.nadir < visibleStart || event.start > visibleEnd) return;
+        var bandStart = xPosition(Math.max(event.start, visibleStart)), bandEnd = xPosition(Math.min(event.nadir, visibleEnd));
+        context.fillRect(bandStart, paddingTop, Math.max(2, bandEnd - bandStart), plotHeight);
       });
     }
 
     // Pulse-rate events (falls only): amber bands, drawn with the heart-rate series.
     if (show.heart_rate) {
-      ctx.fillStyle = 'rgba(214,158,46,0.28)';
-      analysis.pulse.events.forEach(function (e) {
-        if (e.nadir < vs || e.start > ve) return;
-        var x0 = x(Math.max(e.start, vs)), x1 = x(Math.min(e.nadir, ve));
-        ctx.fillRect(x0, padT, Math.max(2, x1 - x0), plotH);
+      context.fillStyle = 'rgba(214,158,46,0.28)';
+      analysis.pulse.events.forEach(function (event) {
+        if (event.nadir < visibleStart || event.start > visibleEnd) return;
+        var bandStart = xPosition(Math.max(event.start, visibleStart)), bandEnd = xPosition(Math.min(event.nadir, visibleEnd));
+        context.fillRect(bandStart, paddingTop, Math.max(2, bandEnd - bandStart), plotHeight);
       });
     }
 
     if (show.spo2) drawSeries('spo2', '#2b6cb0', ySpo2);
-    if (show.heart_rate) drawSeries('heart_rate', '#c05621', yHr);
+    if (show.heart_rate) drawSeries('heart_rate', '#c05621', yHeartRate);
 
-    resetBtn.style.display = (vs === 0 && ve === n - 1) ? 'none' : 'inline';
+    resetButton.style.display = (visibleStart === 0 && visibleEnd === recordCount - 1) ? 'none' : 'inline';
   }
 
   function nearestIndex(mouseX) {
     if (!layout) return null;
-    var frac = clamp((mouseX - layout.padL) / layout.plotW, 0, 1);
-    return clamp(layout.vs + Math.round(frac * (layout.count - 1)), layout.vs, layout.ve);
+    var fraction = clamp((mouseX - layout.paddingLeft) / layout.plotWidth, 0, 1);
+    return clamp(layout.visibleStart + Math.round(fraction * (layout.count - 1)), layout.visibleStart, layout.visibleEnd);
   }
 
   // Hover tooltip: shows the exact reading at the nearest point.
-  canvas.addEventListener('mousemove', function (ev) {
-    if (dragStartX !== null) { handleDrag(ev); return; }
+  canvas.addEventListener('mousemove', function (mouseEvent) {
+    if (dragStartX !== null) { handleDrag(mouseEvent); return; }
     var rect = canvas.getBoundingClientRect();
-    var mx = ev.clientX - rect.left;
-    var idx = nearestIndex(mx);
-    if (idx === null) return;
-    var r = records[idx];
+    var pointerX = mouseEvent.clientX - rect.left;
+    var index = nearestIndex(pointerX);
+    if (index === null) return;
+    var record = records[index];
     tooltip.style.display = 'block';
-    tooltip.style.left = (mx + 12) + 'px';
-    tooltip.style.top = (ev.clientY - rect.top - 10) + 'px';
-    tooltip.innerHTML = fmtTime(r.timestamp) +
-      (show.spo2 ? '<br>SpO2: ' + (r.spo2 === null ? '--' : r.spo2 + '%') : '') +
-      (show.heart_rate ? '<br>HR: ' + (r.heart_rate === null ? '--' : r.heart_rate + ' bpm') : '');
+    tooltip.style.left = (pointerX + 12) + 'px';
+    tooltip.style.top = (mouseEvent.clientY - rect.top - 10) + 'px';
+    tooltip.innerHTML = formatTime(record.timestamp) +
+      (show.spo2 ? '<br>SpO2: ' + (record.spo2 === null ? '--' : record.spo2 + '%') : '') +
+      (show.heart_rate ? '<br>HR: ' + (record.heart_rate === null ? '--' : record.heart_rate + ' bpm') : '');
   });
   canvas.addEventListener('mouseleave', function () { tooltip.style.display = 'none'; });
 
   // Click-drag to zoom into a horizontal range; reset link restores the full view.
-  var dragStartX = null, dragStartIdx = null;
+  var dragStartX = null, dragStartIndex = null;
   var selectionDiv = document.createElement('div');
   selectionDiv.style.cssText = 'position:absolute;top:0;bottom:0;background:rgba(43,108,176,0.12);border-left:1px solid #2b6cb0;border-right:1px solid #2b6cb0;display:none;pointer-events:none;';
-  document.getElementById('chartWrap').appendChild(selectionDiv);
+  document.getElementById('chartWrapper').appendChild(selectionDiv);
 
-  canvas.addEventListener('mousedown', function (ev) {
+  canvas.addEventListener('mousedown', function (mouseEvent) {
     var rect = canvas.getBoundingClientRect();
-    dragStartX = ev.clientX - rect.left;
-    dragStartIdx = nearestIndex(dragStartX);
+    dragStartX = mouseEvent.clientX - rect.left;
+    dragStartIndex = nearestIndex(dragStartX);
     selectionDiv.style.display = 'block';
     selectionDiv.style.left = dragStartX + 'px';
     selectionDiv.style.width = '0px';
   });
 
-  function handleDrag(ev) {
+  function handleDrag(mouseEvent) {
     var rect = canvas.getBoundingClientRect();
-    var mx = ev.clientX - rect.left;
-    var left = Math.min(dragStartX, mx), width = Math.abs(mx - dragStartX);
+    var pointerX = mouseEvent.clientX - rect.left;
+    var left = Math.min(dragStartX, pointerX), width = Math.abs(pointerX - dragStartX);
     selectionDiv.style.left = left + 'px';
     selectionDiv.style.width = width + 'px';
   }
 
-  window.addEventListener('mouseup', function (ev) {
+  window.addEventListener('mouseup', function (mouseEvent) {
     if (dragStartX === null) return;
     var rect = canvas.getBoundingClientRect();
-    var mx = clamp(ev.clientX - rect.left, 0, rect.width);
-    var endIdx = nearestIndex(mx);
+    var pointerX = clamp(mouseEvent.clientX - rect.left, 0, rect.width);
+    var endIndex = nearestIndex(pointerX);
     selectionDiv.style.display = 'none';
-    var dragged = Math.abs(mx - dragStartX) > 6; // ignore accidental tiny drags (treat as a click)
+    var dragged = Math.abs(pointerX - dragStartX) > 6; // ignore accidental tiny drags (treat as a click)
     dragStartX = null;
-    if (dragged && endIdx !== null && dragStartIdx !== null && endIdx !== dragStartIdx) {
-      viewStart = Math.min(dragStartIdx, endIdx);
-      viewEnd = Math.max(dragStartIdx, endIdx);
+    if (dragged && endIndex !== null && dragStartIndex !== null && endIndex !== dragStartIndex) {
+      viewStart = Math.min(dragStartIndex, endIndex);
+      viewEnd = Math.max(dragStartIndex, endIndex);
       render();
     }
   });
 
-  resetBtn.addEventListener('click', function () {
-    viewStart = 0; viewEnd = n - 1;
+  resetButton.addEventListener('click', function () {
+    viewStart = 0; viewEnd = recordCount - 1;
     render();
   });
 
@@ -475,53 +475,53 @@ _TEMPLATE = """<!doctype html>
 
   // Session statistics, computed over the whole recording regardless of zoom.
   function stats() {
-    var spo2Vals = records.map(function (r) { return r.spo2; }).filter(function (v) { return v !== null && v !== undefined; });
-    var hrVals = records.map(function (r) { return r.heart_rate; }).filter(function (v) { return v !== null && v !== undefined; });
-    var a = analysis.summary;
-    function avg(a) { return a.length ? (a.reduce(function (s, v) { return s + v; }, 0) / a.length) : null; }
+    var spo2Readings = records.map(function (record) { return record.spo2; }).filter(function (value) { return value !== null && value !== undefined; });
+    var heartRateReadings = records.map(function (record) { return record.heart_rate; }).filter(function (value) { return value !== null && value !== undefined; });
+    var summary = analysis.summary;
+    function average(values) { return values.length ? (values.reduce(function (total, value) { return total + value; }, 0) / values.length) : null; }
     // "No-signal / probe-out" and the Time-below-criteria row below both come from
     // analysis.summary (desaturation-port), so they use the same 1..100 valid-sample
     // definition as every other report value instead of each filtering on its own (T-044).
     var rows = [
       ['__group__', 'Recording'],
-      ['Duration', fmtSec(n) + ' (' + n + ' records)'],
-      ['SpO2 min / avg / max', spo2Vals.length ? Math.min.apply(null, spo2Vals) + '% / ' + avg(spo2Vals).toFixed(1) + '% / ' + Math.max.apply(null, spo2Vals) + '%' : 'n/a'],
-      ['Heart rate min / avg / max', hrVals.length ? Math.min.apply(null, hrVals) + ' / ' + avg(hrVals).toFixed(1) + ' / ' + Math.max.apply(null, hrVals) + ' bpm' : 'n/a'],
-      ['No-signal / probe-out', fmtSec(n - a.valid_samples) + ' (' + a.artifact_pct.toFixed(1) + '%)'],
+      ['Duration', formatSeconds(recordCount) + ' (' + recordCount + ' records)'],
+      ['SpO2 min / avg / max', spo2Readings.length ? Math.min.apply(null, spo2Readings) + '% / ' + average(spo2Readings).toFixed(1) + '% / ' + Math.max.apply(null, spo2Readings) + '%' : 'n/a'],
+      ['Heart rate min / avg / max', heartRateReadings.length ? Math.min.apply(null, heartRateReadings) + ' / ' + average(heartRateReadings).toFixed(1) + ' / ' + Math.max.apply(null, heartRateReadings) + ' bpm' : 'n/a'],
+      ['No-signal / probe-out', formatSeconds(recordCount - summary.valid_samples) + ' (' + summary.artifact_percent.toFixed(1) + '%)'],
     ];
-    function f1(v, unit) { return v === null || v === undefined ? 'n/a' : v.toFixed(1) + unit; }
+    function formatOneDecimal(value, unit) { return value === null || value === undefined ? 'n/a' : value.toFixed(1) + unit; }
     rows.push(
       ['__group__', 'Desaturation analysis'],
-      ['Event index', f1(a.index_per_hr, ' /hr') + ' (adjusted ' + f1(a.adjusted_index_per_hr, ' /hr') + ')'],
-      ['Desaturation events', a.total_event + ' (red bands; fall of at least ' + analysis.params.drop + '% over ' + analysis.params.min_time + '-' + analysis.params.max_time + ' s)'],
-      ['Events below ' + analysis.params.criteria + '%', a.events_below_criteria + (a.avg_low_spo2_below_criteria === null ? '' : ' (average low ' + f1(a.avg_low_spo2_below_criteria, '%') + ')')],
-      ['Average lowest SpO2 of events', f1(a.avg_low_spo2, '%')],
-      ['Basal SpO2', f1(a.basal_spo2, '%') + ' (mean outside the event falls, as SpO2 Assistant computes it)'],
-      ['Time below ' + analysis.params.criteria + '% SpO2', fmtSec(a.time_below_criteria_s) + (a.valid_samples ? ' (' + (100 * a.time_below_criteria_s / a.valid_samples).toFixed(1) + '% of valid readings)' : '')]
+      ['Event index', formatOneDecimal(summary.index_per_hour, ' /hr') + ' (adjusted ' + formatOneDecimal(summary.adjusted_index_per_hour, ' /hr') + ')'],
+      ['Desaturation events', summary.total_event + ' (red bands; fall of at least ' + analysis.parameters.drop + '% over ' + analysis.parameters.min_time + '-' + analysis.parameters.max_time + ' s)'],
+      ['Events below ' + analysis.parameters.criteria + '%', summary.events_below_criteria + (summary.average_low_spo2_below_criteria === null ? '' : ' (average low ' + formatOneDecimal(summary.average_low_spo2_below_criteria, '%') + ')')],
+      ['Average lowest SpO2 of events', formatOneDecimal(summary.average_low_spo2, '%')],
+      ['Basal SpO2', formatOneDecimal(summary.basal_spo2, '%') + ' (mean outside the event falls, as SpO2 Assistant computes it)'],
+      ['Time below ' + analysis.parameters.criteria + '% SpO2', formatSeconds(summary.time_below_criteria_seconds) + (summary.valid_samples ? ' (' + (100 * summary.time_below_criteria_seconds / summary.valid_samples).toFixed(1) + '% of valid readings)' : '')]
     );
-    var pu = analysis.pulse.summary, pp = analysis.pulse.params;
+    var pulseSummary = analysis.pulse.summary, pulseParameters = analysis.pulse.parameters;
     rows.push(
       ['__group__', 'Pulse-rate events'],
-      ['Event index', f1(pu.index_per_hr, ' /hr') + ' (adjusted ' + f1(pu.adjusted_index_per_hr, ' /hr') + ')'],
-      ['Pulse-rate events', pu.total_event + ' (amber bands; fall of at least ' + pp.drop + ' bpm over ' + pp.min_time + '-' + analysis.params.max_time + ' s)'],
-      ['Average event duration', f1(pu.avg_event_duration_s, ' s')]
+      ['Event index', formatOneDecimal(pulseSummary.index_per_hour, ' /hr') + ' (adjusted ' + formatOneDecimal(pulseSummary.adjusted_index_per_hour, ' /hr') + ')'],
+      ['Pulse-rate events', pulseSummary.total_event + ' (amber bands; fall of at least ' + pulseParameters.drop + ' bpm over ' + pulseParameters.min_time + '-' + analysis.parameters.max_time + ' s)'],
+      ['Average event duration', formatOneDecimal(pulseSummary.average_event_duration_seconds, ' s')]
     );
     var table = document.getElementById('stats');
-    table.innerHTML = rows.map(function (r) {
-      if (r[0] === '__group__') return '<tr><th colspan="2" class="statsGroup">' + r[1] + '</th></tr>';
-      return '<tr><th>' + r[0] + '</th><td>' + r[1] + '</td></tr>';
+    table.innerHTML = rows.map(function (row) {
+      if (row[0] === '__group__') return '<tr><th colspan="2" class="statsGroup">' + row[1] + '</th></tr>';
+      return '<tr><th>' + row[0] + '</th><td>' + row[1] + '</td></tr>';
     }).join('');
   }
 
-  document.getElementById('showSpo2').addEventListener('change', function (ev) {
-    show.spo2 = ev.target.checked; render();
+  document.getElementById('showSpo2').addEventListener('change', function (changeEvent) {
+    show.spo2 = changeEvent.target.checked; render();
   });
-  document.getElementById('showHr').addEventListener('change', function (ev) {
-    show.heart_rate = ev.target.checked; render();
+  document.getElementById('showHeartRate').addEventListener('change', function (changeEvent) {
+    show.heart_rate = changeEvent.target.checked; render();
   });
   // Print uses the browser's own dialog; the canvas is redrawn at the print
   // width first (see the @media print rules above).
-  document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
+  document.getElementById('printButton').addEventListener('click', function () { window.print(); });
   window.addEventListener('beforeprint', render);
   window.addEventListener('afterprint', render);
 
@@ -550,22 +550,22 @@ def build_viewer_html(records):
     records = pad_records(records)
     payload = [
         {
-            "timestamp": r.get("timestamp"),
-            "spo2": r.get("spo2"),
-            "heart_rate": r.get("heart_rate"),
-            "flags": r.get("flags"),
+            "timestamp": record.get("timestamp"),
+            "spo2": record.get("spo2"),
+            "heart_rate": record.get("heart_rate"),
+            "flags": record.get("flags"),
         }
-        for r in records
+        for record in records
     ]
     data_json = json.dumps(payload).replace("<", "\\u003c")
-    spo2 = [p["spo2"] for p in payload]
+    spo2 = [point["spo2"] for point in payload]
     events = desaturation.detect_events(spo2)
-    pulse = [p["heart_rate"] for p in payload]
+    pulse = [point["heart_rate"] for point in payload]
     pulse_events = desaturation.detect_pulse_events(pulse)
     analysis = {
         "events": events,
         "summary": desaturation.summarize(spo2, events),
-        "params": {
+        "parameters": {
             "drop": desaturation.DROP,
             "min_time": desaturation.MIN_TIME,
             "max_time": desaturation.MAX_TIME,
@@ -574,7 +574,7 @@ def build_viewer_html(records):
         "pulse": {
             "events": pulse_events,
             "summary": desaturation.summarize_pulse(pulse, pulse_events),
-            "params": {"drop": desaturation.PULSE_DROP, "min_time": desaturation.PULSE_MIN_TIME},
+            "parameters": {"drop": desaturation.PULSE_DROP, "min_time": desaturation.PULSE_MIN_TIME},
         },
     }
     events_json = json.dumps(analysis).replace("<", "\\u003c")

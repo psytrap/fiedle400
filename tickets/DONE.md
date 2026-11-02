@@ -6,6 +6,15 @@ protocol. The second half is the project timeline before and around the tickets.
 
 ## Tickets by week
 
+### 2026-W45 (Mon 2026-11-02 to Sun 2026-11-08)
+
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-065](done/2026-W45/T-065-installer-english-only.md) | Installer should only offer English, not German | Either |
+| [T-050](done/2026-W45/T-050-ubuntu-lts-compat-check.md) | Check the Linux binary against an older Ubuntu LTS in CI (minimum: 22.04) | Either |
+| [T-043](done/2026-W45/T-043-coding-conventions.md) | Write down coding conventions, starting with identifier names | Either |
+| [T-106](done/2026-W45/T-106-rename-short-identifiers.md) | Rename short identifiers that break the naming rule | Cloud |
+
 ### 2026-W44 (Mon 2026-10-26 to Sun 2026-11-01)
 
 | Ticket | Title | Owner |

@@ -26,7 +26,7 @@ SPO2_TAG_BLE = b"B\x00L\x00E\x00"
 
 # Sentinel bytes for probe-out / disconnected / invalid data
 SPO2_INVALID_SPO2 = 127  # 0x7F
-SPO2_INVALID_HR = 255    # 0xFF
+SPO2_INVALID_HEART_RATE = 255    # 0xFF
 
 # Longest between-session gap that is padded with sentinel samples (2 bytes per second).
 # A longer one is more likely a wrong device clock than a real pause: it is not padded, one
@@ -37,13 +37,13 @@ MAX_GAP_FILL_S = 12 * 3600
 EXPORT_FORMATS = ("html", "spo2", "csv", "json")
 
 
-def parse_record_datetime(ts_val: Any) -> Optional[datetime]:
+def parse_record_datetime(timestamp_value: Any) -> Optional[datetime]:
     """Helper to parse a timestamp from ISO string or datetime object."""
-    if isinstance(ts_val, datetime):
-        return ts_val
-    if isinstance(ts_val, str):
+    if isinstance(timestamp_value, datetime):
+        return timestamp_value
+    if isinstance(timestamp_value, str):
         try:
-            return datetime.fromisoformat(ts_val)
+            return datetime.fromisoformat(timestamp_value)
         except ValueError:
             pass
     return None
@@ -64,28 +64,28 @@ def _sample_positions(records: List[Dict[str, Any]]) -> List[int]:
     first = parse_record_datetime(records[0].get("timestamp")) if records else None
     positions: List[int] = []
     unpadded = 0  # seconds of over-long pauses left out of the file so far
-    for i, r in enumerate(records):
-        pos = positions[-1] + 1 if i else 0
-        ts = parse_record_datetime(r.get("timestamp")) if first is not None and i else None
-        if ts is not None:
+    for i, record in enumerate(records):
+        position = positions[-1] + 1 if i else 0
+        timestamp = parse_record_datetime(record.get("timestamp")) if first is not None and i else None
+        if timestamp is not None:
             try:
-                real = int((ts - first).total_seconds()) - unpadded
+                real = int((timestamp - first).total_seconds()) - unpadded
             except TypeError:  # naive vs aware datetimes
-                real = pos
-            if real - pos > MAX_GAP_FILL_S:
+                real = position
+            if real - position > MAX_GAP_FILL_S:
                 warnings.warn(
-                    f"Pause of {real - pos} s before record {i + 1} is longer than "
+                    f"Pause of {real - position} s before record {i + 1} is longer than "
                     f"{MAX_GAP_FILL_S // 3600} h, which looks like a wrong device clock: it is "
                     "not padded into the .SpO2 file, so timestamps after it are too early "
                     "by that amount. Export the sessions separately to keep their times.",
                     UserWarning,
                     stacklevel=2,
                 )
-                pos += 1  # one probe-out second marks the break
-                unpadded += real - pos
+                position += 1  # one probe-out second marks the break
+                unpadded += real - position
             else:
-                pos = max(pos, real)
-        positions.append(pos)
+                position = max(position, real)
+        positions.append(position)
     return positions
 
 
@@ -103,152 +103,152 @@ def pad_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return list(records)
     first = parse_record_datetime(records[0].get("timestamp"))
     out: List[Dict[str, Any]] = []
-    for pos, r in zip(positions, records):
-        while len(out) < pos:
-            sec = len(out)
+    for position, record in zip(positions, records):
+        while len(out) < position:
+            second = len(out)
             out.append({
-                "timestamp": (first + timedelta(seconds=sec)).isoformat(),
+                "timestamp": (first + timedelta(seconds=second)).isoformat(),
                 "spo2": None,
                 "heart_rate": None,
                 "flags": "probe-out",
             })
-        out.append(r)
+        out.append(record)
     return out
 
 
 def build_spo2_binary(
     records: List[Dict[str, Any]],
-    start_dt: Optional[datetime] = None,
+    start_date_time: Optional[datetime] = None,
 ) -> bytes:
     """Build binary .SpO2 file content from extracted session records.
 
     Args:
         records: List of session record dictionaries containing 'spo2', 'heart_rate', and 'timestamp'.
-        start_dt: Explicit recording start datetime. If None, derived from records[0] or datetime.now().
+        start_date_time: Explicit recording start datetime. If None, derived from records[0] or datetime.now().
 
     Returns:
         bytes: Complete binary .SpO2 file payload (1084-byte header + N * 2 bytes, where N
             covers the elapsed seconds, gaps between sessions included).
     """
-    if start_dt is None:
+    if start_date_time is None:
         if records and records[0].get("timestamp"):
-            start_dt = parse_record_datetime(records[0]["timestamp"])
-        if start_dt is None:
-            start_dt = datetime.now()
+            start_date_time = parse_record_datetime(records[0]["timestamp"])
+        if start_date_time is None:
+            start_date_time = datetime.now()
 
     positions = _sample_positions(records)
     sample_count = positions[-1] + 1 if positions else 0
-    hdr = bytearray(SPO2_HEADER_SIZE)
+    header = bytearray(SPO2_HEADER_SIZE)
 
     # 0x0000: Magic (0x0358 = 856), 0x0004: Version (1)
-    struct.pack_into("<II", hdr, 0x0000, SPO2_MAGIC, SPO2_VERSION)
+    struct.pack_into("<II", header, 0x0000, SPO2_MAGIC, SPO2_VERSION)
 
     # 0x0358: Channel flag (1)
-    struct.pack_into("<I", hdr, 0x0358, SPO2_CHANNEL_FLAG)
+    struct.pack_into("<I", header, 0x0358, SPO2_CHANNEL_FLAG)
 
     # 0x0360: Protocol tag "BLE\0" (UTF-16LE)
-    hdr[0x0360:0x0366] = SPO2_TAG_BLE
+    header[0x0360:0x0366] = SPO2_TAG_BLE
 
     # 0x0420: Datetime block and total 1 Hz sample count
     struct.pack_into(
         "<7I",
-        hdr,
+        header,
         0x0420,
-        start_dt.year,
-        start_dt.month,
-        start_dt.day,
-        start_dt.hour,
-        start_dt.minute,
-        start_dt.second,
+        start_date_time.year,
+        start_date_time.month,
+        start_date_time.day,
+        start_date_time.hour,
+        start_date_time.minute,
+        start_date_time.second,
         sample_count,
     )
 
     # Payload: 2 bytes per second [SpO2 (uint8), Heart Rate (uint8)]
     # Seconds with no record (a pause between sessions) stay probe-out.
-    payload = bytearray([SPO2_INVALID_SPO2, SPO2_INVALID_HR] * sample_count)
-    for pos, r in zip(positions, records):
-        spo2 = r.get("spo2")
-        hr = r.get("heart_rate")
+    payload = bytearray([SPO2_INVALID_SPO2, SPO2_INVALID_HEART_RATE] * sample_count)
+    for position, record in zip(positions, records):
+        spo2 = record.get("spo2")
+        heart_rate = record.get("heart_rate")
 
         # Check for valid physiological ranges
         spo2_valid = spo2 is not None and 1 <= int(spo2) <= 100
-        hr_valid = hr is not None and 1 <= int(hr) <= 250
+        heart_rate_valid = heart_rate is not None and 1 <= int(heart_rate) <= 250
 
         # OSCAR's probe-out check is an AND of both sentinel bytes (T-004,
         # SPO2_FORMAT.md §5.2): it never treats a single channel as probe-out
         # on its own. If either channel is invalid, write the sentinel pair
         # for both -- fiedle400's own output must never produce a record
         # OSCAR would import as a literal (e.g. SpO2 127%) on one channel.
-        if spo2_valid and hr_valid:
-            s_byte = int(spo2)
-            h_byte = int(hr)
+        if spo2_valid and heart_rate_valid:
+            spo2_byte = int(spo2)
+            heart_rate_byte = int(heart_rate)
         else:
-            s_byte = SPO2_INVALID_SPO2
-            h_byte = SPO2_INVALID_HR
+            spo2_byte = SPO2_INVALID_SPO2
+            heart_rate_byte = SPO2_INVALID_HEART_RATE
 
-        payload[pos * 2] = s_byte
-        payload[pos * 2 + 1] = h_byte
+        payload[position * 2] = spo2_byte
+        payload[position * 2 + 1] = heart_rate_byte
 
-    return bytes(hdr + payload)
+    return bytes(header + payload)
 
 
 def export_records(
     records: List[Dict[str, Any]],
     output_filename: Optional[str] = None,
-    fmt: str = "spo2",
-    output_dir: Optional[str] = None,
+    format: str = "spo2",
+    output_directory: Optional[str] = None,
 ) -> str:
     """Save extracted records into the requested file format (.html, .spo2, .csv, or .json).
 
     Args:
         records: List of record dictionaries.
         output_filename: Target path or filename. If omitted, a timestamped name is generated.
-        fmt: Target format ('html', 'spo2', 'csv', or 'json'). Ignored if output_filename has a recognized extension.
-        output_dir: Directory for the generated name. Ignored when output_filename is given;
+        format: Target format ('html', 'spo2', 'csv', or 'json'). Ignored if output_filename has a recognized extension.
+        output_directory: Directory for the generated name. Ignored when output_filename is given;
             omitted means the current directory, preserving the plain-CLI behaviour.
 
     Returns:
         str: Absolute path of the saved output file.
     """
-    clean_fmt = fmt.lower().lstrip(".")
+    clean_format = format.lower().lstrip(".")
 
     # Auto-detect format from output_filename extension if supplied
     if output_filename:
-        _, ext = os.path.splitext(output_filename)
-        ext_clean = ext.lower().lstrip(".")
-        if ext_clean in EXPORT_FORMATS:
-            clean_fmt = ext_clean
+        _, extension = os.path.splitext(output_filename)
+        extension_clean = extension.lower().lstrip(".")
+        if extension_clean in EXPORT_FORMATS:
+            clean_format = extension_clean
 
     if not output_filename:
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"fiedle400_all_sessions_{timestamp_str}.{clean_fmt}"
-        if output_dir:
-            output_filename = os.path.join(output_dir, output_filename)
+        timestamp_text = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"fiedle400_all_sessions_{timestamp_text}.{clean_format}"
+        if output_directory:
+            output_filename = os.path.join(output_directory, output_filename)
 
     output_path = os.path.abspath(output_filename)
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
-    if clean_fmt == "html":
+    if clean_format == "html":
         from fiedle400 import spo2_viewer  # imports this module, so not at the top
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(spo2_viewer.build_viewer_html(records))
-    elif clean_fmt == "spo2":
+        with open(output_path, "w", encoding="utf-8") as output_file:
+            output_file.write(spo2_viewer.build_viewer_html(records))
+    elif clean_format == "spo2":
         data = build_spo2_binary(records)
-        with open(output_path, "wb") as f:
-            f.write(data)
-    elif clean_fmt == "csv":
-        with open(output_path, "w", newline="", encoding="utf-8") as f:
+        with open(output_path, "wb") as output_file:
+            output_file.write(data)
+    elif clean_format == "csv":
+        with open(output_path, "w", newline="", encoding="utf-8") as output_file:
             writer = csv.DictWriter(
-                f,
-                fieldnames=["session_id", "user_id", "block_id", "seq", "timestamp", "spo2", "heart_rate", "flags"],
+                output_file,
+                fieldnames=["session_id", "user_id", "block_id", "sequence", "timestamp", "spo2", "heart_rate", "flags"],
                 extrasaction="ignore",
             )
             writer.writeheader()
             writer.writerows(records)
-    elif clean_fmt == "json":
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(records, f, indent=2)
+    elif clean_format == "json":
+        with open(output_path, "w", encoding="utf-8") as output_file:
+            json.dump(records, output_file, indent=2)
     else:
-        raise ValueError(f"Unsupported export format '{clean_fmt}'. Supported: {', '.join(EXPORT_FORMATS)}.")
+        raise ValueError(f"Unsupported export format '{clean_format}'. Supported: {', '.join(EXPORT_FORMATS)}.")
 
     return output_path

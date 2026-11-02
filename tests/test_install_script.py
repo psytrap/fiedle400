@@ -26,29 +26,29 @@ class TestUninstall(unittest.TestCase):
             open(path, "w").close()
 
     def run_uninstall(self, answers):
-        env = {"HOME": self.home, "PATH": os.environ.get("PATH", "")}
-        return subprocess.run(["sh", SCRIPT, "--uninstall"], input=answers, env=env,
+        environment = {"HOME": self.home, "PATH": os.environ.get("PATH", "")}
+        return subprocess.run(["sh", SCRIPT, "--uninstall"], input=answers, env=environment,
                               capture_output=True, text=True, timeout=30)
 
     def test_yes_removes_install_and_both_settings_but_never_recordings(self):
-        r = self.run_uninstall("y\ny\n")
-        self.assertEqual(r.returncode, 0, r.stderr)
+        result = self.run_uninstall("y\ny\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
         for path in (self.bin, self.desktop, self.settings, self.legacy):
             self.assertFalse(os.path.exists(path), path)
         self.assertTrue(os.path.exists(os.path.join(self.recordings, "a.spo2")))
-        self.assertIn("not touched", r.stdout)
-        self.assertIn("sudo rm -f /etc/udev/rules.d/99-pulsox*.rules", r.stdout)
+        self.assertIn("not touched", result.stdout)
+        self.assertIn("sudo rm -f /etc/udev/rules.d/99-pulsox*.rules", result.stdout)
 
     def test_default_answer_keeps_settings(self):
-        r = self.run_uninstall("\n\n")
-        self.assertEqual(r.returncode, 0, r.stderr)
+        result = self.run_uninstall("\n\n")
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(os.path.exists(self.bin))
         self.assertTrue(os.path.exists(self.settings))
         self.assertTrue(os.path.exists(self.legacy))
 
     def test_no_input_at_all_keeps_settings(self):
-        r = self.run_uninstall("")
-        self.assertEqual(r.returncode, 0, r.stderr)
+        result = self.run_uninstall("")
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.assertTrue(os.path.exists(self.settings))
 
 

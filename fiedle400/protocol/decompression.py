@@ -71,63 +71,63 @@ def decode_ed_subframes(
         HR:   1..254 (out-of-range -> None for probe-out)
     """
     samples: List[Optional[int]] = []
-    base_val: Optional[int] = state.get("base_val") if state else None
+    base_value: Optional[int] = state.get("base_value") if state else None
     pending_split: Optional[int] = state.get("pending_split") if state else None
 
-    for sf in subframes:
-        if len(sf) < 30 or sf[0] != 0xED or sf[1] != 0x04:
+    for subframe in subframes:
+        if len(subframe) < 30 or subframe[0] != 0xED or subframe[1] != 0x04:
             continue
 
-        unmasked = unmask_subframe_msb(sf)
-        p_idx = 0
-        while p_idx < len(unmasked):
-            b = unmasked[p_idx]
+        unmasked = unmask_subframe_msb(subframe)
+        position = 0
+        while position < len(unmasked):
+            byte = unmasked[position]
 
             if pending_split is not None:
-                base_val = pending_split | (b & 0x0F)
+                base_value = pending_split | (byte & 0x0F)
                 pending_split = None
-                p_idx += 1
+                position += 1
                 continue
 
-            if (b & 0xF0) == 0xF0:
-                if p_idx == len(unmasked) - 1:
-                    pending_split = (b & 0x0F) << 4
-                    p_idx += 1
+            if (byte & 0xF0) == 0xF0:
+                if position == len(unmasked) - 1:
+                    pending_split = (byte & 0x0F) << 4
+                    position += 1
                     continue
-                b_next = unmasked[p_idx + 1]
-                if b == 0xFF and b_next == 0xFF:
+                next_byte = unmasked[position + 1]
+                if byte == 0xFF and next_byte == 0xFF:
                     if state is not None:
-                        state["base_val"] = base_val
+                        state["base_value"] = base_value
                         state["pending_split"] = pending_split
                     return samples
-                if (b_next & 0xF0) == 0xF0:
-                    base_val = ((b & 0x0F) << 4) | (b_next & 0x0F)
-                    p_idx += 2
+                if (next_byte & 0xF0) == 0xF0:
+                    base_value = ((byte & 0x0F) << 4) | (next_byte & 0x0F)
+                    position += 2
                     continue
 
-            if base_val is None:
-                base_val = 98 if is_spo2 else 60
+            if base_value is None:
+                base_value = 98 if is_spo2 else 60
 
-            h_nib = (b >> 4) & 0x0F
-            l_nib = b & 0x0F
+            high_nibble = (byte >> 4) & 0x0F
+            low_nibble = byte & 0x0F
 
-            s1 = base_val - h_nib
-            s2 = (base_val - l_nib) if (l_nib != 0x0F) else None
+            high_sample = base_value - high_nibble
+            low_sample = (base_value - low_nibble) if (low_nibble != 0x0F) else None
 
             if is_spo2:
-                v1 = s1 if (0 < s1 <= 100) else None
-                v2 = s2 if (s2 is not None and 0 < s2 <= 100) else None
+                high_value = high_sample if (0 < high_sample <= 100) else None
+                low_value = low_sample if (low_sample is not None and 0 < low_sample <= 100) else None
             else:
-                v1 = s1 if (0 < s1 <= 254) else None
-                v2 = s2 if (s2 is not None and 0 < s2 <= 254) else None
+                high_value = high_sample if (0 < high_sample <= 254) else None
+                low_value = low_sample if (low_sample is not None and 0 < low_sample <= 254) else None
 
-            samples.append(v1)
-            if s2 is not None:
-                samples.append(v2)
-            p_idx += 1
+            samples.append(high_value)
+            if low_sample is not None:
+                samples.append(low_value)
+            position += 1
 
     if state is not None:
-        state["base_val"] = base_val
+        state["base_value"] = base_value
         state["pending_split"] = pending_split
 
     return samples

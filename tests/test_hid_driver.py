@@ -27,21 +27,21 @@ class TestHidDriverBackends(unittest.TestCase):
 
     def test_pulsox_hid_device_default_linux(self):
         with patch("sys.platform", "linux"):
-            dev = PulsoxHidDevice(dev_path="/dev/hidraw1")
-            self.assertEqual(dev.backend_name, "hidraw")
-            self.assertIsInstance(dev._backend, LinuxHidrawBackend)
+            device = PulsoxHidDevice(device_path="/dev/hidraw1")
+            self.assertEqual(device.backend_name, "hidraw")
+            self.assertIsInstance(device._backend, LinuxHidrawBackend)
 
     def test_pulsox_hid_device_default_windows(self):
         with patch("sys.platform", "win32"):
-            dev = PulsoxHidDevice()
-            self.assertEqual(dev.backend_name, "hid")
-            self.assertIsInstance(dev._backend, HidBackend)
+            device = PulsoxHidDevice()
+            self.assertEqual(device.backend_name, "hid")
+            self.assertIsInstance(device._backend, HidBackend)
 
     def test_pulsox_hid_device_explicit_hidraw_on_windows_fails(self):
         with patch("sys.platform", "win32"):
-            with self.assertRaises(RuntimeError) as ctx:
+            with self.assertRaises(RuntimeError) as context:
                 PulsoxHidDevice(backend="hidraw")
-            self.assertIn("only supported on Linux", str(ctx.exception))
+            self.assertIn("only supported on Linux", str(context.exception))
 
     def test_pulsox_hid_device_invalid_backend(self):
         with self.assertRaises(ValueError):
@@ -50,63 +50,63 @@ class TestHidDriverBackends(unittest.TestCase):
     def test_hid_backend_missing_library(self):
         backend = HidBackend()
         with patch.dict(sys.modules, {"hid": None}):
-            with self.assertRaises(RuntimeError) as ctx:
+            with self.assertRaises(RuntimeError) as context:
                 backend.connect()
-            self.assertIn("pip install hid", str(ctx.exception))
+            self.assertIn("pip install hid", str(context.exception))
 
     def test_hid_backend_with_mock_cython_device(self):
         """Test with cython-hidapi style (hid.device)."""
         mock_hid = MagicMock(spec=["device", "enumerate"])
-        mock_dev_inst = MagicMock()
-        mock_hid.device.return_value = mock_dev_inst
+        mock_device_instance = MagicMock()
+        mock_hid.device.return_value = mock_device_instance
         mock_hid.enumerate.return_value = [{"path": b"\\\\?\\hid#vid_28e9&pid_028a"}]
 
         with patch.dict(sys.modules, {"hid": mock_hid}):
             backend = HidBackend()
             connected_path = backend.connect()
             self.assertEqual(connected_path, "\\\\?\\hid#vid_28e9&pid_028a")
-            mock_dev_inst.set_nonblocking.assert_called_once_with(1)
+            mock_device_instance.set_nonblocking.assert_called_once_with(1)
 
             # Test write_report prepends 0x00 Report ID for 64-byte payload
             payload_64 = bytes([0x7D] + [0x00] * 63)
             backend.write_report(payload_64)
-            mock_dev_inst.write.assert_called_with(bytes([0x00]) + payload_64)
+            mock_device_instance.write.assert_called_with(bytes([0x00]) + payload_64)
 
             # Test read_report
-            mock_dev_inst.read.return_value = [0xF0, 0x70]
+            mock_device_instance.read.return_value = [0xF0, 0x70]
             data = backend.read_report(64)
             self.assertEqual(data, bytes([0xF0, 0x70]))
 
             # Test read_report empty
-            mock_dev_inst.read.return_value = []
+            mock_device_instance.read.return_value = []
             self.assertIsNone(backend.read_report(64))
 
             # Test close
             backend.close()
-            mock_dev_inst.close.assert_called_once()
+            mock_device_instance.close.assert_called_once()
 
     def test_hid_backend_with_mock_ctypes_device(self):
         """Test with ctypes hid style (hid.Device)."""
         mock_hid = MagicMock(spec=["Device", "enumerate"])
-        mock_dev_inst = MagicMock()
-        mock_hid.Device.return_value = mock_dev_inst
+        mock_device_instance = MagicMock()
+        mock_hid.Device.return_value = mock_device_instance
         mock_hid.enumerate.return_value = [{"path": b"/dev/hidraw10"}]
 
         with patch.dict(sys.modules, {"hid": mock_hid}):
             backend = HidBackend()
             connected_path = backend.connect()
             self.assertEqual(connected_path, "/dev/hidraw10")
-            self.assertTrue(mock_dev_inst.nonblocking)
+            self.assertTrue(mock_device_instance.nonblocking)
 
             payload_64 = bytes([0x7D] + [0x00] * 63)
             backend.write_report(payload_64)
-            mock_dev_inst.write.assert_called_with(bytes([0x00]) + payload_64)
+            mock_device_instance.write.assert_called_with(bytes([0x00]) + payload_64)
 
             backend.close()
-            mock_dev_inst.close.assert_called_once()
+            mock_device_instance.close.assert_called_once()
 
     def test_linux_hidraw_backend_descriptor_info(self):
-        backend = LinuxHidrawBackend(dev_path="/dev/hidraw_dummy")
+        backend = LinuxHidrawBackend(device_path="/dev/hidraw_dummy")
         meta = backend.get_descriptor_info()
         self.assertIn("manufacturer", meta)
         self.assertIn("product", meta)
@@ -116,8 +116,8 @@ class TestHidDriverBackends(unittest.TestCase):
 
     def test_hid_backend_descriptor_info(self):
         mock_hid = MagicMock(spec=["Device", "enumerate"])
-        mock_dev_inst = MagicMock()
-        mock_hid.Device.return_value = mock_dev_inst
+        mock_device_instance = MagicMock()
+        mock_hid.Device.return_value = mock_device_instance
         mock_hid.enumerate.return_value = [{
             "path": b"\\\\?\\hid#vid_28e9&pid_028a",
             "vendor_id": 0x28E9,
@@ -145,8 +145,8 @@ class TestHidDriverBackends(unittest.TestCase):
     def test_hid_backend_descriptor_info_empty_whitespace_not_fabricated(self):
         """Verify that whitespace or missing strings in USB descriptors return None, not fake strings."""
         mock_hid = MagicMock(spec=["Device", "enumerate"])
-        mock_dev_inst = MagicMock()
-        mock_hid.Device.return_value = mock_dev_inst
+        mock_device_instance = MagicMock()
+        mock_hid.Device.return_value = mock_device_instance
         # PO-400 actual behavior: 8 spaces in manufacturer string
         mock_hid.enumerate.return_value = [{
             "path": b"/dev/hidraw10",

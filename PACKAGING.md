@@ -14,10 +14,10 @@ binary (`--version`, `--help`, `config`).
 
 | Artifact | Built on | Contents |
 |---|---|---|
-| `fiedle400-linux-x64.tar.gz` | ubuntu | binary, `install.sh`, `fiedle400_setup-udev.sh` |
+| `fiedle400-linux-x64.tar.gz` | ubuntu-22.04 (pinned, glibc 2.35: 22.04 LTS is the minimum supported Linux; T-049) | binary, `install.sh`, `fiedle400_setup-udev.sh` |
 | `fiedle400-windows-x64.exe` | windows | portable binary |
 | `fiedle400-setup.exe` | windows | Inno Setup installer around the exe |
-| `fiedle400-macos-arm64` | macos | binary (Apple Silicon); verified by CI only, no Mac hardware test |
+| `fiedle400-macos-arm64` | macos | binary (Apple Silicon); verified by CI only, no Mac hardware test. CI also marks the packaged asset quarantined and runs it after the README's `chmod +x` / `xattr -d` steps (T-049) |
 
 Binaries are unsigned (RELEASE_PLAN D1); the release notes explain SmartScreen.
 
@@ -28,6 +28,8 @@ Binaries are unsigned (RELEASE_PLAN D1); the release notes explain SmartScreen.
 - Device access needs a one-time root step: `sudo ./fiedle400_setup-udev.sh`. It writes
   the `99-pulsox*.rules` files in `/etc/udev/rules.d/` (USB `28e9:028a`) and nothing else.
   Verify afterwards with `fiedle400 selftest`.
+- Minimum: Ubuntu 22.04 LTS (psytrap, 2026-11-02). CI builds on `ubuntu-22.04` and runs the
+  packaged asset in a clean `ubuntu:22.04` container (`--version`, `--help`, `config`; T-050).
 - No AppImage: the PyInstaller binary already runs on any distro, so AppImage adds nothing.
 
 ## Windows
@@ -49,7 +51,14 @@ Source: `packaging/windows/fiedle400.iss`, built by CI with `/DAppVersion=<__ver
   `Documents\fiedle400` on first install, plus a "View Demo Recording" Start Menu entry
   (`fiedle400.exe view demo.SpO2`) -- lets a new user see the viewer without a device.
   Regenerate with `scripts/make_demo_recording.py` if it ever needs to change.
-- CI installs the installer silently, checks the exe, folder and `--version`, then uninstalls.
+- English-only installer UI (T-065).
+- CI first installs the latest published release, runs this build's installer over it and checks
+  version, uninstall entry, files, Start Menu group, context-menu keys and that the user's files
+  in `Documents\fiedle400` survive; then uninstalls and checks nothing is left (T-097). After
+  that it installs fresh, checks the exe, folder and `--version`, and uninstalls.
+- Known limit (T-097): `UsePreviousAppDir=no` (needed for the po400 rename) means an upgrade
+  always installs to the default folder. Someone who picked a custom folder gets the new
+  version in the default one and an orphaned old copy in theirs.
 
 ## Checklist when changing packaging
 
