@@ -6,6 +6,7 @@ protocol; `DONE.md` for the archive.
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
 | [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly -- only the Windows test-machine cleanup is left | Local |
+| [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud |
 
 ## Backlog (deferred)
 
@@ -15,7 +16,6 @@ Open tickets parked until psytrap picks them up again.
 
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
-| [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud |
 | [T-041](open/T-041-key-sessions-by-user-and-entry.md) | Key stored recordings by user and entry, not entry alone | Cloud |
 | [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud |
 | [T-093](open/T-093-set-username-via-wizard.md) | Set a username via the wizard | Cloud |
