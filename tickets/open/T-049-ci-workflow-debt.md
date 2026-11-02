@@ -52,7 +52,7 @@ recorded here so they aren't lost.
 
 - [x] `ubuntu-latest`/Ubuntu 26 decision made and recorded (pin
       `ubuntu-24.04`, or accept 26 with the glibc question checked)
-- [ ] A CI run's log checked for the Node 20 deprecation warnings; pin
+- [x] A CI run's log checked for the Node 20 deprecation warnings; pin
       specific action versions only if they still appear
 - [ ] A macOS Gatekeeper/quarantine step added (download the packaged
       asset and run it as fetched) and passing
@@ -62,8 +62,8 @@ recorded here so they aren't lost.
 
 ## Execution Notes
 
-Partly done 2026-11-02 (cloud, patch 0039, v0.5.7). Stays open for item 2 and for the first
-run of the new macOS job.
+Partly done 2026-11-02 (cloud, patch 0039, v0.5.7). Stays open for the first run of the new
+macOS job.
 
 1. **Ubuntu: decided, pinned.** psytrap, 2026-11-02: "22 LTS is minimum". `build-release.yml`'s
    Linux build now runs on `ubuntu-22.04` (glibc 2.35), the oldest supported release, so the
@@ -72,14 +72,13 @@ run of the new macOS job.
    container check.) `tests.yml` stays on `ubuntu-latest`: it only runs the Python suite, and
    following the newest Ubuntu there is useful early warning. When GitHub retires its 22.04
    runner image, build in an `ubuntu:22.04` container instead.
-2. **Node 20 warnings: not checked.** The cloud has no access to the repo's Actions logs.
-   Background: GitHub made Node 24 the default for JavaScript actions on 2026-06-16 and
-   removes Node 20 from its runners in fall 2026 ([tenki.cloud summary](https://tenki.cloud/blog/migrate-github-actions-node-24)),
-   so `@v4` actions now run forced on Node 24 with a warning rather than failing. Sources
-   disagree on which majors of `upload-artifact`/`download-artifact` are the first on Node 24
-   (v5 vs v7/v8), so nothing was bumped blind. To do: open the annotations of the next
-   `build-release.yml` run and bump only the actions it names, to the version its warning
-   suggests.
+2. **Node 20 warnings: checked, fixed.** Local, 2026-11-02: the annotations on the latest real
+   run (`gh run view <id>`, not grep-able from the step logs -- they're separate annotation
+   entries) name exactly two actions: `actions/checkout@v4` and `actions/setup-python@v5`.
+   Confirmed each's `action.yml` at the next major (`checkout@v5`, `setup-python@v6`) declares
+   `using: node24` directly, so both are bumped in `tests.yml` and `build-release.yml`.
+   `upload-artifact`/`download-artifact@v4` and `action-gh-release@v2` were not named in the
+   annotations, so left alone per this item's own caution against bumping blind.
 3. **macOS quarantine: job added.** New job `quarantine-macos` (needs `build`; `release` now
    needs it too) downloads the packaged `fiedle400-macos-arm64`, sets
    `com.apple.quarantine` as a browser download would, records whether Gatekeeper lets it
