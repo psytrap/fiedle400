@@ -5,7 +5,8 @@ protocol; `DONE.md` for the archive.
 
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
-| [T-095](open/T-095-beta-rollout-advertise-and-find-users.md) | Beta rollout -- advertise `fiedle400` and find users | Local | Open |
+| [T-049](open/T-049-ci-workflow-debt.md) | CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper) | Either | Open (Ubuntu pin, Node 20 pin and a green CI run all done; first run of the new macOS job left) |
+| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly | Local | Open (CI upgrade test added in 0039, first manual run in progress; Windows test-machine cleanup left) |
 
 ## Backlog (deferred)
 
@@ -35,10 +36,8 @@ Open tickets parked until psytrap picks them up again.
 | Ticket | Title | Owner | Status |
 | :---: | :--- | :---: | :--- |
 | [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either | Open (deferred) |
-| [T-049](open/T-049-ci-workflow-debt.md) | CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper) | Either | Open (Linux build pinned to 22.04, macOS job added in 0039; Node 20 log check left) |
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open (deferred) |
 | [T-077](open/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either | Open (deferred) |
-| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly | Local | Open (CI upgrade test added in 0039; first run and machine cleanup left) |
 
 ### HTML viewer features & architecture
 
