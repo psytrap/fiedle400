@@ -62,8 +62,17 @@ recorded here so they aren't lost.
 
 ## Execution Notes
 
-Partly done 2026-11-02 (cloud, patch 0039, v0.5.7). Stays open for the first run of the new
-macOS job.
+Partly done 2026-11-02 (cloud, patch 0039, v0.5.7; local, v0.5.8). Stays open only for the
+first run of the new macOS job (`build-release.yml` only triggers on a tag or manual dispatch,
+not on every push).
+
+4. **`tests.yml` on GitHub, re-checked after the Node 20 fix:** two CI regressions surfaced on
+   the push that carried the version bump -- both pre-existing local fixes from this same
+   session that had been left uncommitted (`tests/test_serial_emulator.py` still called
+   `PulsoxHidDevice(dev_path=...)` after T-106 renamed the parameter; `scripts/
+   wizard_gui_mockup.py` still had `self.fmt` after the test file's matching rename). Both
+   committed and pushed; [run 41470535172](https://github.com/psytrap/fiedle400/actions/runs/41470535172)
+   green on all three OSes, no Node 20 warning in the annotations.
 
 1. **Ubuntu: decided, pinned.** psytrap, 2026-11-02: "22 LTS is minimum". `build-release.yml`'s
    Linux build now runs on `ubuntu-22.04` (glibc 2.35), the oldest supported release, so the
