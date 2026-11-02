@@ -32,16 +32,22 @@ is actually broken in the shipped release.
 
 ## Criteria
 
-- [ ] Determine exactly where the extra `.zip` layer is observed: the
+- [x] Determine exactly where the extra `.zip` layer is observed: the
       published GitHub Release asset itself, or a workflow-run artifact
       downloaded from the Actions UI
 - [ ] If it's the published Release asset: fix the workflow so the
       asset uploaded to the Release is the plain `.tar.gz`
-- [ ] If it's only the Actions-UI artifact download: no code fix needed,
+- [x] If it's only the Actions-UI artifact download: no code fix needed,
       just confirm and note it's expected GitHub behavior, not a release
       defect
-- [ ] Tests pass
+- [x] Tests pass
 
 ## Execution Notes
 
-(Not started.)
+Done 2026-11-02 (local): `gh release view --json assets` on the latest published release
+(`v0.5.0`) lists the Linux asset as plain `fiedle400-linux-x64.tar.gz` -- no `.zip` layer.
+Confirms the second hypothesis: the `.zip` psytrap saw was from downloading a workflow-run
+artifact via the Actions UI, which always wraps any download in `.zip` regardless of the
+artifact's own name or content. The published Release asset itself, which is what the README
+and release notes actually tell users to download, is correct as-is. No workflow change
+needed.

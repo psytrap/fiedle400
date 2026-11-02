@@ -56,7 +56,7 @@ something unexpected happen since `UsePreviousAppDir=no` normally
       against the in-place-upgrade path above
 - [x] Note any divergence from what the manual T-096 swap already
       confirmed (if the real installer behaves differently, flag it)
-- [ ] Clean up the portable `fiedle400-windows-x64.exe` test binary
+- [x] Clean up the portable `fiedle400-windows-x64.exe` test binary
       left on the Windows machine from this ticket's testing (and any
       left from T-096's Ring 1 smoke test) once done with it
 - [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
@@ -88,5 +88,12 @@ CI part done 2026-11-02 (cloud, patch 0039, v0.5.7); first run confirmed green, 
   passed end to end, both the new "Upgrade Test" step and the existing fresh-install/uninstall
   smoke test ([run 41470763625](https://github.com/psytrap/fiedle400/actions/runs/41470763625)).
   No divergence from T-096's manual swap noted.
-- **Left for local:** remove the portable test binaries from the Windows machine
-  (`192.168.2.165`, criterion 5) -- needs hands-on access to that machine.
+- **Windows machine cleanup, done.** Via SSH (`192.168.2.165`, confirmed reachable with a
+  trusted key already in place): no portable `fiedle400-windows-x64.exe` was actually present
+  (likely already cleaned up), but five leftover installer-download copies were --
+  `Desktop\fiedle400-setup.exe`, `Downloads\fiedle400-setup.exe`, `Downloads\fiedle400-setup
+  (1).exe`, `Downloads\fiedle400-setup(1).exe`, and the pre-rename `po400-setup.exe` at the
+  profile root. All five deleted and confirmed gone. The current legit install
+  (`%LOCALAPPDATA%\Programs\fiedle400\`: `fiedle400.exe`, `unins000.dat`, `unins000.exe`) and
+  the dev source checkouts (`fiedle400\`, `fiedle400-repo\`, `fiedle400-head.bundle`) were left
+  untouched -- not test binaries.

@@ -10,6 +10,8 @@ protocol. The second half is the project timeline before and around the tickets.
 
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
+| [T-097](done/2026-W45/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly | Local |
+| [T-077](done/2026-W45/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either |
 | [T-049](done/2026-W45/T-049-ci-workflow-debt.md) | CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper) | Either |
 | [T-095](done/2026-W45/T-095-beta-rollout-advertise-and-find-users.md) | Beta rollout -- advertise `fiedle400` and find users | Local |
 | [T-065](done/2026-W45/T-065-installer-english-only.md) | Installer should only offer English, not German | Either |

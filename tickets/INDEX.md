@@ -5,10 +5,8 @@ protocol; `DONE.md` for the archive.
 
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
-| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly -- only the Windows test-machine cleanup is left | Local |
-| [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud |
 
-## Backlog (deferred)
+## Backlog
 
 Open tickets parked until psytrap picks them up again.
 
@@ -16,8 +14,10 @@ Open tickets parked until psytrap picks them up again.
 
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
+| [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud |
 | [T-041](open/T-041-key-sessions-by-user-and-entry.md) | Key stored recordings by user and entry, not entry alone | Cloud |
 | [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud |
+| [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local |
 | [T-093](open/T-093-set-username-via-wizard.md) | Set a username via the wizard | Cloud |
 
 ### Manual-mode & erase protocol
@@ -36,7 +36,6 @@ Open tickets parked until psytrap picks them up again.
 | :---: | :--- | :---: |
 | [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either |
 | [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local |
-| [T-077](open/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either |
 
 ### HTML viewer features & architecture
 
@@ -73,7 +72,6 @@ Open tickets parked until psytrap picks them up again.
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
 | [T-046](open/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either |
-| [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local |
 | [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either |
 
 ### Long end
