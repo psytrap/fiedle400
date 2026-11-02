@@ -32,18 +32,28 @@ enum {
 
 struct EmuModel {
   const char *name;
-  const char *model_string;  // the 8 bytes of the 0xF1 reply, space padded
-  uint8_t storage;
+  const char *model_string;  // the 8 bytes of the 0xF1 reply (protocol C), or the A8 model
+                              // string (protocol B); space padded either way
+  uint8_t storage;           // protocol C only: which TRACE_* keys this model answers
+  bool protocol_b;           // speaks protocol B (CMS50F family, PROTOCOL_B.md) instead of C
 };
 
 // PO-250 and PO-300 model strings are unknown (PROTOCOL.md §6.3); these are placeholders, so
 // fiedle400 shows them as "Unknown PO-x00 family device".
+//
+// EMU_PO300_PROTOCOL_B: a real PO-300 owner's unit answered "Smart Device Assistant" but not
+// "SpO2 Assistant" (CMS50_COMPATIBILITY.md finding 6), and a disassembly of the former's bundled
+// SpO2.exe found it sends protocol B's command set (PROTOCOL_B.md §5.2) -- unconfirmed on a real
+// PO-300, but worth emulating so fiedle400's probe-and-refuse path (T-105, detection only) can be
+// tried against something other than a Python mock. Detection only: there is no protocol-B
+// download reply here, matching fiedle400 itself.
 static const EmuModel EMU_MODELS[] = {
-  {"PO-400", "50F", TRACE_COMMON | TRACE_AUTO | TRACE_MANUAL},  // as captured
-  {"PO-300", "EMU-300", TRACE_COMMON | TRACE_AUTO | TRACE_MANUAL},  // Auto + Manual like the PO-400
-  {"PO-250", "EMU-250", TRACE_COMMON | TRACE_MANUAL},  // one Manual recording, no Auto list
+  {"PO-400", "50F", TRACE_COMMON | TRACE_AUTO | TRACE_MANUAL, false},  // as captured
+  {"PO-300", "EMU-300", TRACE_COMMON | TRACE_AUTO | TRACE_MANUAL, false},  // Auto+Manual like the PO-400
+  {"PO-250", "EMU-250", TRACE_COMMON | TRACE_MANUAL, false},  // one Manual recording, no Auto list
+  {"PO-300 (protocol B guess)", "CMS50F", 0, true},
 };
-enum { EMU_PO400 = 0, EMU_PO300 = 1, EMU_PO250 = 2 };
+enum { EMU_PO400 = 0, EMU_PO300 = 1, EMU_PO250 = 2, EMU_PO300_PROTOCOL_B = 3 };
 
 static const uint8_t EMU_REPORT = 64;
 static const uint8_t EMU_GAP_MS = 3;  // a quiet line this long ends a burst of commands
@@ -71,10 +81,32 @@ class Emulator {
   uint32_t last_ms_ = 0;
   uint8_t out_[EMU_REPORT];
 
+  void process() {
+    if (EMU_MODELS[model].protocol_b) { process_b(); return; }
+    process_c();
+  }
+
+  // Protocol B (PROTOCOL_B.md §1): every request is exactly 9 bytes, `7D 81 [op] ... `, no
+  // checksum -- no need for protocol C's bare/checksum-delimited scanning below. A byte that
+  // is not `7D 81` at a frame boundary is skipped one at a time (foreign noise); an incomplete
+  // trailing frame (a burst cut mid-write) is dropped, same as protocol C's handling of leftovers.
+  void process_b() {
+    uint8_t p = 0, n = len_;
+    while (p + 9 <= n) {
+      if (buf_[p] == 0x7D && buf_[p + 1] == 0x81) {
+        handle_b(buf_ + p);
+        p += 9;
+      } else {
+        p++;
+      }
+    }
+    len_ = 0;
+  }
+
   // Commands arrive without report boundaries (serial_port.unpad_report), so a burst is cut
   // into commands by their shape: 7D 81 frames run to the next 7D, bare commands end with
   // their checksum (PROTOCOL.md §1.2).
-  void process() {
+  void process_c() {
     uint8_t p = 0, n = len_;
     while (p < n) {
       const uint8_t *b = buf_ + p;
@@ -172,6 +204,56 @@ class Emulator {
       for (uint8_t i = 0; i < rlen; i++) out_[i] = pgm_read_byte(best + i);
       best += rlen;
       send_report(rlen);
+    }
+  }
+
+  // Protocol B (PROTOCOL_B.md §2.1): `f` is one complete 9-byte frame, `f[0..1]` already
+  // checked as `7D 81`. Enough to answer fiedle400's detection-only probe (hello + model
+  // query); every other opcode, including `AE` (erase), gets no reply at all -- there is no
+  // download engine on either side of this (T-105 is on hold).
+  void handle_b(const uint8_t *f) {
+    commands++;
+    uint8_t op = f[2];
+    if (op == 0xAE) {  // erase: never answered, never performed
+      destructive++;
+      emu_activity(true);
+      return;
+    }
+    emu_activity(false);
+    if (op == 0xA7 || op == 0xA2) {  // hello (stop stored / stop live stream) -> ack
+      out_[0] = 0x0C;
+      out_[1] = 0x00;
+      send_report_b(2);
+      return;
+    }
+    if (op == 0xA8) {  // model query -> one 0x02 frame (no continuation frame needed: <= 6 chars)
+      const char *s = model_override ? model_override : EMU_MODELS[model].model_string;
+      out_[0] = 0x02;
+      out_[1] = 0x00;  // every byte below is plain ASCII, so no bit 7 to restore
+      out_[2] = 0x00;  // marker: this is the first (and only) model frame
+      for (uint8_t i = 0; i < 6; i++) out_[3 + i] = *s ? (uint8_t)*s++ : ' ';
+      send_report_b(9);
+      return;
+    }
+    unanswered++;  // A9/A3/A4/A5/A6/...: not emulated, matching fiedle400's own non-support
+  }
+
+  // out_[0..len) holds a protocol-B reply without padding. No checksum fault to apply: protocol
+  // B has none (PROTOCOL_B.md §1.2).
+  void send_report_b(uint8_t len) {
+    if (faults & FAULT_SILENT) return;
+    uint8_t total = len;
+    if (!(faults & FAULT_UNPADDED)) {
+      memset(out_ + len, 0, EMU_REPORT - len);
+      total = EMU_REPORT;
+    }
+    if (faults & FAULT_SPLIT) {
+      uint8_t half = total / 2;
+      emu_write(out_, half);
+      emu_delay_ms(20);
+      emu_write(out_ + half, total - half);
+    } else {
+      emu_write(out_, total);
     }
   }
 

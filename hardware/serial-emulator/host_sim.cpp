@@ -2,7 +2,7 @@
 // (termios, SerialBackend) can be run against it without a board. Linux/macOS only.
 //
 //   g++ -O2 -o host_sim hardware/serial-emulator/host_sim.cpp
-//   ./host_sim /tmp/ttyACM-emu [po400|po300|po250] [silent,badsum,split,unpadded] [MODEL]
+//   ./host_sim /tmp/ttyACM-emu [po400|po300|po250|po300b] [silent,badsum,split,unpadded] [MODEL]
 //   python3 -m fiedle400 -d /tmp/ttyACM-emu info
 //
 // The link's name must start with "ttyACM" or "ttyUSB" for fiedle400 to treat it as a serial
@@ -43,13 +43,14 @@ static uint32_t now_ms() {
 
 int main(int argc, char **argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: %s LINK [po400|po300|po250] [faults] [MODEL]\n", argv[0]);
+    fprintf(stderr, "usage: %s LINK [po400|po300|po250|po300b] [faults] [MODEL]\n", argv[0]);
     return 2;
   }
   Emulator emu;
   if (argc > 2) {
     if (!strcmp(argv[2], "po300")) emu.model = EMU_PO300;
     else if (!strcmp(argv[2], "po250")) emu.model = EMU_PO250;
+    else if (!strcmp(argv[2], "po300b")) emu.model = EMU_PO300_PROTOCOL_B;
   }
   if (argc > 3) {
     if (strstr(argv[3], "silent")) emu.faults |= FAULT_SILENT;

@@ -9,15 +9,26 @@ and `download` with the same recorded replies the mock tests replay
 captured either of those models (T-102). SpO2 Assistant sends the PO-400's commands to every
 model (PROTOCOL.md §5), so this is the best guess, not a proof that a real PO-250/PO-300 works.
 
-| Model (jumper) | 0xF1 model string | Storage it answers for |
+| Model (jumper) | 0xF1 / A8 model string | Storage it answers for |
 | :--- | :--- | :--- |
 | PO-300 (none, `DEFAULT_MODEL`) | `EMU-300` (placeholder; the real one is unknown) | Auto: one 214 s recording; Manual: one 59 s recording |
 | PO-250 (D7 to GND) | `EMU-250` (placeholder; the real one is unknown) | Manual only: one 59 s recording; the Auto list (`9C`) gets no answer |
+| PO-300, protocol B (D6 as above, D8 to GND) | `CMS50F` (a guess; T-105, detection only) | None: `fiedle400` probes and refuses this device, it never gets to `sessions`/`download` |
 
 PO-400 has no jumper pin of its own -- it was only ever the "neither jumper"
 default. With `DEFAULT_MODEL` now `EMU_PO300`, getting PO-400 behaviour back
 needs a recompile (`DEFAULT_MODEL EMU_PO400`, or `MODEL_STRING_OVERRIDE
 "50F"`), not a jumper.
+
+**D8 (PO-300, protocol B):** emulates the other, contested possibility for the PO-300
+(`CMS50_COMPATIBILITY.md` finding 6/8, `PROTOCOL_B.md`) -- a real owner's unit was detected by
+"Smart Device Assistant" but not "SpO2 Assistant", which a disassembly of the former's bundled
+`SpO2.exe` explains: it sends protocol B's command set. With D8 grounded (and D7 open, so PO-300
+is the selected model), the emulator switches its *entire* command parser to protocol B
+(`PROTOCOL_B.md` §1) and answers only the hello (`A7`/`A2`) and model query (`A8`) that
+`fiedle400`'s probe sends -- `serial_port.py::probe_cms50f37` correctly identifies and refuses it
+rather than treating it as a PO-300. There is no protocol-B download here on either side: T-105
+(the actual download engine) is still on hold.
 
 The real limits (PO-300: up to 99 Auto recordings; PO-250: one Manual recording of up to
 24 h) are not emulated: there is no captured data for them, and an Uno has 2 KB of RAM.
@@ -93,6 +104,8 @@ tested here (`tests/test_serial_emulator.py`):
 g++ -O2 -o /tmp/host_sim hardware/serial-emulator/host_sim.cpp
 /tmp/host_sim /tmp/ttyACM-emu po250 &        # faults: add e.g. "split,badsum"
 fiedle400 sessions -d /tmp/ttyACM-emu
+/tmp/host_sim /tmp/ttyACM-emu po300b &       # protocol-B PO-300 guess: fiedle400 should refuse it
+fiedle400 info -d /tmp/ttyACM-emu
 ```
 
 ## Changing the data

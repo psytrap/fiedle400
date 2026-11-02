@@ -87,6 +87,25 @@ class TestHostSim(unittest.TestCase):
         dev, _ = self.connect(faults="badsum")
         self.assertIsNone(dev._backend.model_string)
 
+    def test_a_protocol_b_device_is_refused_not_misdetected(self):
+        """po300b: a real PO-300 owner's unit answered only Smart Device Assistant, not SpO2
+        Assistant (CMS50_COMPATIBILITY.md finding 6); this is that guess, emulated far enough to
+        prove the probe-and-refuse path (T-105, detection only) over a real compiled binary and a
+        pseudo-terminal, not just the Python-level fakes in test_serial_port.py."""
+        link = os.path.join(self.tmp, "ttyACM-emu")
+        sim = subprocess.Popen([self.binary, link, "po300b"], stdout=subprocess.PIPE,
+                               stderr=subprocess.DEVNULL, text=True)
+        self.addCleanup(sim.stdout.close)
+        self.addCleanup(sim.wait)
+        self.addCleanup(sim.kill)
+        sim.stdout.readline()
+        dev = PulsoxHidDevice(dev_path=link)
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(RuntimeError) as ctx:
+                dev.connect()
+        self.assertIn("CMS50F", str(ctx.exception))
+        self.assertIn("protocol B", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
