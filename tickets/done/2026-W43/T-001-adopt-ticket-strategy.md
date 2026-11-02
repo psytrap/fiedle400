@@ -1,6 +1,5 @@
 # T-001: Adopt a ticket strategy to replace `handoff/`
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

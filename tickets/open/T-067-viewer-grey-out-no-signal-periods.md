@@ -1,6 +1,5 @@
 # T-067: HTML viewer should grey out no-signal/probe-out periods on the chart
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

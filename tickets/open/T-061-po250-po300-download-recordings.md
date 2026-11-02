@@ -1,6 +1,5 @@
 # T-061: PO-250 / PO-300 support: download stored recordings from the device
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

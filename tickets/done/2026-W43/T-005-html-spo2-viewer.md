@@ -1,6 +1,5 @@
 # T-005: HTML viewer for `.spo2` files, offered from the wizard
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud (no hardware involved; pure software/UI work)
 - **Scope & Relevant Files:**

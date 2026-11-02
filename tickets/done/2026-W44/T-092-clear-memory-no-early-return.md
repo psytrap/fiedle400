@@ -1,6 +1,5 @@
 # T-092: `clear_memory()` should not early-return when nothing matches the erase target
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

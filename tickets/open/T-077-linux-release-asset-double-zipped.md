@@ -1,6 +1,5 @@
 # T-077: Check why the Linux release asset is `tar.gz.zip`
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

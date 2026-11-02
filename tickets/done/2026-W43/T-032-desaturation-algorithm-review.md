@@ -1,6 +1,5 @@
 # T-032: Review the desaturation-event algorithm against the decoded spec
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local or Cloud
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-022: HTML viewer draws a false desaturation event across a multi-session gap
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

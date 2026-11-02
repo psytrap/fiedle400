@@ -1,6 +1,5 @@
 # T-049: CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper)
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**
@@ -54,7 +53,7 @@ recorded here so they aren't lost.
       `ubuntu-24.04`, or accept 26 with the glibc question checked)
 - [x] A CI run's log checked for the Node 20 deprecation warnings; pin
       specific action versions only if they still appear
-- [ ] A macOS Gatekeeper/quarantine step added (download the packaged
+- [x] A macOS Gatekeeper/quarantine step added (download the packaged
       asset and run it as fetched) and passing
 - [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
@@ -62,9 +61,16 @@ recorded here so they aren't lost.
 
 ## Execution Notes
 
-Partly done 2026-11-02 (cloud, patch 0039, v0.5.7; local, v0.5.8). Stays open only for the
-first run of the new macOS job (`build-release.yml` only triggers on a tag or manual dispatch,
-not on every push).
+Done 2026-11-02 (cloud, patch 0039, v0.5.7; local, v0.5.8).
+
+5. **macOS quarantine job, first run: green.** Local, manual `gh workflow run build-release.yml`
+   on `34c964a` (after the Node 20 fix and its own regressions were sorted below): `quarantine-
+   macos` passed -- quarantine attribute set, Gatekeeper's response recorded, then the README's
+   `chmod +x` + `xattr -d com.apple.quarantine` steps confirmed to unblock it, `--version`
+   matching and `--help` working ([run 41470763625](https://github.com/psytrap/fiedle400/actions/runs/41470763625)).
+   The run's overall conclusion was still `failure` from an unrelated job
+   (`linux-oldest-lts`/T-050 -- a CI-script `pipefail`/`SIGPIPE` bug, not a real finding; see
+   T-050's notes), which does not affect this item.
 
 4. **`tests.yml` on GitHub, re-checked after the Node 20 fix:** two CI regressions surfaced on
    the push that carried the version bump -- both pre-existing local fixes from this same

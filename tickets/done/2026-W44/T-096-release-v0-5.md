@@ -1,6 +1,5 @@
 # T-096: Ship the next release (v0.5.x) -- re-run the Runbook Checklist
 
-- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

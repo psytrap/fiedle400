@@ -1,6 +1,5 @@
 # T-051: Local inspection -- G7 visual confirmation and Manual-mode protocol questions
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

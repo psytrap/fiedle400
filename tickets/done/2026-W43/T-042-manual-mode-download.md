@@ -1,6 +1,5 @@
 # T-042: Download Manual-mode recordings
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

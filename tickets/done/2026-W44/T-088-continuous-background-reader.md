@@ -1,6 +1,5 @@
 # T-088: Evaluate a continuously-running background reader thread for the serial engine
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

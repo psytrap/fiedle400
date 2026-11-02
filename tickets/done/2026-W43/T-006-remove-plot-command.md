@@ -1,6 +1,5 @@
 # T-006: Remove `fiedle400 plot` once the HTML viewer supersedes it
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

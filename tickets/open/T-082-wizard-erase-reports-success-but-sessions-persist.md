@@ -1,6 +1,5 @@
 # T-082: Wizard reports erase succeeded, but the session is still there afterward
 
-- **Status:** Open (deferred)
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

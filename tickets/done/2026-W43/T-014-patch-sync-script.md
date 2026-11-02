@@ -1,6 +1,5 @@
 # T-014: Script to apply and generate the local/cloud sync patches
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

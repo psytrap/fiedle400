@@ -1,6 +1,5 @@
 # T-002: Standing code-review checklist
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-033: Evaluate migrating the interactive wizard from a terminal TUI to tkinter
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

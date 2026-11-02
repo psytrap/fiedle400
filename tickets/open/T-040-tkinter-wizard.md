@@ -1,6 +1,5 @@
 # T-040: tkinter wizard, with the terminal wizard as fallback
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Cloud (implementation), Local (Windows look, binary size)
 - **Scope & Relevant Files:**

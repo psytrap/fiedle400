@@ -1,6 +1,5 @@
 # T-023: Viewer area-exclusion selection
 
-- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

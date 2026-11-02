@@ -10,7 +10,6 @@ constraint recorded below is still the standing reason a native GUI
 toolkit was never considered as the mechanism, and is worth keeping as
 a citable record independent of T-012's execution.
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

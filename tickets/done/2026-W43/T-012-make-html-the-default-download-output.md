@@ -1,6 +1,5 @@
 # T-012: Make the HTML viewer the default download output
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

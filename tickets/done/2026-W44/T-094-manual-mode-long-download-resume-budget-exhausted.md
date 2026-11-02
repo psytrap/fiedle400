@@ -1,6 +1,5 @@
 # T-094: Manual-mode download of a long recording loses almost all samples -- `_manual_series`'s fixed retry budget gives up too early
 
-- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-036: Reusable procedure for confirming a decoded algorithm in SpO2 Assistant
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

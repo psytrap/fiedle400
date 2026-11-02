@@ -1,6 +1,5 @@
 # T-065: Installer should only offer English, not German
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

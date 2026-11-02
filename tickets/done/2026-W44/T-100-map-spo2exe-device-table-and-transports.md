@@ -1,6 +1,5 @@
 # T-100: Map `SpO2.exe`'s device table and its serial path
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)

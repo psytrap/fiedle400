@@ -1,6 +1,5 @@
 # T-054: Add a demo screen capture to README.md
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

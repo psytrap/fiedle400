@@ -1,6 +1,5 @@
 # T-003: Worked example -- one real download, start to finish
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

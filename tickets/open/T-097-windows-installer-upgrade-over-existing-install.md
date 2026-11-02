@@ -1,6 +1,5 @@
 # T-097: Verify the real Windows installer upgrades a pre-existing install cleanly
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**
@@ -40,32 +39,32 @@ something unexpected happen since `UsePreviousAppDir=no` normally
 
 ## Criteria
 
-- [ ] Get Inno Setup (`ISCC.exe`) onto a Windows test machine (or build
+- [x] Get Inno Setup (`ISCC.exe`) onto a Windows test machine (or build
       `fiedle400-setup.exe` via the existing `build-release.yml` CI job
       and download the artifact) so the real installer can be run, not
       a manual stand-in
-- [ ] With an existing `fiedle400` install present (any older version),
+- [x] With an existing `fiedle400` install present (any older version),
       run the new `fiedle400-setup.exe` over it and confirm: no leftover
       files/shortcuts/registry keys from the old version, the app
       launches and reports the new version afterward, and the user's
       recordings folder (`Documents\fiedle400`) and its demo recording
       are untouched
-- [ ] Separately confirm a **clean uninstall** first (run the old
+- [x] Separately confirm a **clean uninstall** first (run the old
       version's uninstaller, verify nothing is left behind -- files,
       Start Menu group, registry context-menu keys), *then* a fresh
       install of the new version, as a second, simpler path to compare
       against the in-place-upgrade path above
-- [ ] Note any divergence from what the manual T-096 swap already
+- [x] Note any divergence from what the manual T-096 swap already
       confirmed (if the real installer behaves differently, flag it)
 - [ ] Clean up the portable `fiedle400-windows-x64.exe` test binary
       left on the Windows machine from this ticket's testing (and any
       left from T-096's Ring 1 smoke test) once done with it
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ## Execution Notes
 
-CI part done 2026-11-02 (cloud, patch 0039, v0.5.7). Stays open until the first CI run
-passes and the Windows test machine is cleaned up.
+CI part done 2026-11-02 (cloud, patch 0039, v0.5.7); first run confirmed green, local,
+2026-11-02. Stays open only for criterion 5 (Windows test-machine cleanup).
 
 - **New CI step** in `build-release.yml`'s `installer-windows` job, "Upgrade Test", before the
   existing fresh-install smoke test. It downloads the latest published release's
@@ -84,6 +83,10 @@ passes and the Windows test machine is cleaned up.
   upgrades, which is everyone on the default, overwrite in place. A user who picked a custom
   folder gets the new version in the default folder, the uninstall entry and shortcuts move
   there, and the old copy is orphaned. Rare, so documented in `PACKAGING.md` only.
-- **Left for local:** confirm the first CI run is green (a manual "Run workflow" on
-  `build-release.yml` is enough, no tag needed), and remove the portable test binaries from
-  the Windows machine (criterion 5).
+- **First CI run: green.** Local, manual `gh workflow run build-release.yml` on `34c964a`
+  (after the Node 20 fix and its own regressions were sorted; see T-049): `installer-windows`
+  passed end to end, both the new "Upgrade Test" step and the existing fresh-install/uninstall
+  smoke test ([run 41470763625](https://github.com/psytrap/fiedle400/actions/runs/41470763625)).
+  No divergence from T-096's manual swap noted.
+- **Left for local:** remove the portable test binaries from the Windows machine
+  (`192.168.2.165`, criterion 5) -- needs hands-on access to that machine.

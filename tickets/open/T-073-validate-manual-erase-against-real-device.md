@@ -1,6 +1,5 @@
 # T-073: Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

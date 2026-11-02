@@ -1,6 +1,5 @@
 # T-090: Unify the "flush stale reports" idiom into `_flush_before_command()`
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

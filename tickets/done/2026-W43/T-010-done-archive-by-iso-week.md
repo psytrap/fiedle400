@@ -1,6 +1,5 @@
 # T-010: Group `tickets/done/` by ISO week and reconstruct the project timeline in `DONE.md`
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

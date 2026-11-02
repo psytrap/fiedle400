@@ -1,6 +1,5 @@
 # T-043: Write down coding conventions, starting with identifier names
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

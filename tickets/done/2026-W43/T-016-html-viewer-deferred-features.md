@@ -1,6 +1,5 @@
-# T-016: Add save-as-PNG and a smooth trend overlay to the HTML viewer
+# T-016: Add save-as-PNG and a smooth trend overlay to the HTML viewer (Won't Do)
 
-- **Status:** Won't Do
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

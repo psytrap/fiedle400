@@ -1,6 +1,5 @@
 # T-062: `TestViewerTmpDir` fails on real Windows -- tests mock the wrong thing
 
-- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

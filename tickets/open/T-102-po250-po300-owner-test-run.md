@@ -1,6 +1,5 @@
 # T-102: A PO-250/PO-300 owner runs fiedle400 on their device
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Local
 - **Parent:** [T-061](T-061-po250-po300-download-recordings.md)

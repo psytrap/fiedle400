@@ -1,6 +1,5 @@
 # T-055: Ship a synthetic demo recording in the Windows installer
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

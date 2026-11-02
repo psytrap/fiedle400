@@ -1,6 +1,5 @@
 # T-038: fiedle400 and the vendor SpO2 Assistant differ on auto-erase after download
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

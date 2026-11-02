@@ -1,6 +1,5 @@
 # T-047: Ship the next release (v0.4.x) -- re-run the Runbook Checklist
 
-- **Status:** Done (psytrap, 2026-10-21)
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-079: Final beta testing before Phase 2 (the minor version bump)
 
-- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

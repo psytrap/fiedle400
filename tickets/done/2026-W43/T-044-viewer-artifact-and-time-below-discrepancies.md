@@ -1,6 +1,5 @@
 # T-044: Viewer shows a different "artifact"/"time below" than it computes
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-076: Checkbox to toggle drawing desaturation/pulse-rate event bands in the HTML viewer
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

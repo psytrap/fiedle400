@@ -1,6 +1,5 @@
 # T-052: Re-check findings T1-T8 against this release's hardware testing
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

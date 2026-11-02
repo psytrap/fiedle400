@@ -1,6 +1,5 @@
 # T-075: Auto-mode session duration/record count reads ~half the real recording time
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

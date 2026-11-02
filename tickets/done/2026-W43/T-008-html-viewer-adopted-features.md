@@ -1,6 +1,5 @@
 # T-008: HTML viewer extras adopted from the T-007 evaluation
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

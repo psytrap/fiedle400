@@ -1,6 +1,5 @@
 # T-081: Group backlog tickets by AI judgment
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

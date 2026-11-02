@@ -1,6 +1,5 @@
-# T-099: Read the other vendor oximetry files (`.spoR`/`.spo`, 4-byte `.SpO2`)
+# T-099: Read the other vendor oximetry files (`.spoR`/`.spo`, 4-byte `.SpO2`) (Won't Do)
 
-- **Status:** Won't Do
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)

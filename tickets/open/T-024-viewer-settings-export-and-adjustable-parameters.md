@@ -1,6 +1,5 @@
 # T-024: Viewer export/save settings button
 
-- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

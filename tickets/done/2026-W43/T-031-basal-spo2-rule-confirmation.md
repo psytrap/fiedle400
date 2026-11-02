@@ -1,6 +1,5 @@
 # T-031: Confirm the exact Basal SpO2 calculation rule
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

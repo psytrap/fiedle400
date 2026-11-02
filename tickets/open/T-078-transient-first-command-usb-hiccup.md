@@ -1,6 +1,5 @@
 # T-078: First command after idle occasionally fails to find/reach the device, succeeds on retry
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

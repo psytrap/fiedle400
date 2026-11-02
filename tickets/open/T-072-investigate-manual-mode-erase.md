@@ -1,6 +1,5 @@
 # T-072: Investigate `fiedle400 clear` against a Manual-mode recording
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

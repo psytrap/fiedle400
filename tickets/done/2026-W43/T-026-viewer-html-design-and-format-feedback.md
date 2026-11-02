@@ -1,6 +1,5 @@
 # T-026: HTML viewer design and format feedback
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-104: Detect PO-250 / PO-300 / PO-400 for the wizard and `info`
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)

@@ -1,6 +1,5 @@
 # T-059: A "coffee/beer" license + funding note -- money for additional test devices
 
-- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

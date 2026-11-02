@@ -1,6 +1,5 @@
 # T-056: Comment field in the HTML viewer
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-070: Fresh real SpO2 Assistant run of the desaturation-event probe
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

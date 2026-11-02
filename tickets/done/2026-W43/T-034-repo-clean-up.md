@@ -1,6 +1,5 @@
 # T-034: Repo clean-up -- basic pass (duplicate file, launcher wording, stale build artifacts)
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-039: Clarify "User" vs "Session" in the device protocol
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

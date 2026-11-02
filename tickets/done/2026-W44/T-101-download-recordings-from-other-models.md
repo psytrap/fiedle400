@@ -1,6 +1,5 @@
 # T-101: Download stored recordings from PO-250/PO-300 (no live/realtime mode)
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)

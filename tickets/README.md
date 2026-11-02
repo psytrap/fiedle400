@@ -48,15 +48,17 @@ you're told to do something, do it; open the ticket alongside the work
    results, what was deliberately left out and why.
 4. Check off every `Criteria` item that's actually met.
 5. `git mv tickets/open/T-NNN-<slug>.md tickets/done/<ISO-year>-W<week>/T-NNN-<slug>.md`,
-   set `Status: Done`, update `INDEX.md` (remove it) and `DONE.md` (add
-   it under that week's heading).
+   update `INDEX.md` (remove it) and `DONE.md` (add it under that week's heading).
 6. Commit and push as usual (this project pushes after every applied
    change — no separate manual-release gate on top of that).
 
 A ticket closed without doing the work (psytrap says to drop it, scope
-moved on, superseded by something else) follows the same steps 3-6 but with
-`Status: Won't Do` instead of `Done`, and Execution Notes giving the reason
-in one or two lines rather than a result. It still moves to `done/` and
+moved on, superseded by something else) follows the same steps 3-6, with
+Execution Notes giving the reason in one or two lines rather than a result,
+and "Won't Do" noted in the title and in `DONE.md`'s row for it (open/done is
+already the file's location; the Done/Won't-Do distinction isn't, so it's
+recorded there instead of in a `Status:` field repeating what the folder and
+Execution Notes already say -- 2026-11-02). It still moves to `done/` and
 `DONE.md` — "closed" is the state being recorded, not "shipped". It is not
 reopened; if the work becomes wanted again later, open a fresh ticket.
 
@@ -65,7 +67,6 @@ reopened; if the work becomes wanted again later, open a fresh ticket.
 ```markdown
 # T-NNN: <Descriptive Title>
 
-- **Status:** Open | Open (deferred) | In Progress | Done | Won't Do
 - **Priority:** P0 | High | Normal | Low
 - **Owner:** Local | Cloud | Either
 - **Scope & Relevant Files:**

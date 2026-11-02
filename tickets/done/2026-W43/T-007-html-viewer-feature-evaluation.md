@@ -1,6 +1,5 @@
 # T-007: Evaluate further features for the HTML `.spo2` viewer
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

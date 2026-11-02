@@ -1,6 +1,5 @@
 # T-046: Repo clean-up -- deep pass (decisions needed)
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-069: Automated test coverage for the viewer's interactive JS behavior
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

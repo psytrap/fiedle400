@@ -192,7 +192,7 @@ jobs:
         shell: bash
         run: |
           grep PRETTY_NAME /etc/os-release
-          ldd --version | head -1
+          ldd --version | head -1 || true
           mkdir unpacked
           tar -C unpacked -xzf artifact/fiedle400-linux-x64.tar.gz
           cd unpacked

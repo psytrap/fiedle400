@@ -1,6 +1,5 @@
 # T-060: Re-evaluate `spo2_viewer.py`'s architecture
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
-# T-068: Legend entry for desaturation/pulse event markers in the HTML viewer
+# T-068: Legend entry for desaturation/pulse event markers in the HTML viewer (Won't Do -- superseded by [T-076](../../open/T-076-viewer-event-band-toggle.md))
 
-- **Status:** Won't Do (superseded by [T-076](T-076-viewer-event-band-toggle.md))
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

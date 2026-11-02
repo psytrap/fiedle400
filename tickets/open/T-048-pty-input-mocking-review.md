@@ -1,6 +1,5 @@
 # T-048: Review whether the Windows CI job needs more than `builtins.input` mocking
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

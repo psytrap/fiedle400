@@ -1,6 +1,5 @@
 # T-041: Key stored recordings by user and entry, not entry alone
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low (no device has shown a second user yet)
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

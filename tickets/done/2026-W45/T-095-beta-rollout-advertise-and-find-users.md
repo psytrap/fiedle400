@@ -1,6 +1,5 @@
 # T-095: Beta rollout -- advertise `fiedle400` and find users
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:** A forum post (`forum-schlafapnoe.de`)

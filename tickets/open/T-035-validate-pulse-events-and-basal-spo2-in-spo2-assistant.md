@@ -1,6 +1,5 @@
 # T-035: Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant
 
-- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

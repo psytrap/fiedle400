@@ -1,6 +1,5 @@
 # T-091: Make "flush before command" an actual synchronization point, not a racy snapshot
 
-- **Status:** Open
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

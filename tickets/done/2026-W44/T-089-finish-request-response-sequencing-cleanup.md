@@ -1,6 +1,5 @@
 # T-089: Finish cleaning up request/response sequencing (remaining single-shot reads, erase status, flush/watermark race)
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

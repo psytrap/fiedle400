@@ -1,6 +1,5 @@
 # T-084: Checksum-failed frames dropped silently on long session downloads, no retry
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

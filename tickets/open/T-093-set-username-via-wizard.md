@@ -1,6 +1,5 @@
 # T-093: Set a username via the wizard
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

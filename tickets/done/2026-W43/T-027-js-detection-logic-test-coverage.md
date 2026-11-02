@@ -1,6 +1,5 @@
 # T-027: Automated test coverage for the viewer's ported JS detection logic
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

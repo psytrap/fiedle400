@@ -1,6 +1,5 @@
 # T-050: Check the Linux binary against an older Ubuntu LTS in CI
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**
@@ -70,3 +69,12 @@ Done 2026-11-02 (cloud, patch 0039, v0.5.7).
 - **Not covered:** device access (hidraw, udev) on 22.04; that needs hardware. The kernel's
   hidraw interface has not changed in a way that matters here, and the serial backend uses only
   termios.
+
+**First real run (local, 2026-11-02): failed, but not on compatibility.** `linux-oldest-lts`
+failed with exit 141 before the binary ever ran -- a `bash -e -o pipefail` script abort on
+`ldd --version | head -1`: `head` closes its end of the pipe after one line, `ldd` gets
+`SIGPIPE` writing the rest, and `pipefail` turns that into the whole line's exit status. The
+two lines before it (`PRETTY_NAME`, the `ldd` version string itself) printed fine, confirming
+the container really is Ubuntu 22.04 / glibc 2.35 as intended -- a CI-script bug, not a
+glibc/compatibility finding. Fixed: `|| true` on that one diagnostic line (it's informational,
+not a check). Re-run needed to confirm `--version`/`--help`/`config` actually pass now.

@@ -1,6 +1,5 @@
 # T-086: Clean up `fiedle400/desat.py`
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

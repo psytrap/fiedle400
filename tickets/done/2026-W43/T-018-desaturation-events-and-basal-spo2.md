@@ -1,6 +1,5 @@
 # T-018: Show desaturation events, ODI and Basal SpO2 in the HTML viewer
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

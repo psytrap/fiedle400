@@ -1,6 +1,5 @@
 # T-087: Device's on-unit "51 Seg" display vs. `fiedle400 sessions` listing only 31
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

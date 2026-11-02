@@ -1,6 +1,5 @@
 # T-080: SpO2/HR histogram in the HTML viewer
 
-- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-017: Research the vendor's desaturation-event and "Basal SpO2" definitions
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

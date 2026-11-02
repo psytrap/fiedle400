@@ -1,6 +1,5 @@
 # T-057: Automatic filename choice -- insert the postfix right away
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

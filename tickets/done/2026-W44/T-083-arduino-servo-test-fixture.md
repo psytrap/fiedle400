@@ -1,6 +1,5 @@
 # T-083: Arduino + servo mechanical test fixture for the PO-400 sensor
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

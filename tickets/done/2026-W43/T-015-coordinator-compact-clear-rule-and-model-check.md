@@ -1,6 +1,5 @@
 # T-015: Coordinator `/compact`/`/clear` cadence rule, and a model check at ticket creation
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

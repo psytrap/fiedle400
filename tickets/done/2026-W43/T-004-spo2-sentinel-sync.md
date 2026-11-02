@@ -1,6 +1,5 @@
 # T-004: Synchronize SpO2/Pulse sentinels in `.spo2` export
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local or Cloud
 - **Scope & Relevant Files:**

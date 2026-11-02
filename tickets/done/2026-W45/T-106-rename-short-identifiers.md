@@ -1,6 +1,5 @@
 # T-106: Rename short identifiers that break the naming rule
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

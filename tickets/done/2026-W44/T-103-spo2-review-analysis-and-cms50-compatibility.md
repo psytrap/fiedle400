@@ -1,6 +1,5 @@
 # T-103: Analyse SpO2 Review; download compatibility matrix for the CMS50 family
 
-- **Status:** Done (SpO2 Review installer unavailable; its request captured)
 - **Priority:** Normal
 - **Owner:** Either
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)

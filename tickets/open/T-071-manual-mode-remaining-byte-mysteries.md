@@ -1,6 +1,5 @@
 # T-071: Manual-mode subframe bytes 3..4, `D0` bytes 8..9, and `D0` kinds 1/4
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**

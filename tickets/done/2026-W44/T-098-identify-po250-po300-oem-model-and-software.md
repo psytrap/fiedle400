@@ -1,6 +1,5 @@
 # T-098: Identify the PO-250 / PO-300 hardware and their PC software
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Either
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)

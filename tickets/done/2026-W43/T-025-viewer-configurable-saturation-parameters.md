@@ -1,6 +1,5 @@
 # T-025: Configurable desaturation/pulse analysis parameters in the viewer
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-011: Check `.spo2` export compatibility against the real SpO2 Assistant
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

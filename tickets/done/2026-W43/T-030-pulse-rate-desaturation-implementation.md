@@ -1,6 +1,5 @@
 # T-030: Implement the pulse-rate desaturation detector
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Blocked by:** none. The block on [T-035](T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md)

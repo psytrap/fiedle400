@@ -1,6 +1,5 @@
 # T-058: Show and edit a username in the HTML viewer
 
-- **Status:** Open (deferred)
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-063: `pyproject.toml` declares the wrong `hid`-family package
 
-- **Status:** Done
 - **Priority:** High
 - **Owner:** Local
 - **Scope & Relevant Files:**

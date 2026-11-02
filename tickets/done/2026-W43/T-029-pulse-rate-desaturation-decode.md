@@ -1,6 +1,5 @@
 # T-029: Decode and validate the pulse-rate desaturation detector
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

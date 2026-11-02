@@ -1,6 +1,5 @@
 # T-037: `fiedle400 clear`'s per-session erase sequence is unverified against a real capture
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Local
 - **Scope & Relevant Files:**

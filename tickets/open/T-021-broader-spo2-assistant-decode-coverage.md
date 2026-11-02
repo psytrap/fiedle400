@@ -1,6 +1,5 @@
 # T-021: Broader real SpO2 Assistant `.spo2` decode coverage
 
-- **Status:** Open (deferred)
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**

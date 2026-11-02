@@ -1,6 +1,5 @@
 # T-013: `fiedle400 view FILE` opens the HTML viewer for an existing recording
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

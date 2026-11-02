@@ -1,6 +1,5 @@
 # T-020: Multi-session `.spo2` export silently discards the gap between sessions
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

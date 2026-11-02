@@ -1,6 +1,5 @@
 # T-064: Windows installer UX fixes found during manual install testing
 
-- **Status:** Done
 - **Priority:** Medium
 - **Owner:** Local
 - **Scope & Relevant Files:**

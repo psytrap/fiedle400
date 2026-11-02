@@ -1,6 +1,5 @@
 # T-105: Download from CMS50F v3.7 / CMS50I (protocol B)
 
-- **Status:** Open (deferred, on hold)
 - **Priority:** Low
 - **Owner:** Either
 - **Parent:** [T-061](T-061-po250-po300-download-recordings.md)

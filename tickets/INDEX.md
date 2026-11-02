@@ -3,10 +3,9 @@
 Live list of everything in `tickets/open/`. See `README.md` for the
 protocol; `DONE.md` for the archive.
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-049](open/T-049-ci-workflow-debt.md) | CI/release-workflow debt (Ubuntu 26, Actions Node 20 warnings, macOS Gatekeeper) | Either | Open (Ubuntu pin, Node 20 pin and a green CI run all done; first run of the new macOS job left) |
-| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly | Local | Open (CI upgrade test added in 0039, first manual run in progress; Windows test-machine cleanup left) |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-097](open/T-097-windows-installer-upgrade-over-existing-install.md) | Verify the real Windows installer upgrades a pre-existing install cleanly -- only the Windows test-machine cleanup is left | Local |
 
 ## Backlog (deferred)
 
@@ -14,68 +13,68 @@ Open tickets parked until psytrap picks them up again.
 
 ### Small UX & data-model odds-and-ends
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud | Open |
-| [T-041](open/T-041-key-sessions-by-user-and-entry.md) | Key stored recordings by user and entry, not entry alone | Cloud | Open |
-| [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud | Open |
-| [T-093](open/T-093-set-username-via-wizard.md) | Set a username via the wizard | Cloud | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-040](open/T-040-tkinter-wizard.md) | tkinter wizard, with the terminal wizard as fallback | Cloud |
+| [T-041](open/T-041-key-sessions-by-user-and-entry.md) | Key stored recordings by user and entry, not entry alone | Cloud |
+| [T-057](open/T-057-auto-filename-postfix-on-collision.md) | Automatic filename choice -- insert the postfix right away | Cloud |
+| [T-093](open/T-093-set-username-via-wizard.md) | Set a username via the wizard | Cloud |
 
 ### Manual-mode & erase protocol
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-072](open/T-072-investigate-manual-mode-erase.md) | Investigate `fiedle400 clear` against a Manual-mode recording | Either | Open |
-| [T-073](open/T-073-validate-manual-erase-against-real-device.md) | Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware | Local | Open |
-| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either | Open |
-| [T-082](open/T-082-wizard-erase-reports-success-but-sessions-persist.md) | Wizard reports erase succeeded, but the session is still there afterward | Local | Open |
-| [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-072](open/T-072-investigate-manual-mode-erase.md) | Investigate `fiedle400 clear` against a Manual-mode recording | Either |
+| [T-073](open/T-073-validate-manual-erase-against-real-device.md) | Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware | Local |
+| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either |
+| [T-082](open/T-082-wizard-erase-reports-success-but-sessions-persist.md) | Wizard reports erase succeeded, but the session is still there afterward | Local |
+| [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local |
 
 ### Release / CI infra debt
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either | Open |
-| [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local | Open |
-| [T-077](open/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either |
+| [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local |
+| [T-077](open/T-077-linux-release-asset-double-zipped.md) | Check why the Linux release asset is `tar.gz.zip` | Either |
 
 ### HTML viewer features & architecture
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-023](open/T-023-viewer-blocked-areas-and-exportable-settings.md) | Viewer area-exclusion selection | Cloud | Open |
-| [T-024](open/T-024-viewer-settings-export-and-adjustable-parameters.md) | Viewer export/save settings button | Cloud | Open |
-| [T-045](open/T-045-pulse-max-time-and-sentinel-index-quirks.md) | Pulse row reads the wrong channel's max_time; a sentinel-index quirk is shared by both implementations | Cloud | Open |
-| [T-056](open/T-056-html-viewer-comment-field.md) | Comment field in the HTML viewer | Cloud | Open |
-| [T-058](open/T-058-html-viewer-username-display-and-edit.md) | Show and edit a username in the HTML viewer | Cloud | Open |
-| [T-060](open/T-060-reevaluate-spo2-viewer-architecture.md) | Re-evaluate `spo2_viewer.py`'s architecture | Either | Open |
-| [T-067](open/T-067-viewer-grey-out-no-signal-periods.md) | HTML viewer should grey out no-signal/probe-out periods on the chart | Either | Open |
-| [T-069](open/T-069-js-interactive-behavior-test-coverage.md) | Automated test coverage for the viewer's interactive JS behavior (chart zoom/pan, hover, toggles) | Either | Open |
-| [T-076](open/T-076-viewer-event-band-toggle.md) | Checkbox to toggle drawing desaturation/pulse-rate event bands in the HTML viewer | Either | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-023](open/T-023-viewer-blocked-areas-and-exportable-settings.md) | Viewer area-exclusion selection | Cloud |
+| [T-024](open/T-024-viewer-settings-export-and-adjustable-parameters.md) | Viewer export/save settings button | Cloud |
+| [T-045](open/T-045-pulse-max-time-and-sentinel-index-quirks.md) | Pulse row reads the wrong channel's max_time; a sentinel-index quirk is shared by both implementations | Cloud |
+| [T-056](open/T-056-html-viewer-comment-field.md) | Comment field in the HTML viewer | Cloud |
+| [T-058](open/T-058-html-viewer-username-display-and-edit.md) | Show and edit a username in the HTML viewer | Cloud |
+| [T-060](open/T-060-reevaluate-spo2-viewer-architecture.md) | Re-evaluate `spo2_viewer.py`'s architecture | Either |
+| [T-067](open/T-067-viewer-grey-out-no-signal-periods.md) | HTML viewer should grey out no-signal/probe-out periods on the chart | Either |
+| [T-069](open/T-069-js-interactive-behavior-test-coverage.md) | Automated test coverage for the viewer's interactive JS behavior (chart zoom/pan, hover, toggles) | Either |
+| [T-076](open/T-076-viewer-event-band-toggle.md) | Checkbox to toggle drawing desaturation/pulse-rate event bands in the HTML viewer | Either |
 
 ### SpO2 Assistant validation & decode coverage
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-021](open/T-021-broader-spo2-assistant-decode-coverage.md) | Broader real SpO2 Assistant `.spo2` decode coverage | Local | Open |
-| [T-035](open/T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md) | Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant | Local | Open |
-| [T-070](open/T-070-fresh-spo2-assistant-desat-rerun.md) | Fresh real SpO2 Assistant run of the desaturation-event probe | Local | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-021](open/T-021-broader-spo2-assistant-decode-coverage.md) | Broader real SpO2 Assistant `.spo2` decode coverage | Local |
+| [T-035](open/T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md) | Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant | Local |
+| [T-070](open/T-070-fresh-spo2-assistant-desat-rerun.md) | Fresh real SpO2 Assistant run of the desaturation-event probe | Local |
 
 ### Other PO-x00 models (T-061)
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either | Open |
-| [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local | Open |
-| [T-105](open/T-105-cms50f37-protocol-b-download.md) | Download from CMS50F v3.7 / CMS50I (protocol B) | Either | Open (on hold) |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either |
+| [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local |
+| [T-105](open/T-105-cms50f37-protocol-b-download.md) | Download from CMS50F v3.7 / CMS50I (protocol B) -- on hold | Either |
 
 ### Process & docs
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-046](open/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either | Open |
-| [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local | Open |
-| [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-046](open/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either |
+| [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local |
+| [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either |
 
 ### Long end
 
@@ -83,12 +82,12 @@ Investigations/mysteries with no clear next action yet -- unresolved
 protocol quirks, unconfirmed flakiness, or a design decision with options
 laid out but nothing chosen.
 
-| Ticket | Title | Owner | Status |
-| :---: | :--- | :---: | :--- |
-| [T-071](open/T-071-manual-mode-remaining-byte-mysteries.md) | Manual-mode subframe bytes 3..4, `D0` bytes 8..9, and `D0` kinds 1/4 | Either | Open |
-| [T-078](open/T-078-transient-first-command-usb-hiccup.md) | First command after idle occasionally fails to find/reach the device, succeeds on retry | Either | Open |
-| [T-080](open/T-080-viewer-spo2-hr-histogram.md) | SpO2/HR histogram in the HTML viewer (parity with SpO2 Assistant) | Either | Open |
-| [T-091](open/T-091-synchronized-flush-watermark.md) | Make "flush before command" an actual synchronization point, not a racy snapshot | Local | Open |
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-071](open/T-071-manual-mode-remaining-byte-mysteries.md) | Manual-mode subframe bytes 3..4, `D0` bytes 8..9, and `D0` kinds 1/4 | Either |
+| [T-078](open/T-078-transient-first-command-usb-hiccup.md) | First command after idle occasionally fails to find/reach the device, succeeds on retry | Either |
+| [T-080](open/T-080-viewer-spo2-hr-histogram.md) | SpO2/HR histogram in the HTML viewer (parity with SpO2 Assistant) | Either |
+| [T-091](open/T-091-synchronized-flush-watermark.md) | Make "flush before command" an actual synchronization point, not a racy snapshot | Local |
 
 ## Open questions
 

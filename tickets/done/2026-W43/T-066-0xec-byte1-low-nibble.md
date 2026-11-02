@@ -1,6 +1,5 @@
 # T-066: Decode `0xEC` byte 1, bits 0..3
 
-- **Status:** Done
 - **Priority:** Normal
 - **Owner:** Cloud
 - **Scope & Relevant Files:**

@@ -1,6 +1,5 @@
 # T-074: `fiedle400 clear -s N` (single Auto-mode session) does not erase anything on real hardware
 
-- **Status:** Open (deferred; psytrap, 2026-10-21)
 - **Priority:** Normal
 - **Owner:** Either
 - **Scope & Relevant Files:**

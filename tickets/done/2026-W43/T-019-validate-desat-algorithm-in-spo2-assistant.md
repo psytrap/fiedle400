@@ -1,6 +1,5 @@
 # T-019: Validate the decoded desaturation algorithm in SpO2 Assistant
 
-- **Status:** Done
 - **Priority:** Low
 - **Owner:** Local
 - **Scope & Relevant Files:**
