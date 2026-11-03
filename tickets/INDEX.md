@@ -10,6 +10,13 @@ protocol; `DONE.md` for the archive.
 
 Open tickets parked until psytrap picks them up again.
 
+### Process & docs
+
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either |
+| [T-107](open/T-107-archive-backup-confirmation.md) | Confirm `archive/` has a backup outside the working folder | Local |
+
 ### Small UX & data-model odds-and-ends
 
 | Ticket | Title | Owner |
@@ -20,22 +27,13 @@ Open tickets parked until psytrap picks them up again.
 | [T-054](open/T-054-readme-demo-screen-capture.md) | Add a demo screen capture to README.md | Local |
 | [T-093](open/T-093-set-username-via-wizard.md) | Set a username via the wizard | Cloud |
 
-### Manual-mode & erase protocol
+### Other PO-x00 models (T-061)
 
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
-| [T-072](open/T-072-investigate-manual-mode-erase.md) | Investigate `fiedle400 clear` against a Manual-mode recording | Either |
-| [T-073](open/T-073-validate-manual-erase-against-real-device.md) | Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware | Local |
-| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either |
-| [T-082](open/T-082-wizard-erase-reports-success-but-sessions-persist.md) | Wizard reports erase succeeded, but the session is still there afterward | Local |
-| [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local |
-
-### Release / CI infra debt
-
-| Ticket | Title | Owner |
-| :---: | :--- | :---: |
-| [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either |
-| [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local |
+| [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either |
+| [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local |
+| [T-105](open/T-105-cms50f37-protocol-b-download.md) | Download from CMS50F v3.7 / CMS50I (protocol B) -- on hold | Either |
 
 ### HTML viewer features & architecture
 
@@ -51,6 +49,16 @@ Open tickets parked until psytrap picks them up again.
 | [T-069](open/T-069-js-interactive-behavior-test-coverage.md) | Automated test coverage for the viewer's interactive JS behavior (chart zoom/pan, hover, toggles) | Either |
 | [T-076](open/T-076-viewer-event-band-toggle.md) | Checkbox to toggle drawing desaturation/pulse-rate event bands in the HTML viewer | Either |
 
+### Manual-mode & erase protocol
+
+| Ticket | Title | Owner |
+| :---: | :--- | :---: |
+| [T-072](open/T-072-investigate-manual-mode-erase.md) | Investigate `fiedle400 clear` against a Manual-mode recording | Either |
+| [T-073](open/T-073-validate-manual-erase-against-real-device.md) | Validate `fiedle400 clear`'s Manual-mode `A1`/`D1` erase against real hardware | Local |
+| [T-074](open/T-074-auto-mode-single-session-erase-does-not-work.md) | `clear -s N` (single Auto-mode session) does not erase anything on real hardware | Either |
+| [T-082](open/T-082-wizard-erase-reports-success-but-sessions-persist.md) | Wizard reports erase succeeded, but the session is still there afterward | Local |
+| [T-085](open/T-085-clear-poll-timeout-retry.md) | `clear_memory` should poll with a timeout/retry, not a single immediate re-list | Local |
+
 ### SpO2 Assistant validation & decode coverage
 
 | Ticket | Title | Owner |
@@ -59,20 +67,12 @@ Open tickets parked until psytrap picks them up again.
 | [T-035](open/T-035-validate-pulse-events-and-basal-spo2-in-spo2-assistant.md) | Validate the decoded pulse-rate events and Basal SpO2 rule in SpO2 Assistant | Local |
 | [T-070](open/T-070-fresh-spo2-assistant-desat-rerun.md) | Fresh real SpO2 Assistant run of the desaturation-event probe | Local |
 
-### Other PO-x00 models (T-061)
+### Release / CI infra debt
 
 | Ticket | Title | Owner |
 | :---: | :--- | :---: |
-| [T-061](open/T-061-po250-po300-download-recordings.md) | PO-250 / PO-300 support: download stored recordings from the device | Either |
-| [T-102](open/T-102-po250-po300-owner-test-run.md) | A PO-250/PO-300 owner runs fiedle400 on their device | Local |
-| [T-105](open/T-105-cms50f37-protocol-b-download.md) | Download from CMS50F v3.7 / CMS50I (protocol B) -- on hold | Either |
-
-### Process & docs
-
-| Ticket | Title | Owner |
-| :---: | :--- | :---: |
-| [T-046](open/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either |
-| [T-059](open/T-059-funding-license-for-additional-devices.md) | A "coffee/beer" license + funding note -- money for additional test devices | Either |
+| [T-048](open/T-048-pty-input-mocking-review.md) | Review whether the Windows CI job needs more than `builtins.input` mocking | Either |
+| [T-053](open/T-053-document-windows-local-test-procedure.md) | Document the local Windows test-execution procedure | Local |
 
 ### Long end
 

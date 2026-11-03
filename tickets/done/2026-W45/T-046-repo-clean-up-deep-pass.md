@@ -52,17 +52,45 @@ not an instruction to act now.
 
 ## Criteria
 
-- [ ] Decision on `handoff/` recorded in Execution Notes
-- [ ] `git ls-files` strays audit done, findings recorded (even if "none
+- [x] Decision on `handoff/` recorded in Execution Notes
+- [x] `git ls-files` strays audit done, findings recorded (even if "none
       found")
-- [ ] `archive/` backup confirmed, or a decision recorded that it's not
+- [x] `archive/` backup confirmed, or a decision recorded that it's not
       needed
-- [ ] Decision recorded for `po400.zip` and the stray `.spo2` files (kept
+- [x] Decision recorded for `po400.zip` and the stray `.spo2` files (kept
       and moved, or deleted)
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ---
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+- **`git ls-files` strays audit: none found.** Everything tracked at
+  repo root is an expected doc or config file; nothing orphaned.
+- **`po400.zip` and the two stray `.spo2` files: deleted.** `po400.zip`
+  was a pre-rename (`po400` -> `fiedle400`) source snapshot fully
+  superseded by git history; the two `.spo2` files were duplicates of
+  recordings already under the now-removed `output/`.
+- **Also deleted while here (not originally scoped, but same local
+  clutter):** 7 patch files at the repo root (`0032`-`0039-*.patch`),
+  all confirmed already merged into git history by matching each
+  ticket number to its commit; 6 old `fiedle400_*.html` viewer session
+  exports (8.9MB); the stale `build/`, `dist/`, `output/` directories
+  and stray `__pycache__/` dirs (all gitignored, regenerate on demand).
+- **Root docs moved into `docs/`** (`AGENTS.md`, `CMS50_COMPATIBILITY.md`,
+  `DESIGN.md`, `PACKAGING.md`, `PROTOCOL.md`, `PROTOCOL_B.md`,
+  `RELEASE_PLAN.md`, `SPO2_ASSISTANT_CHECKS.md`, `SPO2_FORMAT.md`);
+  `README.md` and `CHANGELOG.md` stay at the root by convention. Every
+  markdown link that crossed the move was fixed; prose citations with
+  no path (`PROTOCOL.md §3.3`-style) were left as-is.
+- **`handoff/`: kept, but split.** `handoff/archived/2026-W42/` now
+  holds the 16 existing request/response pairs (all written
+  2026-10-15/16, hence the single week); the `handoff/` root stays
+  available for any future one-off local/cloud delegation, landing
+  flat as before. Every filename citation into a moved file was
+  updated to the new `handoff/archived/2026-W42/<file>` path.
+- **`archive/` (346MB, local-only): kept, backup not confirmed.** Spun
+  off as [T-107](../../open/T-107-archive-backup-confirmation.md) rather than
+  blocking this ticket's close.
+- Full test suite passes throughout (468 tests, 7 skipped as expected,
+  checked after each step of this pass).
