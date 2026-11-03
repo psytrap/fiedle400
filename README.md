@@ -2,9 +2,9 @@
 
 A lightweight Python Command-Line Interface (CLI) to communicate with the **Pulsox PO-400** (and compatible Contec CMS-50 series) pulse oximeter over USB HID. Runs on **Windows and Linux**, verified against real hardware on both (macOS support is present but not yet verified).
 
-> **Status: beta.** Verified against real hardware, including a real finger-on-probe session with a plausible SpO2/heart-rate trace. See [RELEASE_PLAN.md](RELEASE_PLAN.md).
+> **Status: beta.** Verified against real hardware, including a real finger-on-probe session with a plausible SpO2/heart-rate trace. See [RELEASE_PLAN.md](docs/RELEASE_PLAN.md).
 
-For the code architecture see [DESIGN.md](DESIGN.md); for the byte-level protocol see [PROTOCOL.md](PROTOCOL.md).
+For the code architecture see [DESIGN.md](docs/DESIGN.md); for the byte-level protocol see [PROTOCOL.md](docs/PROTOCOL.md).
 
 ---
 
@@ -198,7 +198,7 @@ the output (T-102).
 
 Contec's CMS50 oximeters (CMS50D+, CMS50E, CMS50F, CMS50I), the ones OSCAR reads, use two other
 protocols and are **not supported** (fiedle400 supports the PO-400, PO-250 and PO-300 only);
-`fiedle400` reports no oximeter for them. See [`CMS50_COMPATIBILITY.md`](CMS50_COMPATIBILITY.md)
+`fiedle400` reports no oximeter for them. See [`CMS50_COMPATIBILITY.md`](docs/CMS50_COMPATIBILITY.md)
 for the compatibility matrix.
 
 ---
@@ -284,9 +284,9 @@ python3 tests/capture_tools/record_exchange.py --no-download --probe-firmware --
 
 ## Documentation & Protocol References
 
-- **[SPO2_FORMAT.md](SPO2_FORMAT.md)**: Full binary format specification for Contec / Pulsox `.SpO2` files.
-- **[DESIGN.md](DESIGN.md)**: Code architecture, module map, download flow, test layout.
-- **[AGENTS.md](AGENTS.md)**: Rules for contributors, human or AI: commands, patch workflow, invariants.
-- **[PROTOCOL.md](PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
-- **[PACKAGING.md](PACKAGING.md)**: How the binaries, the Windows installer and the Linux tarball are built.
-- **[RELEASE_PLAN.md](RELEASE_PLAN.md)**: Release gates, version-bump strategy, open findings.
+- **[SPO2_FORMAT.md](docs/SPO2_FORMAT.md)**: Full binary format specification for Contec / Pulsox `.SpO2` files.
+- **[DESIGN.md](docs/DESIGN.md)**: Code architecture, module map, download flow, test layout.
+- **[AGENTS.md](docs/AGENTS.md)**: Rules for contributors, human or AI: commands, patch workflow, invariants.
+- **[PROTOCOL.md](docs/PROTOCOL.md)**: Bit-accurate protocol specification and packet byte maps.
+- **[PACKAGING.md](docs/PACKAGING.md)**: How the binaries, the Windows installer and the Linux tarball are built.
+- **[RELEASE_PLAN.md](docs/RELEASE_PLAN.md)**: Release gates, version-bump strategy, open findings.

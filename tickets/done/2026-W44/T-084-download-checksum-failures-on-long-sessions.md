@@ -144,7 +144,7 @@ precondition didn't trigger it on this attempt.
 whether the corruption originates in the raw HID stream or in the serial
 engine's own parsing. Findings:
 
-- [PROTOCOL.md:89](../../PROTOCOL.md) -- stored-session subframes stream
+- [PROTOCOL.md:89](../../../docs/PROTOCOL.md) -- stored-session subframes stream
   as unpadded 30-byte chunks *continuously across* 64-byte HID report
   boundaries; frames are not aligned 1:1 with reports.
 - `SerialByteStreamBuffer` is a plain FIFO (`buffer.py`) -- it just
