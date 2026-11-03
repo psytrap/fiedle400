@@ -5,7 +5,7 @@ high reasoning effort** — this is a line-by-line read of the densest, most
 failure-sensitive docs in the repo, not a quick pass.
 
 **Repo state:** HEAD `014bfcf`, version `0.3.6`, tests green. Since the
-previous clean audit (patch 0014, `handoff/clean-audit-response.md`),
+previous clean audit (patch 0014, `handoff/archived/2026-W42/clean-audit-response.md`),
 `RELEASE_PLAN.md` was split (resolved investigation history moved to
 `CHANGELOG.md`, `f4005e4`) and T1 was marked unfixed with a new runtime
 alert for its first real-hardware occurrence (`014bfcf`).

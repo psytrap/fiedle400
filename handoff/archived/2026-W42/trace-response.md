@@ -1,6 +1,6 @@
 # Response: the real device trace
 
-Written by the cloud side, 2026-10-15, against HEAD `490d4b6` (version `0.1.7`). Answers `handoff/trace-ready.md`.
+Written by the cloud side, 2026-10-15, against HEAD `490d4b6` (version `0.1.7`). Answers `handoff/archived/2026-W42/trace-ready.md`.
 
 ## What changed
 

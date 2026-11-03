@@ -14,7 +14,7 @@ branch correctly, not a full duplicate of every flow.
 
 This proves the *code's* behaviour on the backend Windows/macOS use. It cannot prove
 how the real Windows HID stack behaves -- the W1-W5 hypotheses in
-handoff/ci-mock-hardware-response.md need the physical laptop regardless.
+handoff/archived/2026-W42/ci-mock-hardware-response.md need the physical laptop regardless.
 
 The T1/T3/T4/T6/T7 defects first pinned as expected failures in tests/test_hwsim_realtrace.py
 (RELEASE_PLAN.md section 3d) are protocol-level, not backend-specific, so they reproduced here

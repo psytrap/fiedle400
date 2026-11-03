@@ -1,6 +1,6 @@
 # Docs review: response (patch 0015)
 
-Answer to `handoff/docs-review.md`. Base: device HEAD `014bfcf` (0.3.6); all 81 tracked files were
+Answer to `handoff/archived/2026-W42/docs-review.md`. Base: device HEAD `014bfcf` (0.3.6); all 81 tracked files were
 re-staged and match. One patch, as asked: the docs review, the code fixes it called for, and fixes
 to the agent instructions. Version 0.3.7; 259 tests pass (7 skipped), pyflakes clean.
 

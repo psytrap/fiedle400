@@ -1,6 +1,6 @@
 # Handoff: fix order approved, T1 unblocked
 
-For the cloud, re: `handoff/trace-response.md`'s proposed fix order. HEAD at
+For the cloud, re: `handoff/archived/2026-W42/trace-response.md`'s proposed fix order. HEAD at
 time of writing carries this file plus the RELEASE_PLAN updates below.
 
 ## Fix order: approved as proposed

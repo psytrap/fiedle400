@@ -100,7 +100,7 @@ Each blocker is a small, separate commit, landed **before** the patch bump.
 | **B4** ✅ | The release workflow doesn't test | `build-release.yml` builds on tag push with no test step. | Done: `test` job on ubuntu, windows and macos (Python 3.11) runs the suite stdlib-only (G4), then again with matplotlib (G1/G2); `build` has `needs: test`; on tag pushes the job fails unless `v<__version__>` equals the tag. |
 | **B5** ✅ | Stale build metadata | `fiedle400.spec` hidden imports omitted `fiedle400.export`. | Spec hidden imports: `fiedle400.export` added in 0001. (`fiedle400.egg-info/` is untracked, so it was never an issue in git.) |
 | **B6** ✅ | Docs point at a local machine | README, DESIGN.md and PROTOCOL.md used `file:///home/mik/...` links. | Done: all links are relative (README in 0002, the other two locally). |
-| **B7** ✅ | Windows console encoding | Emoji and box characters raised `UnicodeEncodeError` on a legacy-codepage Windows console (cp850) (`handoff/windows-console-encoding.md`). | Fixed locally: output falls back to ASCII replacements instead of crashing. |
+| **B7** ✅ | Windows console encoding | Emoji and box characters raised `UnicodeEncodeError` on a legacy-codepage Windows console (cp850) (`handoff/archived/2026-W42/windows-console-encoding.md`). | Fixed locally: output falls back to ASCII replacements instead of crashing. |
 
 ---
 
@@ -163,14 +163,14 @@ Two tiers, deliberately different cadence:
   construction. 251 tests total (was 238), runtime unchanged (~5-6s) once the
   same `VirtualClock` speedup the Linux flows use was wired in (13s -> 0.3s for
   this file alone). Does **not** and cannot prove the W1-W5 real-Windows-stack
-  hypotheses in `handoff/ci-mock-hardware-response.md` -- those need the
+  hypotheses in `handoff/archived/2026-W42/ci-mock-hardware-response.md` -- those need the
   physical laptop regardless of how much mock coverage exists.
 - **Real hardware (G5/G6), at release candidates only.** Not on every patch.
   Requires the physical Windows 8.1 laptop and is run by psytrap before tagging,
   same as Linux. CI cannot do this regardless of cadence -- there is no device
   on a GitHub runner -- so this is a statement of intent, not a workaround.
 
-The W1-W5 Windows HID-stack hypotheses in `handoff/ci-mock-hardware-response.md`
+The W1-W5 Windows HID-stack hypotheses in `handoff/archived/2026-W42/ci-mock-hardware-response.md`
 are a third thing: one-time environmental questions, not per-release checks.
 Settle each once on the laptop, record the answer here, and only revisit if
 `HidBackend` changes substantially.
@@ -296,14 +296,14 @@ Audit the rest of the suite for the same shape of mistake: any test that calls
 through to something environment-dependent (the real filesystem, real device
 enumeration, a real network call, wall-clock time) without mocking it, and
 that happens to pass only because of what this development machine has
-attached, installed, or happens to return right now. **Audit delivered in patch 0014** (findings and open proposals: `handoff/clean-audit-response.md`).
+attached, installed, or happens to return right now. **Audit delivered in patch 0014** (findings and open proposals: `handoff/archived/2026-W42/clean-audit-response.md`).
 
 **TODO (psytrap, 2026-10-15): cross-check the test suite for code smell.**
 Broader than the environment-assumption audit above -- a pass over
 `tests/` for the usual smells (duplicated setup that should be a fixture,
 assertions too weak to catch the regression they're named for, tests that
 pass for the wrong reason, dead/unreachable test code, overfit mocks that
-would still pass after the real implementation broke). **Delivered with the clean audit in patch 0014** (`handoff/clean-audit-response.md`).
+would still pass after the real implementation broke). **Delivered with the clean audit in patch 0014** (`handoff/archived/2026-W42/clean-audit-response.md`).
 
 **TODO (psytrap, 2026-10-15): broader clean-code / clean-docs / clean-test /
 clean-release audit.** A full pass across the project, not limited to
@@ -320,8 +320,8 @@ clean-release audit.** A full pass across the project, not limited to
   (the kind of thing the `default_workflow_permissions` fix this session
   surfaced -- check for other drift between what's documented and what's
   actually configured).
-**Delivered in patch 0014** (`handoff/clean-audit-response.md`); the `PROTOCOL.md` /
-`analysis/*.md` pass followed separately (`handoff/docs-review-response.md`).
+**Delivered in patch 0014** (`handoff/archived/2026-W42/clean-audit-response.md`); the `PROTOCOL.md` /
+`analysis/*.md` pass followed separately (`handoff/archived/2026-W42/docs-review-response.md`).
 
 ---
 
@@ -366,7 +366,7 @@ release notes.
   ask whoever is running the release whether they can supply one real
   Manual-mode recording (a capture or a `.spo2`/trace from the device in
   Manual mode). If provided, use it to settle the open Manual-mode questions
-  in `PROTOCOL.md` §3.14 (M1-M7, `handoff/docs-review-response.md`). If not
+  in `PROTOCOL.md` §3.14 (M1-M7, `handoff/archived/2026-W42/docs-review-response.md`). If not
   provided, note it as skipped and ship anyway -- Manual mode isn't
   implemented in `fiedle400` yet, so this never blocks a release, it only
   improves the docs when the data happens to be available. Not yet done.

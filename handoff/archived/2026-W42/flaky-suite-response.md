@@ -1,6 +1,6 @@
 # Response: intermittent full-suite failure
 
-Written by the cloud for the local side, answering `handoff/flaky-suite.md`. Ships with patch 0004.
+Written by the cloud for the local side, answering `handoff/archived/2026-W42/flaky-suite.md`. Ships with patch 0004.
 
 ## Findings (verified in the cloud)
 

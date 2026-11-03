@@ -3,7 +3,7 @@
 - **Priority:** Low
 - **Owner:** Either
 - **Scope & Relevant Files:**
-  - `trace-response.md` (repo root; byte-identical copy of `handoff/trace-response.md`)
+  - `trace-response.md` (repo root; byte-identical copy of `handoff/archived/2026-W42/trace-response.md`)
   - `fiedle400.bat` (Windows launcher wrapper, still says "PO-400 CLI")
   - `build/`, `dist/`, `po400.egg-info/`, `fiedle400.egg-info/`, `__pycache__/`
     (local only, ignored by git, regenerable)
@@ -19,9 +19,9 @@ more investigation moved to
 [T-046](T-046-repo-clean-up-deep-pass.md) (deferred).
 
 - **Duplicate `trace-response.md` in the repo root.** It is byte-identical
-  to `handoff/trace-response.md`; the only reference to it is
-  `handoff/fix-order-approved.md`, which names it as
-  `handoff/trace-response.md`. Remove the root copy (`git rm`).
+  to `handoff/archived/2026-W42/trace-response.md`; the only reference to it is
+  `handoff/archived/2026-W42/fix-order-approved.md`, which names it as
+  `handoff/archived/2026-W42/trace-response.md`. Remove the root copy (`git rm`).
 - **`fiedle400.bat` wording.** The comment line says "Pulsox PO-400 CLI".
   The device name stays PO-400 in user text (AGENTS.md), so only check that
   the launcher still works (`python -m fiedle400`) and that the wording
@@ -52,8 +52,8 @@ standing rule (`AGENTS.md`, added 2026-10-21), not a backlog task.
 ## Execution Notes
 
 - `trace-response.md` removed from the repo root (`git rm`); confirmed
-  identical to `handoff/trace-response.md` first, and that
-  `handoff/fix-order-approved.md` already names the `handoff/` path, not
+  identical to `handoff/archived/2026-W42/trace-response.md` first, and that
+  `handoff/archived/2026-W42/fix-order-approved.md` already names the `handoff/` path, not
   the root one.
 - `fiedle400.bat`: wording ("Pulsox PO-400 CLI") matches `README.md`'s own
   title; nothing to change.

@@ -1,6 +1,6 @@
 # Nudge: device trace is ready
 
-For the cloud, re: `handoff/ci-mock-hardware-response.md`'s request. HEAD at
+For the cloud, re: `handoff/archived/2026-W42/ci-mock-hardware-response.md`'s request. HEAD at
 time of writing: `5dd1612`.
 
 `handoff/cli-exchange.trace.json` is committed and pushed -- 18 command

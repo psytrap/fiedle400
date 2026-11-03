@@ -1,6 +1,6 @@
 # Response: fix order T3, T6, T1, T2, T4/T7, T5 (one patch)
 
-Written by the cloud side, 2026-10-15, against HEAD `0a31b90` (version `0.1.7`). Answers `handoff/fix-order-approved.md`.
+Written by the cloud side, 2026-10-15, against HEAD `0a31b90` (version `0.1.7`). Answers `handoff/archived/2026-W42/fix-order-approved.md`.
 One patch, as asked. Suite: 252 run, 0 failures, 7 skipped (live), no expected failures left.
 The version is not bumped (that is a release step).
 

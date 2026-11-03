@@ -53,7 +53,7 @@ that was hardware-tested is not the one that ships.
 
 ## 2. Linux-only live tests still fail on Windows
 
-Briefed in full in `handoff/windows-live-tests.md`, with confirmed output
+Briefed in full in `handoff/archived/2026-W42/windows-live-tests.md`, with confirmed output
 appended. Not yet fixed. Summary:
 
 - `test_01` asserts a `/dev/hidraw` path from a sysfs-only scan → fails
@@ -95,7 +95,7 @@ reached when stdin is not a TTY; keep those tests passing.
 
 ## 5. The intermittent suite failure was contained, never explained
 
-See `handoff/flaky-suite.md` and your own `flaky-suite-response.md`. Patch 0004
+See `handoff/archived/2026-W42/flaky-suite.md` and your own `flaky-suite-response.md`. Patch 0004
 made the live tests opt-in and added a lock, which removed the nondeterminism.
 The original one-off failure never reproduced — 30 consecutive live runs clean.
 

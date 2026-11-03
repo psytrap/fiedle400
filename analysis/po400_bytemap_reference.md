@@ -8,7 +8,7 @@ Dieses Dokument enthält die vollständige, bit- und bytegenaue Spezifikation al
 > (`fiedle400` am echten Gerät) abgeglichen; die Korrekturen in §§1-13 entsprechen denen in
 > `PROTOCOL.md`. Der Abschnitt zum manuellen Aufnahme-Protokoll ist bewusst **unverändert**
 > geblieben; seine offenen Abweichungen zu `PROTOCOL.md` §3.14 stehen in
-> `handoff/docs-review-response.md`.
+> `handoff/archived/2026-W42/docs-review-response.md`.
 
 ---
 
