@@ -12,16 +12,23 @@ model (PROTOCOL.md §5). In protocol B (PO-250, CMS50F; `docs/PROTOCOL_B.md`) it
 CMS50F 3.7 download from 2014 (`tests/fixtures/cms50f37-download.trace.json`): the PO-250 speaks
 that protocol (kaivol/pulox, T-105). Both are the best guess, not a proof that a real model works.
 
-| Model (jumper) | 0xF1 / A8 model string | Storage it answers for |
-| :--- | :--- | :--- |
-| PO-250, protocol B (none, `DEFAULT_MODEL`) | `EMU-250` (placeholder; the real one is unknown) | One recording, 2014-08-03 03:18:48: `A4` announces 20,904 samples, `A6` sends the 8,202 the capture holds, then goes quiet (fiedle400 warns about the rest) |
-| PO-300 (D6 to GND) | `EMU-300` (placeholder; the real one is unknown) | Auto: one 214 s recording; Manual: one 59 s recording |
-| PO-400 (D7 to GND) | `50F` | as the PO-300 |
-| CMS50F 3.7, protocol B (D8 to GND) | `CMS50F` | as the PO-250, but fiedle400 refuses it by its model string and never gets to `sessions`/`download` |
+**Model selection is by sketch, not jumper** (psytrap, 2026-11-04: jumpers were error-prone to
+keep straight across sessions). Flash the sketch matching the model you want:
 
-D6 wins over D7, D7 over D8. Since T-105 the PO-250 speaks protocol B, not the PO-400's
-protocol C with a Manual-only list (the earlier `EMU-250` mode), and the "PO-300 protocol B"
-guess on D6+D8 became the plain CMS50F on D8 (the PO-300 question is T-108).
+| Sketch | Model | 0xF1 / A8 model string | Storage it answers for |
+| :--- | :--- | :--- | :--- |
+| `serial-emulator/` (the default) | PO-250, protocol B | `EMU-250` (placeholder; the real one is unknown) | One recording, 2014-08-03 03:18:48: `A4` announces 20,904 samples, `A6` sends the 8,202 the capture holds, then goes quiet (fiedle400 warns about the rest) |
+| `serial-emulator-po300/` | PO-300 | `EMU-300` (placeholder; the real one is unknown) | Auto: one 214 s recording; Manual: one 59 s recording |
+| `serial-emulator-po400/` | PO-400 (as captured, over serial) | `50F` | as the PO-300 |
+| `serial-emulator-cms50f/` | CMS50F 3.7, protocol B | `CMS50F` | as the PO-250, but fiedle400 refuses it by its model string and never gets to `sessions`/`download` |
+
+Each derivative sketch is a thin wrapper (`#define DEFAULT_MODEL ...` plus the same
+fault-jumper/setup/loop code) over the shared `emulator.h` core, reached via a symlink in the
+sketch's own folder (`emulator.h`, `trace_data.h` -- Arduino's build only looks inside the
+sketch folder itself, not `../`, so a plain relative include doesn't work here). Since T-105 the
+PO-250 speaks protocol B, not the PO-400's protocol C with a Manual-only list (the earlier
+`EMU-250` mode); the PO-300 question (whether it is really protocol B too) is T-108, not yet
+answered by this emulator either way.
 
 In protocol B the emulator answers `A7`/`A2` (`0C 80`), `AD`, `A8`, `A3`, `A4`, `A5` and `A6`
 for recording #1, every byte with bit 7 set and without padding, as the capture shows. The
@@ -47,14 +54,19 @@ on serial ports anyway (T-104).
 
 ## Flash
 
-Arduino IDE: open `serial-emulator/serial-emulator.ino`, board "Arduino Uno", Upload.
-Or with arduino-cli:
+Arduino IDE: open `serial-emulator/serial-emulator.ino` (or one of the model folders below),
+board "Arduino Uno", Upload. Or with arduino-cli, naming the folder for the model you want
+(default PO-250 shown; swap in `serial-emulator-po300`, `serial-emulator-po400` or
+`serial-emulator-cms50f` for the others):
 
 ```
 arduino-cli core install arduino:avr
 arduino-cli compile --fqbn arduino:avr:uno hardware/serial-emulator
 arduino-cli upload  --fqbn arduino:avr:uno -p /dev/ttyACM0 hardware/serial-emulator
 ```
+
+For a derivative, point at its own folder instead, e.g.
+`hardware/serial-emulator/serial-emulator-po300`.
 
 Before T-105 it used 5.8 KB of flash and 466 bytes of RAM (checked with avr-gcc 7.3 and the
 Arduino AVR core 1.8.6, not with arduino-cli). The protocol-B data adds about 4.1 KB of flash and
@@ -89,12 +101,15 @@ An Uno is already a USB-serial device (a genuine one is USB CDC ACM through its 
 clone a CH340), so nothing has to be faked on the USB side. It keeps its stock USB ID, which
 is why the port is named with `-d`.
 
-On Linux the user needs the `dialout` group. Expected: with no jumper, `info` shows
-"Pulox PO-250 (protocol B, model string "EMU-250")" and an untested-model note, `sessions` one
-recording of 5h 48m 24s from 2014-08-03 03:18:48, and `download` 8,202 records with a warning
-that 12,702 are missing (the capture ends there; about 2 s on the line). With D6 `info` shows
-"Unknown PO-x00 family device" (`EMU-300`), with D7 model `50F`; `download` gets 214 records.
-With D8 every command stops at the connect: "Found a CMS50F device ... only for the PO-250".
+On Linux the user needs the `dialout` group. Expected, with the default PO-250 sketch flashed:
+`info` shows "Pulox PO-250 (protocol B, model string "EMU-250")" and an untested-model note,
+`sessions` one recording of 5h 48m 24s from 2014-08-03 03:18:48, and `download` 8,202 records
+with a warning that 12,702 are missing (the capture ends there; about 2 s on the line). Flash
+`serial-emulator-po300` instead and `info` shows "Unknown PO-x00 family device" (`EMU-300`);
+flash `serial-emulator-po400` and `info` shows model `50F`; either way `download` gets 214
+records. Flash `serial-emulator-cms50f` and every command stops at the connect: "Found a CMS50F
+device ... only for the PO-250". Verified against a real Arduino Uno R3 for all four sketches
+(psytrap, 2026-11-04).
 
 ## Without a board
 
@@ -112,7 +127,8 @@ fiedle400 info -d /tmp/ttyACM-emu
 ## Changing the data
 
 `trace_data.h` is generated from the fixtures: `python3 hardware/serial-emulator/make_trace.py`.
-The test fails when it is stale. A different model string: `MODEL_STRING_OVERRIDE` in the sketch.
+The test fails when it is stale. A different model string: `MODEL_STRING_OVERRIDE` in whichever
+sketch you are flashing (each derivative has its own copy of that line).
 
 ## What it found (2026-10-29, on the PC build)
 
@@ -138,3 +154,16 @@ The test fails when it is stale. A different model string: `MODEL_STRING_OVERRID
   but not with `"EMU-300"` (checksum `0x38` / `'8'`, alphanumeric). Fixed; regression test
   `tests/test_serial_port.py::TestModelStringChecksumByteIsNotPartOfTheModel`.
 - `clear` correctly refused on the serial port ("download-only in fiedle400").
+
+## What it found (2026-11-04, model jumpers replaced with derivative sketches)
+
+- Split the old D6/D7/D8 model jumper into three sibling sketches
+  (`serial-emulator-po300/`, `serial-emulator-po400/`, `serial-emulator-cms50f/`), each sharing
+  `emulator.h`/`trace_data.h` with the default `serial-emulator/` (PO-250) sketch via a symlink
+  in its own folder -- a plain `../emulator.h` include does not work because `arduino-cli`'s
+  build only looks inside the sketch folder itself.
+- All four compile clean on `arduino:avr:uno` (about 9.8 KB flash, 503 bytes RAM each) and were
+  flashed and run against the real Arduino Uno R3 at `/dev/ttyACM1` in turn: PO-250 (`info`,
+  `sessions` 1×20,904 samples announced/8,202 received, `download`, `clear` correctly refused),
+  PO-300 (`EMU-300`, 214 records), PO-400 (`50F`, 214 records), CMS50F (correctly refused at
+  connect). Matches the mock/PC-build behaviour exactly.

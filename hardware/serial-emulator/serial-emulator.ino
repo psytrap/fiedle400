@@ -2,10 +2,14 @@
 // the mock tests' FakeOximeter does, so the serial path can be tried on a real USB-serial port.
 // See README.md in this folder for flashing and running fiedle400 against it.
 //
-// Jumpers to GND (read before every burst of commands, so they can be changed while it runs):
+// This is the PO-250 (protocol B, DEFAULT_MODEL) sketch. The PO-300, PO-400 and CMS50F 3.7
+// models are separate sketches next to this one (serial-emulator-po300/, -po400/, -cms50f/) --
+// flash the one matching the model you want, instead of a jumper (psytrap, 2026-11-04: jumpers
+// were error-prone to keep straight across sessions).
+//
+// Fault jumpers to GND (read before every burst of commands, so they can be changed while it
+// runs; the same four pins in every derivative sketch):
 //   D2 silent   D3 bad checksum   D4 split reports   D5 unpadded reports
-//   No model jumper: PO-250 in protocol B (DEFAULT_MODEL, T-105)
-//   D6 PO-300   D7 PO-400   D8 CMS50F 3.7 (protocol B; fiedle400 refuses it). D6 wins over D7 over D8.
 // The LED (D13) toggles on every command and stays lit after a destructive one.
 
 #include "emulator.h"
@@ -17,7 +21,6 @@
 // #define MODEL_STRING_OVERRIDE "50F"
 
 static const uint8_t FAULT_PINS[] = {2, 3, 4, 5};
-static const uint8_t PIN_PO300 = 6, PIN_PO400 = 7, PIN_CMS50F = 8;
 
 static Emulator emu;
 static bool led, erased;
@@ -33,34 +36,28 @@ void emu_activity(bool destructive) {
   digitalWrite(LED_BUILTIN, (led || erased) ? HIGH : LOW);
 }
 
-static void read_jumpers() {
+static void read_fault_jumpers() {
   uint8_t faults = DEFAULT_FAULTS;
   for (uint8_t i = 0; i < sizeof(FAULT_PINS); i++)
     if (digitalRead(FAULT_PINS[i]) == LOW) faults |= 1 << i;
   emu.faults = faults;
-  emu.model = digitalRead(PIN_PO300) == LOW ? EMU_PO300
-            : digitalRead(PIN_PO400) == LOW ? EMU_PO400
-            : digitalRead(PIN_CMS50F) == LOW ? EMU_CMS50F
-            : DEFAULT_MODEL;
 }
 
 void setup() {
   for (uint8_t i = 0; i < sizeof(FAULT_PINS); i++) pinMode(FAULT_PINS[i], INPUT_PULLUP);
-  pinMode(PIN_PO300, INPUT_PULLUP);
-  pinMode(PIN_PO400, INPUT_PULLUP);
-  pinMode(PIN_CMS50F, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
+  emu.model = DEFAULT_MODEL;
 #ifdef MODEL_STRING_OVERRIDE
   emu.model_override = MODEL_STRING_OVERRIDE;
 #endif
   Serial.begin(115200);  // 8N1, as SpO2.exe opens the port (PROTOCOL.md §5)
-  read_jumpers();
+  read_fault_jumpers();
 }
 
 void loop() {
   bool idle = true;
   while (Serial.available()) {
-    if (idle) read_jumpers();
+    if (idle) read_fault_jumpers();
     idle = false;
     emu.feed(Serial.read(), millis());
   }
