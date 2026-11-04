@@ -1,8 +1,9 @@
 # CMS50 family: download compatibility (T-103)
 
 **Scope (psytrap, 2026-10-29):** fiedle400 supports the PO-400, PO-250 and PO-300 only. The CMS50
-protocols below are documented for reference and not implemented; protocol-B support is on hold
-(T-105). The PO-400's own protocol is in [`PROTOCOL.md`](PROTOCOL.md).
+protocols below are documented for reference and not implemented, except protocol B for the
+PO-250 (T-105, v0.5.9: download only, untested on a real PO-250; every device naming itself
+CMS50… is still refused). The PO-400's own protocol is in [`PROTOCOL.md`](PROTOCOL.md).
 
 Desk research, 2026-10-29; no device on the project was used. Only stored-recording download is covered (no live
 mode, no file formats). Each claim carries its evidence:
@@ -213,7 +214,7 @@ mode, no file formats). Each claim carries its evidence:
 | CMS50I, CMS50IW | PO-400 (Forum: luke.lol; does not fit psytrap's PO-400, which is HID and reports `"50F"`, Cap) | As CMS50F 3.7 (Src; Forum) | unknown | B with PI, code `09` (Src) | Yes (Src; Forum) | Protocol B |
 | CMS50H | unknown | unknown | unknown | B (Src: model-string check) | Yes (Src) | Protocol B |
 | PO-400 (psytrap's) | -- | HID `28E9:028A` (Cap) | SpO2 Assistant 3.1.0.4 (Cap) | C (Cap) | No, HID (finding 5) | Nothing, supported |
-| PO-250 | -- | serial, `COM` port, per a working open-source implementation (finding 10) | SpO2 Assistant (T-098: manual, forum); a third-party Rust CLI also exists (finding 10) | **leaning protocol B**: a real, working open-source implementation (`kaivol/pulox`, finding 10) was built and used against a named PULOX PO-250 over serial, speaking protocol B/V7.0 -- stronger evidence than finding 1's single secondhand forum report for protocol C. Not device-confirmed by this project | unknown | Nothing beyond 0036 if protocol C with a scanned USB ID (T-101); B support is T-105, on hold, now vendor-documented (finding 9) and independently implemented (finding 10) |
+| PO-250 | -- | serial, `COM` port, per a working open-source implementation (finding 10) | SpO2 Assistant (T-098: manual, forum); a third-party Rust CLI also exists (finding 10) | **leaning protocol B**: a real, working open-source implementation (`kaivol/pulox`, finding 10) was built and used against a named PULOX PO-250 over serial, speaking protocol B/V7.0 -- stronger evidence than finding 1's single secondhand forum report for protocol C. Not device-confirmed by this project | unknown | Nothing beyond 0036 if protocol C with a scanned USB ID (T-101); B support is T-105, done for download in v0.5.9 (untested on a real PO-250), now vendor-documented (finding 9) and independently implemented (finding 10) |
 | PO-300 | CMS50EW, per a 2017 forum owner report (finding 6) and the name of the repo hosting the vendor protocol doc (finding 9); CMS-50EA per an eBay listing photo, unconfirmed (finding 8a) | unknown; non-standard cable (T-098); one eBay listing photo shows `COM3` (finding 8a); Bluetooth as a virtual COM port on some units, per the vendor protocol doc and the PO-300 manual (finding 9) | unknown; conflicting direct reports name both SpO2 Assistant and Smart Device Assistant (finding 6) | **leaning protocol B**: finding 9's vendor protocol doc (hosted in a `Contec-CMS50EW` repo) matches finding 1's protocol B exactly, and resolves finding 6's two "contradicting" owner reports without needing different hardware (SpO2 Assistant 2.x speaks B, 3.1.0.4 doesn't -- finding 1). Still not device-confirmed for any specific PO-300 unit. The PO-300=CMS50E mapping some forums cite is itself unconfirmed (finding 7), though finding 8a's `50E(A)` device name is a lead connecting the PO-300 to the specific CMS-50EA model finding 7 flagged as otherwise untracked | unknown | C: nothing beyond 0036; B: on hold (T-105), now vendor-documented (finding 9); A: not implemented |
 | PO-200 | CMS50D+ (Forum: luke.lol) | as CMS50D+ (inferred) | SpO2 Review (inferred) | A (inferred) | Yes if it is a CMS50D+ (inferred) | Protocol A |
 
@@ -238,12 +239,10 @@ Contec's older PC program for protocol-A devices (Forum: cpaptalk, apneaboard wi
 
 Not planned (scope above). For the record:
 
-- **Protocol B** (CMS50F 3.7, CMS50I, CMS50H, likely PO-300): on hold as T-105. The serial
-  backend already uses B's line settings; it would need B's command module and reply parser, a
-  probe by the `A8` reply, and its own read-only engine. A draft that does this and replays the
-  capture in §6 is kept in `drafts/T-105-cms50f37-engine.diff`. Finding 9's vendor protocol doc
-  (not yet saved into the repo) would remove most of the remaining guesswork if T-105 is picked
-  up.
+- **Protocol B** (CMS50F 3.7, CMS50I, CMS50H, likely PO-300): built for the PO-250 only
+  (T-105, v0.5.9, `PROTOCOL_B.md` §7): command module and reply parser, a discovery probe after
+  the PO-x00 probe, and a read-only engine that replays the capture in §6. The CMS50 models are
+  refused by their `A8` model string; the PO-300 question is T-108.
 - **Protocol A** (CMS50D+, CMS50E, older CMS50F): different line settings, no listing (one pushed
   recording), no clock.
 - **Protocol C on other models**: the PO-250 and PO-300, built in 0036 (T-101, T-104); waiting for

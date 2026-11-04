@@ -8,6 +8,19 @@ keeps a short, live summary and points here for the full story.
 
 ---
 
+## 0.5.9 (2026-11-04)
+
+- **PO-250 download in protocol B (T-105), untested on a real PO-250.** A serial port that does
+  not answer the PO-400's commands is now asked in protocol B (`A7`, `A2`, `AD`, `A8`, all
+  read-only). If it answers there and does not name itself CMS50…, it is used as a PO-250 for
+  `info`, `sessions` and `download` (new `fiedle400/engine/cms50f37.py`, picked by
+  `serial_engine.make_engine`). CMS50F v3.7, CMS50I and CMS50H devices are still refused, now
+  by name. Erase, the clock and live mode are refused on the PO-250 and never sent.
+- Replay tests from the 2014 protocol-B capture (`tests/test_protocol_b.py`).
+- **Serial emulator:** the default model (no jumper) is now the PO-250 in protocol B, replaying
+  the capture's download; PO-300 moved to D6, PO-400 is D7, a CMS50F (refused) is D8.
+- `drafts/` removed: its T-105 draft is now the engine.
+
 ## 0.5.8 (2026-11-02)
 
 - **T-049:** `actions/checkout` and `actions/setup-python` bumped to `@v5`/`@v6` in both

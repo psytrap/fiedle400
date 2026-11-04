@@ -8,6 +8,7 @@ from .engine import (
     SerialByteStreamBuffer,
     SerialPacketDetector,
     SerialDeviceEngine,
+    Cms50F37Engine,
     DecodedPacket,
 )
 from .protocol import (
@@ -19,7 +20,18 @@ from .protocol import (
     decode_status_flags,
 )
 
+
+def make_engine(device, background_reader: bool = False):
+    """The engine for the protocol the connect probe found: `Cms50F37Engine` for a PO-250 in
+    protocol B (T-105, PROTOCOL_B.md), `SerialDeviceEngine` for everything else."""
+    if getattr(device, "protocol", "po400") == "cms50f37":
+        return Cms50F37Engine(device, background_reader=background_reader)
+    return SerialDeviceEngine(device, background_reader=background_reader)
+
+
 __all__ = [
+    "make_engine",
+    "Cms50F37Engine",
     "SerialByteStreamBuffer",
     "SerialPacketDetector",
     "SerialDeviceEngine",

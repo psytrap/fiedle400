@@ -40,8 +40,14 @@ MODEL_STRINGS: Dict[str, str] = {
 }
 
 
-def describe_model(model_string: Optional[str]) -> str:
-    """Product name for a 0xF1 model string, never a guess (T-104)."""
+def describe_model(model_string: Optional[str], protocol: str = "po400") -> str:
+    """Product name for a 0xF1 model string, never a guess (T-104).
+
+    protocol "cms50f37" is a protocol-B device the serial probe accepted as a PO-250 (T-105:
+    it did not name itself CMS50*); its `A8` model string, if any, is shown raw."""
+    if protocol == "cms50f37":
+        reported = f"model string \"{model_string.strip()}\"" if model_string else "model not reported"
+        return f"Pulox PO-250 (protocol B, {reported})"
     if not model_string:
         return "PO-x00 family device (model not reported)"
     name = MODEL_STRINGS.get(model_string.strip().upper())
@@ -50,7 +56,11 @@ def describe_model(model_string: Optional[str]) -> str:
     return f"Unknown PO-x00 family device (model string \"{model_string.strip()}\")"
 
 
-def is_known_model(model_string: Optional[str]) -> bool:
+def is_known_model(model_string: Optional[str], protocol: str = "po400") -> bool:
+    """True only for a model fiedle400 was tested with on real hardware (the PO-250 in
+    protocol B is not, T-105)."""
+    if protocol != "po400":
+        return False
     return bool(model_string) and model_string.strip().upper() in MODEL_STRINGS
 
 

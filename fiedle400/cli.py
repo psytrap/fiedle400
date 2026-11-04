@@ -391,7 +391,11 @@ def command_detect(args) -> int:
         print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
+    if getattr(engine, "protocol", None) == "cms50f37":
+        engine.close()
+        print("Live mode is not supported for the PO-250 (protocol B); use 'sessions' and 'download'.")
+        return 1
     print("==================================================")
     print(f"  PO-400 SERIAL PACKET DETECTOR & DECODER ENGINE  (fiedle400 v{__version__})")
     print("==================================================")
@@ -487,7 +491,7 @@ def command_download(args):
         print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
     total_records = []
     try:
         total_records = engine.download_all_sessions(
@@ -514,7 +518,9 @@ def command_download(args):
         total_records, args.output, args.format.lower(), output_directory=target_directory
     )
     print(f"✅ Saved all session recordings to: {saved_path}")
-    alert = _probe_out_alert(total_records)
+    # The alert asks PO-400 owners to confirm its storage sentinel; a PO-250's "no reading"
+    # samples are a different, documented code (PROTOCOL_B.md), so it does not apply there.
+    alert = _probe_out_alert(total_records) if getattr(engine, "protocol", None) != "cms50f37" else None
     if alert:
         print(alert)
     if dump_path:
@@ -536,7 +542,7 @@ def command_sessions(args):
         print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
     try:
         sessions = engine.list_sessions(debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
@@ -590,7 +596,7 @@ def command_clear(args):
         device.close()
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
     try:
         ok = engine.clear_memory(session_id=session_id, debug=getattr(args, "verbose", 0))
     except KeyboardInterrupt:
@@ -638,8 +644,10 @@ def _model_lines(device, model_string) -> List[str]:
     vid = vid if isinstance(vid, str) and vid else "?"
     pid = pid if isinstance(pid, str) and pid else "?"
     transport = "USB serial" if getattr(device, "backend_name", None) == "serial" else "USB HID"
-    lines = [f"{protocol.describe_model(model_string)}  ({transport}, {vid}:{pid})"]
-    if not protocol.is_known_model(model_string):
+    wire = getattr(device, "protocol", "po400")
+    wire = wire if isinstance(wire, str) else "po400"
+    lines = [f"{protocol.describe_model(model_string, wire)}  ({transport}, {vid}:{pid})"]
+    if not protocol.is_known_model(model_string, wire):
         lines.append("This model has not been tested with fiedle400 yet. Downloading should work but is "
                      f"unconfirmed; please send the output of 'fiedle400 info' to {PROJECT_URL}/issues")
     return lines
@@ -668,7 +676,11 @@ def command_read_time(args):
         print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
+    if getattr(engine, "protocol", None) == "cms50f37":
+        print("\n🕒 Device clock: not read; the PO-250 (protocol B) has no clock query in fiedle400.")
+        engine.close()
+        return 0
     try:
         reply = engine.read_rtc_time(debug=getattr(args, "verbose", 0))
 
@@ -707,7 +719,11 @@ def command_set_time(args):
         print(f"Error connecting: {error}")
         return 1
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
+    if getattr(engine, "protocol", None) == "cms50f37":
+        engine.set_rtc_time(target_date_time)  # refuses, sends nothing (T-105)
+        engine.close()
+        return 1
     try:
         print(f"Sending Set-RTC command (0x83) for timestamp: {timestamp_text}...")
         engine.set_rtc_time(target_date_time, debug=getattr(args, "verbose", 0))
@@ -764,7 +780,7 @@ def _run_backend_checks(backend: str, device_path_arg: Optional[str]) -> list:
     if node_path is None:
         return checks
 
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
     try:
         check("Handshake + device info", lambda: engine.read_device_info(debug=0)["device_info"].hardware_id)
         check("Clock query answered", lambda: (engine.read_rtc_time(debug=0) or b"").hex(" "))
@@ -834,7 +850,7 @@ def command_info(args):
         return 1
 
     meta = device.get_descriptor_info()
-    engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+    engine = serial_engine.make_engine(device, background_reader=True)
     try:
         result = engine.read_device_info(debug=getattr(args, "verbose", 0))
         info = result["device_info"]
@@ -1022,16 +1038,19 @@ def run_interactive_wizard(args) -> int:
             print(f"[✗] Error connecting to device: {error}")
             return 1
 
-        engine = serial_engine.SerialDeviceEngine(device, background_reader=True)
+        engine = serial_engine.make_engine(device, background_reader=True)
         try:
             # 1. Progressive hardware handshake & active user
-            device.write_report(Commands.unlock_handshake())
-            time.sleep(0.15)
-            # T-088: goes through the engine (not a raw dev.read_report) -- once the background
-            # reader thread is running, it's the fd's only reader; anything else touching
-            # dev.read_report() directly here would race with it.
-            negotiate_reply = engine.read_raw_report()
-            active_user_id = Parsers.parse_user_id(negotiate_reply) if negotiate_reply else 1
+            if getattr(engine, "protocol", None) == "cms50f37":
+                active_user_id = engine.unlock_handshake(debug=verbose_level)  # protocol B's own hello (T-105)
+            else:
+                device.write_report(Commands.unlock_handshake())
+                time.sleep(0.15)
+                # T-088: goes through the engine (not a raw dev.read_report) -- once the background
+                # reader thread is running, it's the fd's only reader; anything else touching
+                # dev.read_report() directly here would race with it.
+                negotiate_reply = engine.read_raw_report()
+                active_user_id = Parsers.parse_user_id(negotiate_reply) if negotiate_reply else 1
             print(f"[✓] Hardware Handshake    : ACK (User #{active_user_id})")
 
             # 2. Progressive device info (model, firmware, serial)

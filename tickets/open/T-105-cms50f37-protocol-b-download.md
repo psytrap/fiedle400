@@ -8,7 +8,8 @@
 - **Scope & Relevant Files:**
   - `docs/CMS50_COMPATIBILITY.md` (findings 9, 10, 11), `docs/PROTOCOL_B.md` (the wire spec)
   - `fiedle400/serial_port.py` (probe), `fiedle400/protocol/cms50f37.py`, a new read-only engine
-  - `drafts/T-105-cms50f37-engine.diff`; the captures in `archive/capture/cms50f37-2014/` (not in git)
+  - the former `drafts/T-105-cms50f37-engine.diff` (ported and removed in v0.5.9); the captures in
+    `archive/capture/cms50f37-2014/` (not in git)
   - `hardware/serial-emulator/` (Arduino emulator: default model, PO-250 protocol-B download
     emulation, not just probe-and-refuse)
 
@@ -71,29 +72,58 @@ pattern T-101/T-104 already used for detection and download.
 ## Criteria
 
 - [x] psytrap lifts the hold (scoped to PO-250; see above)
-- [ ] Engine replays the 2014 capture: 1 recording, 2014-08-03 03:18:48, 20,904 samples
+- [x] Engine replays the 2014 capture: 1 recording, 2014-08-03 03:18:48, 20,904 samples
       announced, 8,202 received, warning for the missing rest
-- [ ] Probe order keeps PO-x00 devices on their own protocol (no B command reaches them unless the
+- [x] Probe order keeps PO-x00 devices on their own protocol (no B command reaches them unless the
       PO-x00 probe failed)
-- [ ] Model-string gate: a protocol-B device identifying itself as a PO-250 gets real support
+- [x] Model-string gate: a protocol-B device identifying itself as a PO-250 gets real support
       (`info`/`sessions`/`download`); any other protocol-B device (CMS50F/I/H, anything else)
       is still refused, same as today
-- [ ] Erase is never sent to a protocol-B device
-- [ ] Serial emulator defaults to PO-250 (no jumper needed); PO-300 moves to a jumper instead,
+- [x] Erase is never sent to a protocol-B device
+- [x] Serial emulator defaults to PO-250 (no jumper needed); PO-300 moves to a jumper instead,
       matching this ticket's PO-250-first priority (update `hardware/serial-emulator/README.md`'s
       table and pin assignments accordingly)
-- [ ] Serial emulator actually emulates protocol-B download for its PO-250 mode (real-time hello,
+- [x] Serial emulator actually emulates protocol-B download for its PO-250 mode (real-time hello,
       model query, session list/length/start-time, and `A6` sample data replayed from the 2014
       capture or an equivalent fixture) -- not just probe-and-refuse like the current D6+D8 mode
-- [ ] `fiedle400 download` against the updated emulator (PC build and, if practical, a genuine
+- [x] `fiedle400 download` against the updated emulator (PC build and, if practical, a genuine
       Uno) produces the same result as the capture replay test above
-- [ ] `README.md` lists the PO-250 as supported for download, same convention as T-061's PO-300
+- [x] `README.md` lists the PO-250 as supported for download, same convention as T-061's PO-300
       entry ("untested on real hardware" until an owner confirms)
 - [ ] An owner of a real PO-250 confirms a download (psytrap does not own one; this needs an
       outside owner, same as T-102's role for the PO-300 -- cross-check against `kaivol/pulox`'s
       documented behavior in the meantime, as a secondary, non-device validation)
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ## Execution Notes
 
-<!-- Filled in on completion -->
+**2026-11-04, cloud (patch 0040, v0.5.9).** Built; stays open until a PO-250 owner confirms.
+
+- **Gate** (psytrap, 2026-11-04: "option A"): the PO-250's `A8` string is unknown (kaivol/pulox
+  never sends `A8`; the 2014 `.spm` captures are a CMS50F, which answers `CMS50F`, `Contec` to
+  `A9` and its user-set name to `AA`). So a protocol-B device that does not name itself CMS50*,
+  or gives no model, is taken as a PO-250 and shown as "Pulox PO-250 (protocol B, model string
+  …)" with the untested-model note; CMS50F/I/H are refused by name
+  (`protocol/cms50f37.py::is_refused_model`).
+- **Discovery** (psytrap: "we send a test command that is specific to protocol of po-250"):
+  after the PO-x00 probe fails, `80`×7, `A7`, `A2` (kaivol's first command), `AD` (its second)
+  and `A8`. Protocol B only if `0C 80` and a `0x10` frame come back with bit 7 set on every byte
+  after the code (`split_frames(strict=True)`), so a foreign device's noise does not pass.
+  Note the PO-x00 unlock is itself `7D 81 A7 80…` + `7D 81 A2`, protocol B's hello.
+- **Engine** `fiedle400/engine/cms50f37.py` (ported from the draft with the T-106 names and the
+  `sequence` key; `serial_engine.make_engine` picks it): `info`, `sessions`, `download`. `A4` is
+  bytes, 2 per 1 Hz sample (kaivol: `length / 6` frames of 3), so no model-dependent divisor.
+  Refused and never sent: erase (`AE`), `AA`, clock, live mode; the wizard uses protocol B's
+  hello instead of the PO-x00 unlock; `read-time`/`set-time`/`detect` stop with a message; the
+  PO-400 storage-sentinel alert is skipped for PO-250 downloads.
+- **Tests:** `tests/test_protocol_b.py` (18): decoders on the capture, probe gate and order,
+  noise rejection, replay (1 recording, 2014-08-03 03:18:48, 20,904 announced, 8,202 received,
+  one warning, `A7` at the end), `-t` cap, refusals send nothing, CLI `info`/`sessions`/
+  `download -f csv`/`clear`/`set-time`/`detect`. Every test asserts `AA`/`AE` were never sent.
+- **Emulator:** default model is the PO-250 in protocol B, serving the capture (A3/A4/A5/AD
+  replies as captured, the 8,202 samples as 1,341 runs, about 4 KB of flash); D6 PO-300, D7
+  PO-400 (new), D8 CMS50F (refused). The protocol-C "EMU-250" Manual-only mode and the
+  "po300b" guess are gone. `fiedle400 download -d <pty> -f csv` against the PC build gives the
+  same 8,202 records and warning as the replay test (`tests/test_serial_emulator.py`). Not
+  compiled with avr-gcc or run on a genuine Uno (the cloud has neither).
+- Still open: an outside PO-250 owner (the last unticked criterion).

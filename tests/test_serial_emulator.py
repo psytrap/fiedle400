@@ -2,8 +2,9 @@
 
 The emulator's core (emulator.h) is built for the PC (host_sim.cpp) and served on a
 pseudo-terminal, so these tests run SerialBackend over real termios, as on a USB-serial port.
-They prove the sketch answers like the mock tests' FakeOximeter; how a real PO-250/PO-300
-answers is still open (T-102). Skipped without a C++ compiler or pty.
+They prove the sketch answers like the mock tests' FakeOximeter (protocol C) and like the
+2014 protocol-B capture (PO-250, T-105); how a real PO-250/PO-300 answers is still open
+(T-102, T-105). Skipped without a C++ compiler or pty.
 """
 
 import contextlib
@@ -21,7 +22,7 @@ EMULATOR_DIRECTORY = os.path.join(ROOT, "hardware", "serial-emulator")
 sys.path.insert(0, EMULATOR_DIRECTORY)
 import make_trace  # noqa: E402
 
-from fiedle400.engine import SerialDeviceEngine  # noqa: E402
+from fiedle400 import serial_engine  # noqa: E402
 from fiedle400.hid_driver import PulsoxHidDevice  # noqa: E402
 
 CXX = shutil.which("g++") or shutil.which("c++")
@@ -58,7 +59,7 @@ class TestHostSim(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             device.connect()
         self.addCleanup(device.close)
-        return device, SerialDeviceEngine(device)
+        return device, serial_engine.make_engine(device)
 
     def quietly(self, function, *args):
         with contextlib.redirect_stdout(io.StringIO()):
@@ -71,13 +72,20 @@ class TestHostSim(unittest.TestCase):
         self.assertEqual((session.manual, session.record_count), (False, 214))
         self.assertEqual(len(self.quietly(engine.download_session, session)), 214)
 
-    def test_po250_has_only_the_manual_recording_and_a_placeholder_model(self):
+    def test_po250_speaks_protocol_b_and_downloads_like_the_replay_test(self):
+        """The default model (no jumper): matches tests/test_protocol_b.py's capture replay."""
         device, engine = self.connect("po250")
-        self.assertEqual(device._backend.model_string, "EMU-250")
+        self.assertEqual((device.protocol, device.model_string), ("cms50f37", "EMU-250"))
         (session,) = self.quietly(engine.list_sessions)
-        self.assertEqual((session.manual, session.record_count), (True, 59))
+        self.assertEqual((session.record_count, session.timestamp.isoformat()), (20904, "2014-08-03T03:18:48"))
         records = self.quietly(engine.download_session, session)
-        self.assertEqual(sum(record["spo2"] is not None for record in records), 14)
+        self.assertEqual(len(records), 8202)
+        self.assertEqual(len(engine.download_warnings), 1)
+
+    def test_po300_is_on_a_jumper_and_speaks_protocol_c(self):
+        device, engine = self.connect("po300")
+        self.assertEqual((device.protocol, device.model_string), ("po400", "EMU-300"))
+        self.assertEqual(len(self.quietly(engine.list_sessions)), 1)
 
     def test_a_silent_port_fails_the_probe(self):
         device, _ = self.connect(faults="silent")
@@ -87,13 +95,12 @@ class TestHostSim(unittest.TestCase):
         device, _ = self.connect(faults="badsum")
         self.assertIsNone(device._backend.model_string)
 
-    def test_a_protocol_b_device_is_refused_not_misdetected(self):
-        """po300b: a real PO-300 owner's unit answered only Smart Device Assistant, not SpO2
-        Assistant (CMS50_COMPATIBILITY.md finding 6); this is that guess, emulated far enough to
-        prove the probe-and-refuse path (T-105, detection only) over a real compiled binary and a
-        pseudo-terminal, not just the Python-level fakes in test_serial_port.py."""
+    def test_a_cms50f_is_refused_by_its_model_string(self):
+        """cms50f: the same protocol and data as the PO-250, but the device names itself
+        CMS50F, so fiedle400 refuses it (T-105) -- over a real compiled binary and a
+        pseudo-terminal, not just the Python-level fakes in test_protocol_b.py."""
         link = os.path.join(self.tmp, "ttyACM-emu")
-        simulator = subprocess.Popen([self.binary, link, "po300b"], stdout=subprocess.PIPE,
+        simulator = subprocess.Popen([self.binary, link, "cms50f"], stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, text=True)
         self.addCleanup(simulator.stdout.close)
         self.addCleanup(simulator.wait)
@@ -104,8 +111,7 @@ class TestHostSim(unittest.TestCase):
             with self.assertRaises(RuntimeError) as context:
                 device.connect()
         self.assertIn("CMS50F", str(context.exception))
-        self.assertIn("protocol B", str(context.exception))
-
+        self.assertIn("only for the PO-250", str(context.exception))
 
 if __name__ == "__main__":
     unittest.main()

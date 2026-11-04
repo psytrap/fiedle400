@@ -6,10 +6,12 @@
 //   void emu_delay_ms(uint16_t ms);
 //   void emu_activity(bool destructive);              // a command arrived (LED)
 //
-// What it answers is the PO-400's recorded replies (trace_data.h, the same traces the mock
-// tests replay). For the PO-250 and PO-300 these are assumptions: SpO2 Assistant sends the
-// PO-400's commands to every model (PROTOCOL.md §5), but no reply of those models was ever
-// captured (T-102).
+// What it answers in protocol C (PO-400, PO-300) is the PO-400's recorded replies
+// (trace_data.h, the same traces the mock tests replay). For the PO-300 these are assumptions:
+// SpO2 Assistant sends the PO-400's commands to every model (PROTOCOL.md §5), but no reply of
+// that model was ever captured (T-102). In protocol B (PO-250, CMS50F; T-105) it replays a real
+// CMS50F 3.7 download from 2014 (tests/fixtures/cms50f37-download.trace.json); the PO-250 speaks
+// that protocol (kaivol/pulox), but no PO-250 reply was ever captured either.
 #pragma once
 
 #include <stdint.h>
@@ -35,25 +37,22 @@ struct EmuModel {
   const char *model_string;  // the 8 bytes of the 0xF1 reply (protocol C), or the A8 model
                               // string (protocol B); space padded either way
   uint8_t storage;           // protocol C only: which TRACE_* keys this model answers
-  bool protocol_b;           // speaks protocol B (CMS50F family, PROTOCOL_B.md) instead of C
+  bool protocol_b;           // speaks protocol B (PO-250, CMS50F family; PROTOCOL_B.md) instead of C
 };
 
-// PO-250 and PO-300 model strings are unknown (PROTOCOL.md §6.3); these are placeholders, so
-// fiedle400 shows them as "Unknown PO-x00 family device".
+// PO-250 and PO-300 model strings are unknown (PROTOCOL.md §6.3, T-105); these are
+// placeholders. fiedle400 shows "EMU-300" as "Unknown PO-x00 family device", and takes any
+// protocol-B device that does not name itself CMS50* as a PO-250 (psytrap, 2026-11-04).
 //
-// EMU_PO300_PROTOCOL_B: a real PO-300 owner's unit answered "Smart Device Assistant" but not
-// "SpO2 Assistant" (CMS50_COMPATIBILITY.md finding 6), and a disassembly of the former's bundled
-// SpO2.exe found it sends protocol B's command set (PROTOCOL_B.md §5.2) -- unconfirmed on a real
-// PO-300, but worth emulating so fiedle400's probe-and-refuse path (T-105, detection only) can be
-// tried against something other than a Python mock. Detection only: there is no protocol-B
-// download reply here, matching fiedle400 itself.
+// EMU_CMS50F: a CMS50F with firmware 3.7, as captured; same protocol and data as the PO-250, but
+// fiedle400 refuses it by its model string (T-105), so this proves the refusal end to end.
 static const EmuModel EMU_MODELS[] = {
   {"PO-400", "50F", TRACE_COMMON | TRACE_AUTO | TRACE_MANUAL, false},  // as captured
   {"PO-300", "EMU-300", TRACE_COMMON | TRACE_AUTO | TRACE_MANUAL, false},  // Auto+Manual like the PO-400
-  {"PO-250", "EMU-250", TRACE_COMMON | TRACE_MANUAL, false},  // one Manual recording, no Auto list
-  {"PO-300 (protocol B guess)", "CMS50F", 0, true},
+  {"PO-250 (protocol B)", "EMU-250", 0, true},  // one recording, replayed from the 2014 capture
+  {"CMS50F 3.7 (protocol B)", "CMS50F", 0, true},
 };
-enum { EMU_PO400 = 0, EMU_PO300 = 1, EMU_PO250 = 2, EMU_PO300_PROTOCOL_B = 3 };
+enum { EMU_PO400 = 0, EMU_PO300 = 1, EMU_PO250 = 2, EMU_CMS50F = 3 };
 
 static const uint8_t EMU_REPORT = 64;
 static const uint8_t EMU_GAP_MS = 3;  // a quiet line this long ends a burst of commands
@@ -208,52 +207,93 @@ class Emulator {
   }
 
   // Protocol B (PROTOCOL_B.md §2.1): `f` is one complete 9-byte frame, `f[0..1]` already
-  // checked as `7D 81`. Enough to answer fiedle400's detection-only probe (hello + model
-  // query); every other opcode, including `AE` (erase), gets no reply at all -- there is no
-  // download engine on either side of this (T-105 is on hold).
+  // checked as `7D 81`. Answers the hello, the model query and the read-only download commands
+  // (A3, A4, A5, AD as captured; A6 from B_SAMPLES) for recording #1 of user 1. Everything else,
+  // `AE` (erase) and `AA` (set/ask device id) included, gets no reply.
   void handle_b(const uint8_t *f) {
     commands++;
-    uint8_t op = f[2];
-    if (op == 0xAE) {  // erase: never answered, never performed
+    uint8_t op = f[2], session = f[4] & 0x7F;
+    if (op == 0xAE || op == 0xAA) {  // erase / device id: never answered, never performed
       destructive++;
       emu_activity(true);
       return;
     }
     emu_activity(false);
-    if (op == 0xA7 || op == 0xA2) {  // hello (stop stored / stop live stream) -> ack
+    if (op == 0xA7 || op == 0xA2) {  // hello (stop stored / stop live stream) -> 0C 80
       out_[0] = 0x0C;
-      out_[1] = 0x00;
-      send_report_b(2);
+      out_[1] = 0x80;
+      send_b(2);
       return;
     }
-    if (op == 0xA8) {  // model query -> one 0x02 frame (no continuation frame needed: <= 6 chars)
+    if (op == 0xA8) {  // model query -> two 0x02 frames of 6 characters, as the CMS50F sends
       const char *s = model_override ? model_override : EMU_MODELS[model].model_string;
-      out_[0] = 0x02;
-      out_[1] = 0x00;  // every byte below is plain ASCII, so no bit 7 to restore
-      out_[2] = 0x00;  // marker: this is the first (and only) model frame
-      for (uint8_t i = 0; i < 6; i++) out_[3 + i] = *s ? (uint8_t)*s++ : ' ';
-      send_report_b(9);
+      for (uint8_t part = 0; part < 2; part++) {
+        out_[0] = 0x02;
+        out_[1] = part ? 0x81 : 0x80;  // bit 0: data byte 0 has bit 7 set (0xFF marks the 2nd frame)
+        out_[2] = part ? 0xFF : 0x80;
+        for (uint8_t i = 0; i < 6; i++) out_[3 + i] = (*s ? (uint8_t)*s++ : ' ') | 0x80;
+        send_b(9);
+      }
       return;
     }
-    unanswered++;  // A9/A3/A4/A5/A6/...: not emulated, matching fiedle400's own non-support
+    if (op == 0xA6) {
+      if (session == 0) send_samples_b();
+      else unanswered++;
+      return;
+    }
+    if (session != 0 && (op == 0xA4 || op == 0xA5)) {  // only recording #1 exists
+      unanswered++;
+      return;
+    }
+    const uint8_t *e = B_REPLIES;
+    while (uint8_t opcode = pgm_read_byte(e)) {
+      uint8_t n = pgm_read_byte(e + 1);
+      if (opcode == op) {
+        for (uint8_t i = 0; i < n; i++) out_[i] = pgm_read_byte(e + 2 + i);
+        send_b(n);
+        return;
+      }
+      e += 2 + n;
+    }
+    unanswered++;  // A9, AB, B0, ...: not emulated
   }
 
-  // out_[0..len) holds a protocol-B reply without padding. No checksum fault to apply: protocol
-  // B has none (PROTOCOL_B.md §1.2).
-  void send_report_b(uint8_t len) {
-    if (faults & FAULT_SILENT) return;
-    uint8_t total = len;
-    if (!(faults & FAULT_UNPADDED)) {
-      memset(out_ + len, 0, EMU_REPORT - len);
-      total = EMU_REPORT;
+  // The A6 stream: 0x0F frames of three (SpO2, pulse) samples, high bits in byte 1. The device
+  // then just goes quiet: the capture holds 8,202 of the 20,904 samples A4 announces, so
+  // fiedle400 warns about the rest, as in its replay test.
+  void send_samples_b() {
+    uint8_t frame[6], k = 0;
+    const uint8_t *r = B_SAMPLES;
+    for (uint16_t run = 0; run < B_SAMPLE_RUNS; run++, r += 3) {
+      uint8_t spo2 = pgm_read_byte(r), pulse = pgm_read_byte(r + 1), count = pgm_read_byte(r + 2);
+      while (count--) {
+        frame[k++] = spo2;
+        frame[k++] = pulse;
+        if (k == 6) {
+          out_[0] = 0x0F;
+          out_[1] = 0x80;
+          for (uint8_t i = 0; i < 6; i++) {
+            if (frame[i] & 0x80) out_[1] |= 1 << i;
+            out_[2 + i] = frame[i] | 0x80;
+          }
+          send_b(8);
+          k = 0;
+        }
+      }
     }
+  }
+
+  // out_[0..len) holds one protocol-B frame. Sent as is: protocol-B devices do not pad their
+  // replies (the capture has none) and there is no checksum to break (PROTOCOL_B.md §1.2).
+  void send_b(uint8_t len) {
+    if (faults & FAULT_SILENT) return;
     if (faults & FAULT_SPLIT) {
-      uint8_t half = total / 2;
+      uint8_t half = len / 2;
       emu_write(out_, half);
       emu_delay_ms(20);
-      emu_write(out_ + half, total - half);
+      emu_write(out_ + half, len - half);
     } else {
-      emu_write(out_, total);
+      emu_write(out_, len);
     }
   }
 

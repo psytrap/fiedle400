@@ -6,11 +6,13 @@ Provides stream buffering, packet detection, and high-level device controller wo
 from .buffer import SerialByteStreamBuffer
 from .detector import SerialPacketDetector
 from .device import SerialDeviceEngine
+from .cms50f37 import Cms50F37Engine
 from ..protocol import DecodedPacket
 
 __all__ = [
     "SerialByteStreamBuffer",
     "SerialPacketDetector",
     "SerialDeviceEngine",
+    "Cms50F37Engine",
     "DecodedPacket",
 ]

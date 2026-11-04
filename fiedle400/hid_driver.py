@@ -562,6 +562,20 @@ class PulsoxHidDevice:
     def read_report(self, max_bytes: int = 64) -> Optional[bytes]:
         return self._backend.read_report(max_bytes)
 
+    def write_raw(self, data: bytes) -> int:
+        """Unpadded write; serial only (protocol B, PROTOCOL_B.md §1)."""
+        return self._backend.write_raw(data)
+
+    @property
+    def protocol(self) -> str:
+        """"cms50f37" for a protocol-B PO-250 found by the serial probe (T-105), else "po400"."""
+        return getattr(self._backend, "protocol", "po400")
+
+    @property
+    def model_string(self) -> Optional[str]:
+        """The model string the serial probe read, or None (HID, or no answer)."""
+        return getattr(self._backend, "model_string", None)
+
     def read_report_blocking(self, max_bytes: int = 64, timeout_seconds: float = 2.0) -> Optional[bytes]:
         return self._backend.read_report_blocking(max_bytes, timeout_seconds)
 

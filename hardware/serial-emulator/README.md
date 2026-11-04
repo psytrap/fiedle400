@@ -1,37 +1,34 @@
 # PO-x00 serial emulator (Arduino Uno)
 
 A stand-in for a USB-serial PO-250 / PO-300 (or a PO-400 over serial), to try fiedle400's
-serial backend (T-101, T-104) on a real serial port. It answers the probe, `info`, `sessions`
-and `download` with the same recorded replies the mock tests replay
-(`tests/fixtures/cli-exchange.trace.json`, `tests/fixtures/manual-download.trace.json`).
+serial backend (T-101, T-104, T-105) on a real serial port. It answers the probe, `info`,
+`sessions` and `download` with the same recorded replies the mock tests replay.
 
-**The replies are the PO-400's, not the PO-250's or PO-300's.** Nobody on the project has
-captured either of those models (T-102). SpO2 Assistant sends the PO-400's commands to every
-model (PROTOCOL.md §5), so this is the best guess, not a proof that a real PO-250/PO-300 works.
+**The replies are recorded from other devices, not from a PO-250 or PO-300.** Nobody on the
+project has captured either of those models (T-102). In protocol C (PO-300, PO-400) it answers
+with the PO-400's replies (`tests/fixtures/cli-exchange.trace.json`,
+`tests/fixtures/manual-download.trace.json`): SpO2 Assistant sends the PO-400's commands to every
+model (PROTOCOL.md §5). In protocol B (PO-250, CMS50F; `docs/PROTOCOL_B.md`) it replays a real
+CMS50F 3.7 download from 2014 (`tests/fixtures/cms50f37-download.trace.json`): the PO-250 speaks
+that protocol (kaivol/pulox, T-105). Both are the best guess, not a proof that a real model works.
 
 | Model (jumper) | 0xF1 / A8 model string | Storage it answers for |
 | :--- | :--- | :--- |
-| PO-300 (none, `DEFAULT_MODEL`) | `EMU-300` (placeholder; the real one is unknown) | Auto: one 214 s recording; Manual: one 59 s recording |
-| PO-250 (D7 to GND) | `EMU-250` (placeholder; the real one is unknown) | Manual only: one 59 s recording; the Auto list (`9C`) gets no answer |
-| PO-300, protocol B (D6 as above, D8 to GND) | `CMS50F` (a guess; T-105, detection only) | None: `fiedle400` probes and refuses this device, it never gets to `sessions`/`download` |
+| PO-250, protocol B (none, `DEFAULT_MODEL`) | `EMU-250` (placeholder; the real one is unknown) | One recording, 2014-08-03 03:18:48: `A4` announces 20,904 samples, `A6` sends the 8,202 the capture holds, then goes quiet (fiedle400 warns about the rest) |
+| PO-300 (D6 to GND) | `EMU-300` (placeholder; the real one is unknown) | Auto: one 214 s recording; Manual: one 59 s recording |
+| PO-400 (D7 to GND) | `50F` | as the PO-300 |
+| CMS50F 3.7, protocol B (D8 to GND) | `CMS50F` | as the PO-250, but fiedle400 refuses it by its model string and never gets to `sessions`/`download` |
 
-PO-400 has no jumper pin of its own -- it was only ever the "neither jumper"
-default. With `DEFAULT_MODEL` now `EMU_PO300`, getting PO-400 behaviour back
-needs a recompile (`DEFAULT_MODEL EMU_PO400`, or `MODEL_STRING_OVERRIDE
-"50F"`), not a jumper.
+D6 wins over D7, D7 over D8. Since T-105 the PO-250 speaks protocol B, not the PO-400's
+protocol C with a Manual-only list (the earlier `EMU-250` mode), and the "PO-300 protocol B"
+guess on D6+D8 became the plain CMS50F on D8 (the PO-300 question is T-108).
 
-**D8 (PO-300, protocol B):** emulates the other, contested possibility for the PO-300
-(`CMS50_COMPATIBILITY.md` finding 6/8, `PROTOCOL_B.md`) -- a real owner's unit was detected by
-"Smart Device Assistant" but not "SpO2 Assistant", which a disassembly of the former's bundled
-`SpO2.exe` explains: it sends protocol B's command set. With D8 grounded (and D7 open, so PO-300
-is the selected model), the emulator switches its *entire* command parser to protocol B
-(`PROTOCOL_B.md` §1) and answers only the hello (`A7`/`A2`) and model query (`A8`) that
-`fiedle400`'s probe sends -- `serial_port.py::probe_cms50f37` correctly identifies and refuses it
-rather than treating it as a PO-300. There is no protocol-B download here on either side: T-105
-(the actual download engine) is still on hold.
+In protocol B the emulator answers `A7`/`A2` (`0C 80`), `AD`, `A8`, `A3`, `A4`, `A5` and `A6`
+for recording #1, every byte with bit 7 set and without padding, as the capture shows. The
+samples are stored as runs of (SpO2, pulse, count) in `trace_data.h` (about 4 KB of flash).
+`AE` (erase) and `AA` are never answered.
 
-The real limits (PO-300: up to 99 Auto recordings; PO-250: one Manual recording of up to
-24 h) are not emulated: there is no captured data for them, and an Uno has 2 KB of RAM.
+The real limits (PO-300: up to 99 Auto recordings; PO-250: several recordings) are not emulated: there is no captured data for them, and an Uno has 2 KB of RAM.
 fiedle400 asks for the Manual header only when the Auto list is empty, so the PO-400 and
 PO-300 settings show the Auto recording only.
 
@@ -59,8 +56,10 @@ arduino-cli compile --fqbn arduino:avr:uno hardware/serial-emulator
 arduino-cli upload  --fqbn arduino:avr:uno -p /dev/ttyACM0 hardware/serial-emulator
 ```
 
-It uses 5.8 KB of flash and 466 bytes of RAM (checked with avr-gcc 7.3 and the Arduino AVR core
-1.8.6, not with arduino-cli). 115200 baud is reliable on a genuine Uno: the ATmega328P and the
+Before T-105 it used 5.8 KB of flash and 466 bytes of RAM (checked with avr-gcc 7.3 and the
+Arduino AVR core 1.8.6, not with arduino-cli). The protocol-B data adds about 4.1 KB of flash and
+no RAM beyond a few stack bytes; not rebuilt with avr-gcc since (the cloud has none), so check
+the size line when you upload. 115200 baud is reliable on a genuine Uno: the ATmega328P and the
 16U2 USB chip both run at 16 MHz and land on the same 117 647 baud. A CH340 clone runs at an
 exact 115 200, 2.1 % off, which is within 8N1's tolerance.
 
@@ -90,10 +89,12 @@ An Uno is already a USB-serial device (a genuine one is USB CDC ACM through its 
 clone a CH340), so nothing has to be faked on the USB side. It keeps its stock USB ID, which
 is why the port is named with `-d`.
 
-On Linux the user needs the `dialout` group. Expected: `info` shows model `50F` (or
-"Unknown PO-x00 family device" with `EMU-300`/`EMU-250` and an untested-model note);
-`download` gets 214 records (PO-400, PO-300) or 59 Manual records, 14 with a finger
-(PO-250).
+On Linux the user needs the `dialout` group. Expected: with no jumper, `info` shows
+"Pulox PO-250 (protocol B, model string "EMU-250")" and an untested-model note, `sessions` one
+recording of 5h 48m 24s from 2014-08-03 03:18:48, and `download` 8,202 records with a warning
+that 12,702 are missing (the capture ends there; about 2 s on the line). With D6 `info` shows
+"Unknown PO-x00 family device" (`EMU-300`), with D7 model `50F`; `download` gets 214 records.
+With D8 every command stops at the connect: "Found a CMS50F device ... only for the PO-250".
 
 ## Without a board
 
@@ -102,9 +103,9 @@ tested here (`tests/test_serial_emulator.py`):
 
 ```
 g++ -O2 -o /tmp/host_sim hardware/serial-emulator/host_sim.cpp
-/tmp/host_sim /tmp/ttyACM-emu po250 &        # faults: add e.g. "split,badsum"
-fiedle400 sessions -d /tmp/ttyACM-emu
-/tmp/host_sim /tmp/ttyACM-emu po300b &       # protocol-B PO-300 guess: fiedle400 should refuse it
+/tmp/host_sim /tmp/ttyACM-emu po250 &        # the default; or po300, po400; faults: e.g. "split"
+fiedle400 download -d /tmp/ttyACM-emu -f csv -o po250.csv
+/tmp/host_sim /tmp/ttyACM-emu cms50f &       # protocol B, named CMS50F: fiedle400 should refuse it
 fiedle400 info -d /tmp/ttyACM-emu
 ```
 

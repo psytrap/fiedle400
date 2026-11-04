@@ -33,7 +33,9 @@ as an HTML viewer page (default), `.SpO2`, CSV or JSON, and shows recordings alr
 | `engine/buffer.py` | Byte-stream buffer for serial-style reports. |
 | `engine/detector.py` | `SerialPacketDetector`: turns raw reports into `DecodedPacket` events (live stream frames and stored `0xED` series frames). |
 | `engine/device.py` | `SerialDeviceEngine`: the conversations with the device — handshake, list sessions, download one or all, set time, clear. |
-| `serial_engine.py` | Backward-compatible re-export of `engine`. Import from `fiedle400.engine` in new code. |
+| `engine/cms50f37.py`, `protocol/cms50f37.py` | `Cms50F37Engine`: read-only `info`/`sessions`/`download` for the PO-250 in protocol B (T-105, `PROTOCOL_B.md`), and that protocol's 9-byte commands, frame splitter and decoders. |
+| `serial_port.py` | `SerialBackend` (USB-serial, termios / Win32 COM) and the connect probe: PO-x00 protocol first, then protocol-B discovery (T-101, T-104, T-105). |
+| `serial_engine.py` | Backward-compatible re-export of `engine`, plus `make_engine` (the engine for the protocol the probe found). Import from `fiedle400.engine` in new code. |
 | `export.py` | Writes records as an HTML viewer page (default), `.SpO2` (Contec binary, see SPO2_FORMAT.md), CSV or JSON. |
 | `config.py` | Settings file (`%APPDATA%\fiedle400` or `$XDG_CONFIG_HOME/fiedle400`), working-directory resolution, `FIEDLE400_*` environment variables (legacy `PO400_*` still honoured). |
 | `console.py` | Windows console encoding and window handling. |

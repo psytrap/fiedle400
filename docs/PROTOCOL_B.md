@@ -175,7 +175,7 @@ detected by "Smart Device Assistant" (which bundles this build) but not by plain
 | Checksum | mod-128 | none |
 | Reply header | `>= 0x80` | `< 0x80`, with a separate high-bits byte |
 | Sample packing | nibble-packed deltas across frames | flat per-sample byte pairs |
-| Duration unit | seconds | half- or quarter-seconds (model-dependent) |
+| Duration unit | seconds | `A4`: bytes, 2 per 1 Hz sample (OSCAR: half-seconds on a CMS50F, quarter on a CMS50I) |
 | Erase | `9D 7F` | `AE` |
 | Opcode `AA` | `FLASH_CLEAR` | Device ID query |
 
@@ -183,13 +183,29 @@ detected by "Smart Device Assistant" (which bundles this build) but not by plain
 
 ## 7. Implementation Status in `fiedle400`
 
-- **Probe only** (`serial_port.py::probe_cms50f37`, `probe_any`): after the protocol-C probe
-  fails on a serial candidate, sends the flush (`80`×7) + hello (`A7`, `A2`) + model query (`A8`)
-  and, if a `02` reply names a `CMS50...` model, reports the device as protocol B and refuses to
-  use it (`SerialBackend._refuse_cms50f37`) rather than sending it any protocol-C command.
-- **No download engine.** `AE` (erase) has no code path at all; `A6` (download) is defined in
-  `protocol/cms50f37.py` for completeness of the spec above but is never called.
-- Lifting this (a real `Cms50f37Engine`, read-only info/sessions/download) is T-105, on hold.
+**The PO-250 is supported for download in this protocol (T-105, v0.5.9); untested on a real
+PO-250.** Every other protocol-B device is refused.
+
+- **Discovery** (`serial_port.py::probe_cms50f37`, `probe_any`): only after the protocol-C probe
+  fails on a serial port. Sends the flush (`80`×7), hello (`A7`, `A2`), user count (`AD`) and
+  model query (`A8`). The port counts as protocol B only if the hello comes back as `0C 80` and
+  `AD` as a `0x10` frame, every byte after the code with bit 7 set
+  (`split_frames(strict=True)`).
+- **Model gate** (`protocol/cms50f37.py::is_refused_model`, psytrap 2026-11-04): a device whose
+  `A8` reply starts with `CMS50` (CMS50F v3.7, CMS50I, CMS50H) is refused
+  (`SerialBackend._refuse_cms50f37`). Any other answer, or none, is taken as a PO-250 and shown as
+  "Pulox PO-250 (protocol B, …)" with its raw string. The PO-250's own string is unknown:
+  kaivol/pulox never sends `A8`, and the 2014 capture is a CMS50F.
+- **Engine** (`engine/cms50f37.py::Cms50F37Engine`, picked by `serial_engine.make_engine`):
+  `info` (`A8`, `A3`), `sessions` (`A3`, then `A4` and `A5` per recording) and `download` (`A6`
+  until the announced number of samples or 2 s of silence; a warning if fewer came, then `A7`).
+  `A4` is a length in bytes, 2 per 1 Hz sample (41,808 → 20,904 samples, 5 h 48 m 24 s in the
+  capture; kaivol reads `length / 6` frames of 3 samples).
+- **Refused, never sent:** erase (`AE`), `AA`, clock (`read-time`, `set-time`), live mode
+  (`detect`). `clear` is refused on every serial port anyway (T-104).
+- **Tests:** `tests/test_protocol_b.py` replays the 2014 capture (1 recording, 2014-08-03
+  03:18:48, 20,904 announced, 8,202 received, one warning); the serial emulator's default model
+  serves the same data over a real pseudo-terminal (`tests/test_serial_emulator.py`).
 
 ---
 

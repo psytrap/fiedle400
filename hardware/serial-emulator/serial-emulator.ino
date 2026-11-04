@@ -4,19 +4,20 @@
 //
 // Jumpers to GND (read before every burst of commands, so they can be changed while it runs):
 //   D2 silent   D3 bad checksum   D4 split reports   D5 unpadded reports
-//   D6 PO-300 (also DEFAULT_MODEL, i.e. neither jumper)   D7 PO-250
-//   D8 PO-300 speaks protocol B (CMS50F family) instead of C -- only with D6/no model jumper
+//   No model jumper: PO-250 in protocol B (DEFAULT_MODEL, T-105)
+//   D6 PO-300   D7 PO-400   D8 CMS50F 3.7 (protocol B; fiedle400 refuses it). D6 wins over D7 over D8.
 // The LED (D13) toggles on every command and stays lit after a destructive one.
 
 #include "emulator.h"
 
-#define DEFAULT_MODEL EMU_PO300
+#define DEFAULT_MODEL EMU_PO250
 #define DEFAULT_FAULTS 0
-// Uncomment to report another model string (at most 8 characters) in the 0xF1 reply.
+// Uncomment to report another model string (at most 8 characters in the 0xF1 reply,
+// 12 in the protocol-B A8 reply).
 // #define MODEL_STRING_OVERRIDE "50F"
 
 static const uint8_t FAULT_PINS[] = {2, 3, 4, 5};
-static const uint8_t PIN_PO300 = 6, PIN_PO250 = 7, PIN_PO300_PROTOCOL_B = 8;
+static const uint8_t PIN_PO300 = 6, PIN_PO400 = 7, PIN_CMS50F = 8;
 
 static Emulator emu;
 static bool led, erased;
@@ -37,18 +38,17 @@ static void read_jumpers() {
   for (uint8_t i = 0; i < sizeof(FAULT_PINS); i++)
     if (digitalRead(FAULT_PINS[i]) == LOW) faults |= 1 << i;
   emu.faults = faults;
-  uint8_t m = digitalRead(PIN_PO250) == LOW ? EMU_PO250
-            : digitalRead(PIN_PO300) == LOW ? EMU_PO300
+  emu.model = digitalRead(PIN_PO300) == LOW ? EMU_PO300
+            : digitalRead(PIN_PO400) == LOW ? EMU_PO400
+            : digitalRead(PIN_CMS50F) == LOW ? EMU_CMS50F
             : DEFAULT_MODEL;
-  if (m == EMU_PO300 && digitalRead(PIN_PO300_PROTOCOL_B) == LOW) m = EMU_PO300_PROTOCOL_B;
-  emu.model = m;
 }
 
 void setup() {
   for (uint8_t i = 0; i < sizeof(FAULT_PINS); i++) pinMode(FAULT_PINS[i], INPUT_PULLUP);
   pinMode(PIN_PO300, INPUT_PULLUP);
-  pinMode(PIN_PO250, INPUT_PULLUP);
-  pinMode(PIN_PO300_PROTOCOL_B, INPUT_PULLUP);
+  pinMode(PIN_PO400, INPUT_PULLUP);
+  pinMode(PIN_CMS50F, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
 #ifdef MODEL_STRING_OVERRIDE
   emu.model_override = MODEL_STRING_OVERRIDE;
