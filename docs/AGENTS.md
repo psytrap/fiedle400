@@ -118,7 +118,9 @@ preference; it follows from where the hardware is.
   only, so the cloud can neither run the hardware tests nor observe device
   behaviour.
 - **Local** has the device attached and is the only place hardware work can
-  happen.
+  happen. The sync is one-way: local sees none of the cloud's state. The only
+  path from cloud back to local is a delivered patch (see "Delivery" below),
+  applied by hand with `scripts/sync_patch.py apply`.
 
 Therefore:
 
