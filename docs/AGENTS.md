@@ -110,9 +110,13 @@ FIEDLE400_LIVE=1 python3 -m unittest tests.test_device_live   # real-device test
 Work on this project is split between two environments. The split is not a
 preference; it follows from where the hardware is.
 
-- **Cloud** has read-only access to this folder. It can read all code, but the
-  Pulsox PO-400 is physically attached to the local machine only, so the cloud
-  can neither run the hardware tests nor observe device behaviour.
+- **Cloud** has read-only access to this folder via a synced snapshot, not a git
+  remote -- it has no git history of this repo and no access to `origin`
+  (`T-014`'s Execution Notes). Committing locally is what the sync picks up;
+  `git push` to `origin` is unrelated and not needed for the cloud to see
+  anything. The Pulsox PO-400 is physically attached to the local machine
+  only, so the cloud can neither run the hardware tests nor observe device
+  behaviour.
 - **Local** has the device attached and is the only place hardware work can
   happen.
 
@@ -147,8 +151,10 @@ While working through several tickets, or when opening one, follow
 one-line model suggestion; the user always decides). On every ticket, keep the
 pending-steps checklist current as `.agents/rules/progress-blocks.md` describes.
 
-`tickets/` is tracked in git on purpose. Do NOT use `output/` for anything the
-cloud must read — it is gitignored and therefore invisible to a git-based sync.
+`tickets/` is tracked in git on purpose, so it survives into the synced snapshot
+the cloud reads (see above -- this is a folder sync, not a git remote). Do NOT
+use `output/` for anything the cloud must read — it is gitignored and
+therefore invisible to that sync.
 
 A ticket's `Description & Context` must carry what the cloud cannot observe for itself:
 
