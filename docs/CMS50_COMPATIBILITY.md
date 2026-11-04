@@ -86,11 +86,122 @@ mode, no file formats). Each claim carries its evidence:
    cited for a PO-200/300/400 = CMS50D+/E/F/I mapping, makes no such explicit claim when read
    directly -- it covers only the shared USB-serial chip and Mini-USB pinout. **Treat any
    "PO-300 = CMS50E" (or similar) claim as unconfirmed**, including finding 6's CMS50EW lead.
+8a. **A PO-300 eBay listing photo shows SpO2 Assistant connected over `COM3` with device name
+   `50E(A)`** (eBay.de item 155214698697, "B-WARE Pulsoximeter PULOX PO-300 schwarz", seller
+   Novidion -- Pulox's own German distributor, not a third-party reseller; item specifics list
+   Brand: CONTEC, corroborating the manufacturer finding below; checked 2026-11-04). Novidion
+   being the listing's own seller raises this above an ordinary reused-stock-photo risk, but it
+   is still a seller photo, not a device-side observation on this project, so treat it as strong
+   but unconfirmed. If accurate, two things follow: (a) **serial, not HID** -- contradicts the
+   PO-400-is-HID assumption behind finding 1's "family 1, the PO-400's own" guess for the PO-300,
+   consistent instead with protocol A or B's USB-serial link, or protocol C over `SpO2.exe`'s
+   serial fallback (`PROTOCOL.md` §5); (b) the device name `50E(A)` lines up with **CMS-50EA**,
+   the model finding 7 already flagged as listed separately on the Apnea Board wiki's CMS-50 list
+   but untracked in this matrix -- the first piece of evidence anywhere in this project's research
+   connecting that specific model to the PO-300.
+
+   **Checked against `SpO2.exe` directly (2026-11-04):** no `"50E"`, `"50EA"`, `"CMS50"` or
+   `"CMS-50"` string anywhere in the binary (`strings`, 8-bit and UTF-16LE); the only
+   Contec-related strings are the manufacturer name and its email templates. Consistent with
+   finding 1's existing conclusion that the model string is the device's own raw `0xF1` reply,
+   printed verbatim, not looked up from a client-side table (as `"50F"` is for the PO-400). Does
+   not confirm the screenshot, but rules out one way it could be wrong: there is no generic
+   placeholder label the software could have shown instead, so a genuine `50E(A)` would have to
+   come from an actual session with an actual device.
+
+   **Also checked against the two 2014 serial captures (finding 1's `Wire` source,
+   2026-11-04):** no `CMS50E`/`CMS50EA`/`50E` string (bit-7-set encoding, matching how
+   `CMS50F` is actually stored there) in either `.spm` file. Expected, not a contradiction --
+   those captures are from a CMS50F unit, not any PO-300, so there was never a `50E` reply to
+   find; this only confirms the search method works (it does find `CMS50F` and `Contec` exactly
+   where finding 1 says), not anything about the PO-300.
+
+   **Web check on "CMS50EA" as its own model, 2026-11-04:** thin, and undermines rather than
+   confirms it as a distinct product. No official Contec page, no FCC filing, and no independent
+   manual found for `CMS50EA` specifically -- only `CMS50E` (base model) and `CMS50EW` (the
+   wireless variant, with its own FCC ID `2ABOGCMS50EW`) have real documentation. The two retail
+   listings found under the `CMS50EA` name (an eBay listing, an ibspot.com listing) are both
+   dead -- the eBay one now redirects to an unrelated, sold-out CMS50I listing. The only place
+   `CMS50EA` is documented as a distinct name at all is the Apnea Board wiki bullet already cited
+   in finding 7, with no spec sheet behind it. Best current read: **`CMS50EA` is a minor
+   retail/regional SKU suffix of the base `CMS50E` line**, not an independently-specified model
+   -- parallel to how `CMS50EW` is `CMS50E` + wireless. That reframes 8a's `50E(A)` screenshot:
+   the `(A)` may be a software-shown sub-variant marker on a `CMS50E` base string, not
+   necessarily the device naming itself after a separately-documented "CMS50EA" product. Not
+   confirmed either way.
 8. **"Smart Device Assistant" is a separate, newer program from "SpO2 Assistant"** (Wiki, Forum):
    version 3.1.0.1, index code `01GS4016`, released for post-v3.7 CMS50F/H/I hardware (protocol
    B) that OSCAR cannot import directly. Not the same software RE analysed `archive/bruteforce/SpO2.exe`
    (SpO2 Assistant 3.1.0.4) above; not obtained or analysed by this project.
+9. **Protocol B is now vendor-documented, not just reverse-engineered** (2026-11-04). Contec's own
+   "Communication Protocol of Pulse Oximeter V7.0" (dated 2010-07-08) is published in a GitHub
+   repo named `Contec-CMS50EW`:
+   https://github.com/vats28/Contec-CMS50EW/blob/master/Communication%20protocol%20of%20pulse%20oximeter%20V7.0.pdf
+   -- its text is garbled by a shifted custom font encoding (every character code +29), not
+   corruption; decodes cleanly once accounted for. Every protocol-B fact this matrix had
+   previously only inferred from static analysis (`RE`) or a 2014 third-party wire capture
+   (`Wire`) matches the document exactly: 115200 8N1; `A3`/`A4`/`A5`/`A6` as segment
+   amount/length/start-time/data; `AE` as delete storage; the 9-byte control-command package
+   with the unused byte `0x00` adjusted to `0x80` after packing. It adds what wasn't previously
+   known: the full reason-code table (`0x00` completed, `0x01` shutdown, `0x02` exchange users,
+   `0x03` recording, `0x04` failed delete, `0x05` unsupported, `0xFF` unknown), the real-time
+   data package's exact bit layout (signal strength, searching flags, probe-error bit, PI
+   validity bit), and device-notice/time-sync semantics.
 
+   **Transport, confirming finding 6's `rfcomm` note:** the document states communication "uses
+   the COM port or virtual COM or wireless mode" and that "wireless transmission ignores COM
+   port transmission parameters" -- i.e. Bluetooth is presented to the host as a virtual serial
+   port (SPP), the same protocol B command set over a different transport, not a separate
+   protocol. This is consistent with (a) finding 8a's eBay screenshot, where SpO2 Assistant's
+   connection dialog has `USB`/`Bluetooth` checkboxes feeding into the same `Auto`/`Manual COM`
+   selector; (b) the PO-300 manual's symbol legend noting Bluetooth support on some units only
+   (session note, 2026-11-04); and (c) finding 6's CMS50F-with-Bluetooth protocol-B entry above.
+
+   **Repo name itself is circumstantial evidence for the PO-300.** `Contec-CMS50EW` matches
+   finding 6's 2017 forum owner, who identified their PO-300 specifically as a "Contec CMS 50
+   EW." Combined with finding 1's existing point that **SpO2 Assistant 2.x speaks protocol B but
+   3.1.0.4 does not**, finding 6's two "contradicting" owner reports no longer need two different
+   hardware revisions to explain: the 2017 owner (SpO2 Assistant worked) and the 2023 owner
+   (SpO2 Assistant failed, needed Smart Device Assistant) could both have the same protocol-B
+   hardware, just tested with different app versions years apart. This doesn't retract this
+   session's separate Bluetooth-manual-variant or missing-reset-hole findings (T-102) -- those
+   remain real, independent evidence of hardware variance -- it just removes them as the *only*
+   possible explanation for finding 6.
+
+   Not yet saved into the repo; the GitHub link is the only copy referenced so far.
+10. **A real, working implementation confirms V7.0 is what a PULOX device actually speaks --
+   specifically the PO-250** (2026-11-04). `kaivol/pulox` (GitHub, archived 2025-03-12; MIT
+   licensed) is a Rust CLI, `pulox.exe`, "to interact with pulox pulse oximeters" over a serial
+   port (default `COM3`). Its `contec-protocol` crate's own top-level doc comment reads
+   "Implements the communication protocol of Contec pulse oximeters (V7.0)" -- naming the exact
+   same spec version as finding 9's PDF -- and its `outgoing_package.rs` opcode table matches
+   finding 9's command table byte-for-byte (`0x7D` wrapper; `0xA1`.."`0xB2`). The README names a
+   real device directly: **"Not supported by PULOX PO-250"** for the `clear-storage` and
+   `sync-time` subcommands -- meaning the author built and exercised this against an actual
+   PULOX PO-250, not just the spec. This is markedly stronger evidence for the PO-250 than
+   finding 1's single secondhand forum report: a working open-source implementation, tested by
+   its own author against a named PULOX model, speaking exactly protocol B/V7.0 over serial.
+   Does not by itself confirm the PO-300 (the only PULOX model the README names is the PO-250),
+   but the project is named generically for "pulox pulse oximeters," not PO-250 specifically,
+   consistent with the whole PULOX line sharing this protocol family.
+   https://github.com/kaivol/pulox ;
+   https://kaivol.github.io/pulox/contec_protocol/index.html
+11. **Decision (psytrap, 2026-11-04): working assumption for the PO-300 is protocol B.** Not a
+   device confirmation -- psytrap's own words were "I guess Protocol B" -- but a deliberate call
+   to make given where the evidence has converged, drawn from three independent sources found in
+   this session:
+   - The **`Contec-CMS50EW` vendor protocol doc** (finding 9): Contec's own V7.0 spec, hosted in
+     a repo named for the model a 2017 forum owner identified their PO-300 as.
+   - The **`kaivol/pulox` Rust implementation** (finding 10): working code speaking the same
+     V7.0 protocol, confirmed against a real PULOX PO-250 -- not the PO-300 directly, but the
+     same PULOX line and the same vendor spec.
+   - The **`.spm` serial captures and their originating forum report** (finding 1's `Wire`
+     source, SleepyHead bug #207, and finding 6's two PO-300 owner reports): the 2014 capture
+     that first let this project reverse-engineer protocol B byte-for-byte, and the forum
+     evidence that a real PO-300 owner needed protocol-B software (Smart Device Assistant) to
+     connect at all.
+   Still open: no PO-300 has been read from directly by anyone on this project. Psytrap's own
+   PO-300 (T-102) is the first opportunity to actually confirm this rather than infer it.
 ## 3. Compatibility matrix
 
 | Model | Pulox name | USB link | Vendor software | Protocol | OSCAR downloads it? | What `fiedle400` would need |
@@ -102,8 +213,8 @@ mode, no file formats). Each claim carries its evidence:
 | CMS50I, CMS50IW | PO-400 (Forum: luke.lol; does not fit psytrap's PO-400, which is HID and reports `"50F"`, Cap) | As CMS50F 3.7 (Src; Forum) | unknown | B with PI, code `09` (Src) | Yes (Src; Forum) | Protocol B |
 | CMS50H | unknown | unknown | unknown | B (Src: model-string check) | Yes (Src) | Protocol B |
 | PO-400 (psytrap's) | -- | HID `28E9:028A` (Cap) | SpO2 Assistant 3.1.0.4 (Cap) | C (Cap) | No, HID (finding 5) | Nothing, supported |
-| PO-250 | -- | unknown | SpO2 Assistant (T-098: manual, forum) | unknown and contested: C if it works with a current SpO2 Assistant (3.1.0.4 speaks only C, finding 1) as one forum report suggests (T-098); B if only with Smart Device Assistant, as a 2023 PO-300 owner found for that model (finding 6) | unknown | Nothing beyond 0036 if protocol C with a scanned USB ID (T-101); B support is T-105, on hold |
-| PO-300 | -- | unknown; non-standard cable (T-098) | unknown; conflicting direct reports name both SpO2 Assistant and Smart Device Assistant (finding 6) | unknown and contested: two direct owner reports disagree (finding 6) -- one protocol C (or an unconfirmed CMS50EW variant), one protocol B via Smart Device Assistant. The PO-300=CMS50E mapping some forums cite is itself unconfirmed (finding 7) | unknown | C: nothing beyond 0036; B: on hold (T-105); A: not implemented |
+| PO-250 | -- | serial, `COM` port, per a working open-source implementation (finding 10) | SpO2 Assistant (T-098: manual, forum); a third-party Rust CLI also exists (finding 10) | **leaning protocol B**: a real, working open-source implementation (`kaivol/pulox`, finding 10) was built and used against a named PULOX PO-250 over serial, speaking protocol B/V7.0 -- stronger evidence than finding 1's single secondhand forum report for protocol C. Not device-confirmed by this project | unknown | Nothing beyond 0036 if protocol C with a scanned USB ID (T-101); B support is T-105, on hold, now vendor-documented (finding 9) and independently implemented (finding 10) |
+| PO-300 | CMS50EW, per a 2017 forum owner report (finding 6) and the name of the repo hosting the vendor protocol doc (finding 9); CMS-50EA per an eBay listing photo, unconfirmed (finding 8a) | unknown; non-standard cable (T-098); one eBay listing photo shows `COM3` (finding 8a); Bluetooth as a virtual COM port on some units, per the vendor protocol doc and the PO-300 manual (finding 9) | unknown; conflicting direct reports name both SpO2 Assistant and Smart Device Assistant (finding 6) | **leaning protocol B**: finding 9's vendor protocol doc (hosted in a `Contec-CMS50EW` repo) matches finding 1's protocol B exactly, and resolves finding 6's two "contradicting" owner reports without needing different hardware (SpO2 Assistant 2.x speaks B, 3.1.0.4 doesn't -- finding 1). Still not device-confirmed for any specific PO-300 unit. The PO-300=CMS50E mapping some forums cite is itself unconfirmed (finding 7), though finding 8a's `50E(A)` device name is a lead connecting the PO-300 to the specific CMS-50EA model finding 7 flagged as otherwise untracked | unknown | C: nothing beyond 0036; B: on hold (T-105), now vendor-documented (finding 9); A: not implemented |
 | PO-200 | CMS50D+ (Forum: luke.lol) | as CMS50D+ (inferred) | SpO2 Review (inferred) | A (inferred) | Yes if it is a CMS50D+ (inferred) | Protocol A |
 
 ## 4. SpO2 Review
@@ -127,10 +238,12 @@ Contec's older PC program for protocol-A devices (Forum: cpaptalk, apneaboard wi
 
 Not planned (scope above). For the record:
 
-- **Protocol B** (CMS50F 3.7, CMS50I, CMS50H): on hold as T-105. The serial backend already uses
-  B's line settings; it would need B's command module and reply parser, a probe by the `A8`
-  reply, and its own read-only engine. A draft that does this and replays the capture in §6 is
-  kept in `drafts/T-105-cms50f37-engine.diff`.
+- **Protocol B** (CMS50F 3.7, CMS50I, CMS50H, likely PO-300): on hold as T-105. The serial
+  backend already uses B's line settings; it would need B's command module and reply parser, a
+  probe by the `A8` reply, and its own read-only engine. A draft that does this and replays the
+  capture in §6 is kept in `drafts/T-105-cms50f37-engine.diff`. Finding 9's vendor protocol doc
+  (not yet saved into the repo) would remove most of the remaining guesswork if T-105 is picked
+  up.
 - **Protocol A** (CMS50D+, CMS50E, older CMS50F): different line settings, no listing (one pushed
   recording), no clock.
 - **Protocol C on other models**: the PO-250 and PO-300, built in 0036 (T-101, T-104); waiting for
@@ -178,3 +291,6 @@ between without writing anything, and sends `A7` `A2` again right before `A6`, a
 - forum-schlafapnoe.de, "Fragen zum SpO2 Assistant (Pulox/Contec)" (PO-300/CMS50EW owner, 2017, finding 6): https://forum-schlafapnoe.de/threads/fragen-zum-spo2-assistant-pulox-contec.8989/
 - Software Informer, SpO2 1.2: https://spo2.software.informer.com/download/
 - SleepyHead bug #207, "New Contec CMS" (CMS50F 3.7; the two serial captures): https://sourceforge.net/p/sleepyhead/bugs/207/
+- eBay.de, Novidion listing 155214698697, "B-WARE Pulsoximeter PULOX PO-300 schwarz" (`50E(A)`/`COM3` screenshot, finding 8a): https://www.ebay.de/itm/155214698697
+- GitHub, vats28/Contec-CMS50EW, "Communication protocol of pulse oximeter V7.0" (Contec's own spec, 2010-07-08; text uses a shifted custom font encoding, decodes with +29 per character code; finding 9): https://github.com/vats28/Contec-CMS50EW/blob/master/Communication%20protocol%20of%20pulse%20oximeter%20V7.0.pdf
+- GitHub, kaivol/pulox (archived), a Rust CLI for PULOX oximeters implementing protocol V7.0, built and used against a named PULOX PO-250 (finding 10): https://github.com/kaivol/pulox ; crate docs: https://kaivol.github.io/pulox/contec_protocol/index.html
