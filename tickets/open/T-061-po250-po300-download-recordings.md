@@ -30,9 +30,10 @@ owner who runs it.
 
 - [x] `fiedle400` finds a PO-250/PO-300 and says which model it is (T-104; mock-tested)
 - [x] `sessions` and `download` work for it, read-only (T-101; mock-tested)
-- [ ] `README.md` lists the models as "untested on real hardware" until an owner
-      confirms, then as supported (T-102)
-- [ ] Tests pass (`python3 -m unittest discover -s tests -t .`)
+- [x] `README.md` lists the models as untested/experimental until an owner confirms (PO-250:
+      experimental, T-105/T-109; PO-300: untested, T-102) -- still open: flipping either to
+      plainly supported once confirmed
+- [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
 
 ---
 
@@ -44,12 +45,18 @@ owner who runs it.
 | [T-100](../done/2026-W44/T-100-map-spo2exe-device-table-and-transports.md) | `SpO2.exe`'s device table and its serial path | No | Done |
 | [T-104](../done/2026-W44/T-104-detect-po250-po300-po400-for-wizard-and-info.md) | Detect PO-250/PO-300/PO-400 for the wizard and `info` | Mock tests; an owner confirms | Done |
 | [T-101](../done/2026-W44/T-101-download-recordings-from-other-models.md) | Download stored recordings | Mock tests; an owner confirms | Done |
-| [T-102](T-102-sample-file-from-po250-po300-owner.md) | An owner runs it (and, ideally, a USB capture) | An owner, not psytrap | Open |
+| [T-102](T-102-po300-owner-test-run.md) | PO-300 owner runs it (psytrap's own unit; protocol/model still unconfirmed) | psytrap owns one | Open |
 | [T-103](../done/2026-W44/T-103-spo2-review-analysis-and-cms50-compatibility.md) | CMS50 family download compatibility matrix | No | Done |
 | [T-099](../done/2026-W44/T-099-read-other-vendor-oximetry-files.md) | Read other vendors' files | -- | Won't Do |
-| [T-105](T-105-cms50f37-protocol-b-download.md) | PO-250 download (protocol B) | Mock tests and the emulator; an owner confirms | Open (built in v0.5.9, waiting for an owner) |
+| [T-105](../done/2026-W45/T-105-cms50f37-protocol-b-download.md) | PO-250 download (protocol B) | Mock tests and the emulator | Done (v0.5.9); ships marked experimental |
+| [T-109](T-109-po250-owner-confirmation.md) | PO-250 owner confirms a download (split from T-105's close) | An owner, nobody on the project owns one | Open |
+| [T-108](T-108-po300-bluetooth-support.md) | PO-300 Bluetooth support -- separate from T-105's protocol-B engine | psytrap's own unit, once its protocol is confirmed | Open |
 
-T-104 and T-101 are done (mock-tested); what remains is T-102, an owner running it.
+T-104, T-101 and T-105 are done. What's left is really just the **PO-300**: T-102 (psytrap's own
+teardown and software-side checks, still missing `fiedle400 info`/`sessions`/`download` against
+it), and T-108 (Bluetooth, blocked on T-102 confirming the protocol first). T-109 (an outside
+PO-250 owner) is open too, but PO-250 already ships -- marked experimental -- so it isn't
+blocking anything the way the PO-300 questions are.
 
 ## Findings so far (T-098, T-100; 2026-10-29)
 

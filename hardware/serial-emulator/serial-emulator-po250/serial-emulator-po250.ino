@@ -1,14 +1,13 @@
-// PO-x00 serial emulator for an Arduino Uno: answers fiedle400's serial backend (T-101) the way
-// the mock tests' FakeOximeter does, so the serial path can be tried on a real USB-serial port.
-// See README.md in this folder for flashing and running fiedle400 against it.
-//
-// This is the PO-250 (protocol B, DEFAULT_MODEL) sketch. The PO-300, PO-400 and CMS50F 3.7
-// models are separate sketches next to this one (serial-emulator-po300/, -po400/, -cms50f/) --
-// flash the one matching the model you want, instead of a jumper (psytrap, 2026-11-04: jumpers
-// were error-prone to keep straight across sessions).
+// PO-250 (protocol B) variant of the PO-x00 serial emulator for an Arduino Uno: answers
+// fiedle400's serial backend (T-101, T-105) the way the mock tests' FakeOximeter does, so the
+// serial path can be tried on a real USB-serial port. See ../README.md for flashing and running
+// fiedle400 against it. The PO-300, PO-400 and CMS50F 3.7 models are separate sibling sketches
+// (../serial-emulator-po300/, -po400/, -cms50f/) -- flash the one matching the model you want;
+// there is no default (psytrap, 2026-11-04: a jumper-selected or implicit default was error-prone
+// to keep straight across sessions).
 //
 // Fault jumpers to GND (read before every burst of commands, so they can be changed while it
-// runs; the same four pins in every derivative sketch):
+// runs; the same four pins in every sibling sketch):
 //   D2 silent   D3 bad checksum   D4 split reports   D5 unpadded reports
 // The LED (D13) toggles on every command and stays lit after a destructive one.
 

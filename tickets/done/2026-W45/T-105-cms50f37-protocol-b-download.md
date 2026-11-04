@@ -4,7 +4,7 @@
 - **Owner:** Cloud
 - **Parent:** [T-061](T-061-po250-po300-download-recordings.md)
 - **Related:** [T-103](../done/2026-W44/T-103-spo2-review-analysis-and-cms50-compatibility.md),
-  [T-102](T-102-po250-po300-owner-test-run.md), [T-108](T-108-po300-bluetooth-support.md)
+  [T-102](T-102-po300-owner-test-run.md), [T-108](T-108-po300-bluetooth-support.md)
 - **Scope & Relevant Files:**
   - `docs/CMS50_COMPATIBILITY.md` (findings 9, 10, 11), `docs/PROTOCOL_B.md` (the wire spec)
   - `fiedle400/serial_port.py` (probe), `fiedle400/protocol/cms50f37.py`, a new read-only engine
@@ -90,14 +90,23 @@ pattern T-101/T-104 already used for detection and download.
       Uno) produces the same result as the capture replay test above
 - [x] `README.md` lists the PO-250 as supported for download, same convention as T-061's PO-300
       entry ("untested on real hardware" until an owner confirms)
-- [ ] An owner of a real PO-250 confirms a download (psytrap does not own one; this needs an
-      outside owner, same as T-102's role for the PO-300 -- cross-check against `kaivol/pulox`'s
-      documented behavior in the meantime, as a secondary, non-device validation)
 - [x] Tests pass (`python3 -m unittest discover -s tests -t .`)
+
+**Split off (psytrap, 2026-11-04), not blocking this ticket's close:** confirming a download
+against a real PO-250 -- psytrap does not own one -- is [T-109](../../open/T-109-po250-owner-confirmation.md).
+PO-250 support ships marked **experimental** in `README.md` instead of waiting on it.
 
 ## Execution Notes
 
-**2026-11-04, cloud (patch 0040, v0.5.9).** Built; stays open until a PO-250 owner confirms.
+**2026-11-04, cloud (patch 0040, v0.5.9).** Engine, tests, docs and emulator all built.
+
+**2026-11-04, local.** Serial emulator's protocol-B PO-250 mode flashed to and verified against a
+real Arduino Uno R3 at `/dev/ttyACM1`: `info`, `sessions` (1×20,904 announced/8,202 received),
+`download` and `clear` (correctly refused) all matched the capture-replay test exactly. Also
+verified the PO-300 and CMS50F sibling sketches the same way. This is the secondary,
+non-device validation the ticket called for -- real hardware, real USB bytes, not just the PC
+build -- but it is the emulator, not a real PO-250, so it does not close the owner-confirmation
+question. That question is split off as T-109 rather than left blocking this ticket.
 
 - **Gate** (psytrap, 2026-11-04: "option A"): the PO-250's `A8` string is unknown (kaivol/pulox
   never sends `A8`; the 2014 `.spm` captures are a CMS50F, which answers `CMS50F`, `Contec` to

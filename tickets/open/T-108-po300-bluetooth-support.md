@@ -4,7 +4,7 @@
 - **Owner:** Either
 - **Parent:** [T-061](T-061-po250-po300-download-recordings.md)
 - **Related:** [T-105](T-105-cms50f37-protocol-b-download.md) (protocol B engine, now being
-  built for the PO-250), [T-102](T-102-po250-po300-owner-test-run.md) (psytrap's own PO-300
+  built for the PO-250), [T-102](T-102-po300-owner-test-run.md) (psytrap's own PO-300
   teardown), [docs/CMS50_COMPATIBILITY.md](../../docs/CMS50_COMPATIBILITY.md) findings 9-11
 - **Scope & Relevant Files:**
   - `docs/CMS50_COMPATIBILITY.md` (finding 9: the vendor protocol doc)
@@ -17,7 +17,7 @@
 
 Some PO-300 units support Bluetooth -- the PO-300 manual's symbol legend has an entry
 marked "only on devices with Bluetooth" (session note, 2026-11-04), and psytrap's own
-unit was opened as part of [T-102](T-102-po250-po300-owner-test-run.md)'s teardown.
+unit was opened as part of [T-102](T-102-po300-owner-test-run.md)'s teardown.
 
 **This is not a separate protocol from protocol B.** Contec's own vendor spec
 ("Communication Protocol of Pulse Oximeter V7.0", 2010-07-08, found in a

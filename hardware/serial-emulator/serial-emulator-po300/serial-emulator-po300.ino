@@ -1,9 +1,9 @@
 // PO-300 variant of the PO-x00 serial emulator. See ../README.md for flashing and running
-// fiedle400 against it, and ../serial-emulator.ino (the PO-250 default) for the shared design
-// notes. This sketch differs only in DEFAULT_MODEL -- flash this one instead of the PO-250
-// sketch to get PO-300 (protocol C) replies; no jumper needed (psytrap, 2026-11-04).
+// fiedle400 against it. The PO-250, PO-400 and CMS50F 3.7 models are sibling sketches
+// (../serial-emulator-po250/, -po400/, -cms50f/) -- flash the one matching the model you want;
+// there is no default (psytrap, 2026-11-04).
 //
-// Fault jumpers to GND, same as every derivative sketch:
+// Fault jumpers to GND, same as every sibling sketch:
 //   D2 silent   D3 bad checksum   D4 split reports   D5 unpadded reports
 // The LED (D13) toggles on every command and stays lit after a destructive one.
 

@@ -1,27 +1,32 @@
-# T-102: A PO-250/PO-300 owner runs fiedle400 on their device
+# T-102: The PO-300 owner (psytrap) runs fiedle400 on their device
 
 - **Priority:** Normal
 - **Owner:** Local
 - **Parent:** [T-061](T-061-po250-po300-download-recordings.md)
 - **Related:** [T-095](T-095-beta-rollout-advertise-and-find-users.md) (finding
-  users), [T-059](T-059-funding-license-for-additional-devices.md) (funding devices)
+  users), [T-059](T-059-funding-license-for-additional-devices.md) (funding devices),
+  [T-108](T-108-po300-bluetooth-support.md) (depends on this confirming the PO-300's protocol),
+  [T-109](T-109-po250-owner-confirmation.md) (the equivalent ticket for the PO-250, split off
+  separately since that needs an owner outside the project)
 
 ---
 
 ## Description & Context
 
+**Originally scoped to "a PO-250 or PO-300 owner" generically; split 2026-11-04** once it turned
+out psytrap owns a PO-300 -- the PO-250 side of the original ask (an outside owner, since nobody
+on the project has one) is now [T-109](T-109-po250-owner-confirmation.md).
+
 T-104 and T-101 are built from `SpO2.exe` and the manuals, and only mock-tested.
-Only a real device proves them. Ask in the beta rollout (T-095) for owners of a
-PO-250 or PO-300 to:
+Only a real device proves them:
 1. run `fiedle400 info` and send its output (USB VID:PID, model string; T-104);
-2. once T-101 is built, run `sessions` and `download` on a short test
-   recording, and send the vendor software's CSV of the same recording as the
-   answer key;
+2. run `sessions` and `download` on a short test recording, and send the vendor
+   software's CSV of the same recording as the answer key;
 3. ideally, capture the vendor software downloading it (Wireshark/USBPcap on
    Windows), like the PO-400 captures in `archive/capture/`.
 
-Privacy: recordings are health data; ask for a short test recording, store it
-under `archive/` (not in git) unless the owner agrees to publish it.
+Privacy: recordings are health data; keep a short test recording under `archive/`
+(not in git) unless psytrap agrees to publish it.
 
 ## Criteria
 

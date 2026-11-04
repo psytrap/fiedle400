@@ -17,7 +17,7 @@ For the code architecture see [DESIGN.md](docs/DESIGN.md); for the byte-level pr
 
 **Driver**
 - **Dual-backend**: Linux defaults to `hidraw` -- 100% standard library, zero external dependencies (`pip install` is NOT required). Windows and macOS default to `hid` (`import hid`, pulled in automatically on those platforms). Pass `--backend hid` on Linux to develop and test the cross-platform path locally.
-- **USB-serial models (untested, T-101)**: a `serial` backend for Contec oximeters that connect as a serial port instead of HID, standard library only, including the PO-250's own protocol (T-105). See [Other models](#other-models-po-250-po-300-untested).
+- **USB-serial models (untested, T-101)**: a `serial` backend for Contec oximeters that connect as a serial port instead of HID, standard library only, including the PO-250's own protocol (**experimental**, T-105). See [Other models](#other-models-po-250-experimental-po-300-untested).
 
 **Everyday use**
 - **`fiedle400 selftest`**: a one-command, read-only hardware check (detection, connect, handshake, clock, sessions) against the real device -- no env var needed, unlike the test suite's opt-in live tests; running this command is itself the signal that a check is wanted. Automatically probes every backend this platform supports (e.g. both `hidraw` and `hid` on Linux) in one run; only the primary backend's result affects the exit code, so a known-flaky secondary backend never masks an otherwise-healthy device.
@@ -173,7 +173,7 @@ fiedle400 --backend hid info
 fiedle400 --device /dev/ttyUSB0 sessions      # Windows: --device COM3
 ```
 
-### Other models (PO-250, PO-300): untested
+### Other models (PO-250 experimental, PO-300 untested)
 
 Nobody on the project owns a PO-250 or PO-300, so support for them is built from SpO2
 Assistant's own code and only tested against a simulated device (T-101, T-104; `PROTOCOL.md` §5):
@@ -193,15 +193,18 @@ Assistant's own code and only tested against a simulated device (T-101, T-104; `
 - On Linux a serial port needs your user in the `dialout` group (log out and in again after
   `sudo usermod -aG dialout $USER`).
 
-- **PO-250: download supported, untested on real hardware (T-105).** The PO-250 speaks Contec's
-  other serial protocol ("protocol B", [`PROTOCOL_B.md`](docs/PROTOCOL_B.md)). If a serial port
-  does not answer the PO-400's commands, fiedle400 tries protocol B's read-only hello and uses the
-  device as a PO-250 for `info`, `sessions` and `download`. Built from Contec's protocol spec, an
-  open-source tool written against a PO-250 (kaivol/pulox) and a real 2014 download capture.
-  Clock, live mode and erase are not supported on it.
+- **PO-250: download support is experimental (T-105, T-109).** `fiedle400` itself has never
+  talked to a real PO-250 -- this is built from Contec's own protocol spec, a third-party
+  open-source tool written against a real PO-250 (kaivol/pulox), and a 2014 download capture of a
+  *different* device in the same protocol family (a CMS50F, not a PO-250). The PO-250 speaks
+  Contec's other serial protocol ("protocol B", [`PROTOCOL_B.md`](docs/PROTOCOL_B.md)); if a
+  serial port does not answer the PO-400's commands, `fiedle400` tries protocol B's read-only
+  hello and uses the device as a PO-250 for `info`, `sessions` and `download`. Clock, live mode
+  and erase are not supported on it. Treat this more cautiously than the PO-300 below: it has not
+  even been tried against the real model's own replies yet, only a close relative's.
 
 If you own one of these models, please run `fiedle400 info` and `fiedle400 sessions` and send
-the output (T-102, T-105).
+the output (T-102, T-109).
 
 Contec's CMS50 oximeters (CMS50D+, CMS50E, CMS50F, CMS50I, CMS50H), the ones OSCAR reads, are
 **not supported** (fiedle400 supports the PO-400, PO-250 and PO-300 only): a device that names

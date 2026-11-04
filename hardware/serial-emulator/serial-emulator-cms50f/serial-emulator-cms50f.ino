@@ -1,10 +1,10 @@
 // CMS50F 3.7 variant of the PO-x00 serial emulator -- same protocol and data as the PO-250, but
 // named CMS50F so fiedle400's model-string refusal can be tested end to end (T-105). See
-// ../README.md for flashing and running fiedle400 against it, and ../serial-emulator.ino (the
-// PO-250 default) for the shared design notes. This sketch differs only in DEFAULT_MODEL --
-// flash this one instead of the PO-250 sketch; no jumper needed (psytrap, 2026-11-04).
+// ../README.md for flashing and running fiedle400 against it. The PO-250, PO-300 and PO-400
+// models are sibling sketches (../serial-emulator-po250/, -po300/, -po400/) -- flash the one
+// matching the model you want; there is no default (psytrap, 2026-11-04).
 //
-// Fault jumpers to GND, same as every derivative sketch:
+// Fault jumpers to GND, same as every sibling sketch:
 //   D2 silent   D3 bad checksum   D4 split reports   D5 unpadded reports
 // The LED (D13) toggles on every command and stays lit after a destructive one.
 

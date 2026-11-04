@@ -4,7 +4,7 @@
 - **Owner:** Either
 - **Parent:** [T-061](../../open/T-061-po250-po300-download-recordings.md)
 - **Related:** [T-101](T-101-download-recordings-from-other-models.md) (uses the result),
-  [T-102](../../open/T-102-po250-po300-owner-test-run.md) (an owner runs it)
+  [T-102](../../open/T-102-po300-owner-test-run.md) (an owner runs it)
 - **Scope & Relevant Files:**
   - `fiedle400/hid_driver.py` (device search), `fiedle400/protocol/hardware.py` (`KNOWN_DEVICES`)
   - `fiedle400/cli.py` (`command_info`, `run_interactive_wizard`)

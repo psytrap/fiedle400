@@ -19,6 +19,7 @@ protocol. The second half is the project timeline before and around the tickets.
 | [T-043](done/2026-W45/T-043-coding-conventions.md) | Write down coding conventions, starting with identifier names | Either |
 | [T-106](done/2026-W45/T-106-rename-short-identifiers.md) | Rename short identifiers that break the naming rule | Cloud |
 | [T-046](done/2026-W45/T-046-repo-clean-up-deep-pass.md) | Repo clean-up -- deep pass (decisions needed) | Either |
+| [T-105](done/2026-W45/T-105-cms50f37-protocol-b-download.md) | PO-250 download (protocol B) -- ships marked experimental | Cloud |
 
 ### 2026-W44 (Mon 2026-10-26 to Sun 2026-11-01)
 
